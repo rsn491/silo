@@ -9,3 +9,33 @@ How it works:
 1. Provision: The system automatically spins up isolated environments (Local Worktrees or Remote Containers).
 1. Execute: Agents (Claude, Gemini, Codex) work independently without file conflicts.
 1. Review: Merge the successful outputs back into your main branch.
+
+## Development
+
+### Prerequisites
+
+- Rust 1.93.0 or later
+
+### Build
+
+```bash
+cargo build
+```
+
+For a release build:
+
+```bash
+cargo build --release
+```
+
+### Run
+
+```bash
+cargo run
+```
+
+### Test
+
+```bash
+cargo test
+```
