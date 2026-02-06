@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Launch(args) => {
-            GitWorktreeLauncher::new(Git::default(), args.worktree_base, args.branch).launch()?;
+            GitWorktreeLauncher::new(Git, args.worktree_base, args.branch).launch()?;
         }
     };
 

@@ -66,7 +66,7 @@ impl<G: GitOperations> AgentLauncher for GitWorktreeLauncher<G> {
 mod tests {
     use super::*;
     use crate::infra::git_error::GitError;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     // Mock GitOperations
     struct MockGit {
@@ -83,7 +83,7 @@ mod tests {
             Ok(self.project_name.clone())
         }
 
-        fn create_worktree(&self, _path: &PathBuf, _branch: &str) -> Result<(), GitError> {
+        fn create_worktree(&self, _path: &Path, _branch: &str) -> Result<(), GitError> {
             Ok(())
         }
     }
@@ -109,4 +109,3 @@ mod tests {
         }
     }
 }
-
