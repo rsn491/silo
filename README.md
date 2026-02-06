@@ -10,6 +10,21 @@ How it works:
 1. Execute: Agents (Claude, Gemini, Codex) work independently without file conflicts.
 1. Review: Merge the successful outputs back into your main branch.
 
+## Usage
+
+Launch an agent in an isolated git worktree:
+
+```bash
+silo launch
+```
+
+This creates a new worktree (in the parent directory of the repo by default) with a unique branch and starts a Claude session inside it.
+
+### Options
+
+- `--worktree-base <path>` — Base directory for the worktree (default: parent of repo)
+- `--branch <name>` — Custom branch name (default: auto-generated from project name)
+
 ## Development
 
 ### Prerequisites
@@ -26,12 +41,6 @@ For a release build:
 
 ```bash
 cargo build --release
-```
-
-### Run
-
-```bash
-cargo run
 ```
 
 ### Test
