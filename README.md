@@ -1,6 +1,6 @@
 # silo
 
-Multi-Agent Orchestration with Absolute Isolation.
+Automated environment isolation for multi-agent development
 
 Current LLM agents are powerful, but managing their environments is a chore. silo automates the "boring stuff"—cloning repos, setting up worktrees, and partitioning environments—so you can deploy a fleet of agents to solve tasks in parallel.
 
@@ -30,6 +30,17 @@ This creates a new worktree (in the parent directory of the repo by default) wit
 ### Prerequisites
 
 - Rust 1.93.0 or later
+
+### Pre-commit hooks
+
+Install [pre-commit](https://pre-commit.com/) and set up the git hooks:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+The hooks run `cargo fmt`, `clippy`, `check`, and `test` automatically on each commit.
 
 ### Build
 
