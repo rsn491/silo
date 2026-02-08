@@ -3,8 +3,10 @@ mod services;
 
 use clap::{Parser, Subcommand};
 use infra::git::Git;
+use infra::process::SystemProcess;
 use infra::terminal::{self, Terminal};
 use services::agent_launcher::{AgentLauncher, LaunchMode};
+use services::agent_list::AgentListService;
 use services::git_worktree_launcher::GitWorktreeLauncher;
 use std::path::PathBuf;
 
@@ -20,6 +22,8 @@ pub struct Cli {
 pub enum Commands {
     /// Create a new git worktree and launch Claude in it
     Launch(LaunchArgs),
+    /// List running agents in worktrees of the current repository
+    Ps,
 }
 
 #[derive(Parser, Debug)]
@@ -60,6 +64,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             GitWorktreeLauncher::new(Git, args.worktree_base, args.branch, terminal)
                 .launch(launch_mode)?;
+        }
+        Commands::Ps => {
+            let agents = AgentListService::new(Git, SystemProcess).list_running_agents()?;
+
+            if agents.is_empty() {
+                println!("No running agents found in this repository's worktrees.");
+            } else {
+                println!("{:<8} {:<10} {:<20} WORKTREE", "PID", "AGENT", "BRANCH");
+                for agent in &agents {
+                    println!(
+                        "{:<8} {:<10} {:<20} {}",
+                        agent.pid,
+                        agent.agent_type,
+                        agent.branch.as_deref().unwrap_or("(detached)"),
+                        agent.worktree_path.display()
+                    );
+                }
+            }
         }
     };
 

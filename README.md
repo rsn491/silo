@@ -27,6 +27,14 @@ This creates a new worktree (in the parent directory of the repo by default) wit
 - `--tab` — Launch the agent in a new terminal tab instead of replacing the current process
 - `--split-pane` — Launch the agent in a vertical split pane (iTerm2 only)
 
+### List running agents
+
+View all active agents running in worktrees of the current repository:
+
+```bash
+silo ps
+```
+
 ## Development
 
 ### Prerequisites

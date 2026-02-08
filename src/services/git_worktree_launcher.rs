@@ -114,6 +114,7 @@ impl<G: GitOperations> AgentLauncher for GitWorktreeLauncher<G> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infra::git::WorktreeInfo;
     use crate::infra::git_error::GitError;
     use std::path::{Path, PathBuf};
 
@@ -134,6 +135,10 @@ mod tests {
 
         fn create_worktree(&self, _path: &Path, _branch: &str) -> Result<(), GitError> {
             Ok(())
+        }
+
+        fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>, GitError> {
+            Ok(vec![])
         }
     }
 
