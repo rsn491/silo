@@ -7,7 +7,7 @@ use infra::process::SystemProcess;
 use infra::terminal::{self, Terminal};
 use services::agent_launcher::{AgentLauncher, LaunchMode};
 use services::agent_list::AgentListService;
-use services::git_worktree_launcher::GitWorktreeLauncher;
+use services::git_worktree_workspace::GitWorktreeWorkspace;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -62,8 +62,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     (LaunchMode::ExecReplace, None)
                 };
 
-            GitWorktreeLauncher::new(Git, args.worktree_base, args.branch, terminal)
-                .launch(launch_mode)?;
+            let workspace = GitWorktreeWorkspace::new(Git, args.worktree_base, args.branch);
+            let launcher = AgentLauncher::new(Box::new(workspace), terminal, launch_mode);
+            launcher.launch()?;
         }
         Commands::Ps => {
             let agents = AgentListService::new(Git, SystemProcess).list_running_agents()?;
