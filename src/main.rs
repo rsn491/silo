@@ -8,6 +8,7 @@ use infra::terminal::{self, Terminal};
 use services::agent_launcher::{AgentLauncher, LaunchMode};
 use services::agent_list::AgentListService;
 use services::git_worktree_workspace::GitWorktreeWorkspace;
+use services::silo_config::SiloConfig;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -24,6 +25,8 @@ pub enum Commands {
     Launch(LaunchArgs),
     /// List running agents in worktrees of the current repository
     Ps,
+    /// Initialize the .silo directory in your home directory
+    Init,
 }
 
 #[derive(Parser, Debug)]
@@ -84,6 +87,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        Commands::Init => match SiloConfig::initialize() {
+            Ok(path) => {
+                println!("Silo directory initialized successfully.");
+                println!("Future worktrees will be created in: {}", path.display());
+                println!("\nYou can now run 'silo launch' to create worktrees in this directory.");
+            }
+            Err(e) => {
+                eprintln!("Error initializing silo directory: {}", e);
+                std::process::exit(1);
+            }
+        },
     };
 
     Ok(())

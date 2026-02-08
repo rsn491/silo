@@ -12,17 +12,34 @@ How it works:
 
 ## Usage
 
+### Initialize silo
+
+Optionally create a dedicated directory for all your worktrees:
+
+```bash
+silo init
+```
+
+This creates a `~/.silo/` directory in your home folder. Once initialized, all future worktrees will be created here by default instead of in the parent directory of each repository.
+
+### Launch an agent
+
 Launch an agent in an isolated git worktree:
 
 ```bash
 silo launch
 ```
 
-This creates a new worktree (in the parent directory of the repo by default) with a unique branch and starts a Claude session inside it.
+This creates a new worktree with a unique branch and starts a Claude session inside it.
 
-### Options
+The worktree location is determined by this priority:
+1. Explicit `--worktree-base` argument (highest priority)
+2. `~/.silo/` directory (if it exists from running `silo init`)
+3. Parent directory of the repo (fallback)
 
-- `--worktree-base <path>` — Base directory for the worktree (default: parent of repo)
+#### Options
+
+- `--worktree-base <path>` — Base directory for the worktree (overrides default)
 - `--branch <name>` — Custom branch name (default: auto-generated from project name)
 - `--tab` — Launch the agent in a new terminal tab instead of replacing the current process
 - `--split-pane` — Launch the agent in a vertical split pane (iTerm2 only)

@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use super::agent_launcher::LaunchError;
 use super::agent_workspace::AgentWorkspace;
+use super::silo_config::SiloConfig;
 use crate::infra::git::GitOperations;
 
 pub struct GitWorktreeWorkspace<G: GitOperations> {
@@ -23,12 +24,9 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
 
     fn generate_worktree_path(&self) -> Result<PathBuf, LaunchError> {
         let repo_root = self.git.get_repo_root()?;
-        let base_dir = self.worktree_base.clone().unwrap_or_else(|| {
-            repo_root
-                .parent()
-                .map(|p| p.to_path_buf())
-                .unwrap_or_else(|| repo_root.to_path_buf())
-        });
+
+        // Use SiloConfig for resolution with priority logic
+        let base_dir = SiloConfig::resolve_worktree_base(self.worktree_base.clone(), &repo_root);
 
         let worktree_name = format!(
             "{}-{}",
