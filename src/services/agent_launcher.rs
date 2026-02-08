@@ -1,6 +1,13 @@
 use crate::infra::git_error::GitError;
 use std::fmt;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LaunchMode {
+    ExecReplace,
+    NewTab,
+    SplitPane,
+}
+
 #[derive(Debug)]
 pub enum LaunchError {
     AgentSpawnError(String),
@@ -32,5 +39,5 @@ impl From<GitError> for LaunchError {
 }
 
 pub trait AgentLauncher {
-    fn launch(&self) -> Result<(), LaunchError>;
+    fn launch(&self, launch_mode: LaunchMode) -> Result<(), LaunchError>;
 }

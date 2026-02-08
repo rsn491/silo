@@ -4,21 +4,29 @@ use std::process::Command;
 
 use uuid::Uuid;
 
-use super::agent_launcher::{AgentLauncher, LaunchError};
+use super::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
 use crate::infra::git::GitOperations;
+use crate::infra::terminal::Terminal;
 
 pub struct GitWorktreeLauncher<G: GitOperations> {
     git: G,
     worktree_base: Option<PathBuf>,
     branch: Option<String>,
+    terminal: Option<Box<dyn Terminal>>,
 }
 
 impl<G: GitOperations> GitWorktreeLauncher<G> {
-    pub fn new(git: G, worktree_base: Option<PathBuf>, branch: Option<String>) -> Self {
+    pub fn new(
+        git: G,
+        worktree_base: Option<PathBuf>,
+        branch: Option<String>,
+        terminal: Option<Box<dyn Terminal>>,
+    ) -> Self {
         Self {
             git,
             worktree_base,
             branch,
+            terminal,
         }
     }
 
@@ -41,7 +49,7 @@ impl<G: GitOperations> GitWorktreeLauncher<G> {
 }
 
 impl<G: GitOperations> AgentLauncher for GitWorktreeLauncher<G> {
-    fn launch(&self) -> Result<(), LaunchError> {
+    fn launch(&self, launch_mode: LaunchMode) -> Result<(), LaunchError> {
         let worktree_path = self.generate_worktree_path()?;
         let worktree_name = worktree_path.file_name().unwrap().to_string_lossy();
         let branch_name = self
@@ -54,11 +62,52 @@ impl<G: GitOperations> AgentLauncher for GitWorktreeLauncher<G> {
 
         self.git.create_worktree(&worktree_path, &branch_name)?;
 
-        println!("Launching claude in worktree...");
-
-        let err = Command::new("claude").current_dir(&worktree_path).exec();
-
-        Err(LaunchError::AgentSpawnError(err.to_string()))
+        match launch_mode {
+            LaunchMode::ExecReplace => {
+                println!("Launching claude in worktree...");
+                let err = Command::new("claude").current_dir(&worktree_path).exec();
+                Err(LaunchError::AgentSpawnError(err.to_string()))
+            }
+            LaunchMode::NewTab => {
+                let terminal = self.terminal.as_ref().ok_or_else(|| {
+                    LaunchError::AgentSpawnError("no terminal provided for new tab".to_string())
+                })?;
+                println!("Opening new tab for claude in worktree...");
+                match terminal.open_tab(&worktree_path) {
+                    Ok(()) => {
+                        println!("Agent launched in new tab at: {}", worktree_path.display());
+                        Ok(())
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to open new tab: {}", e);
+                        eprintln!("Falling back to launching claude in current process...");
+                        let err = Command::new("claude").current_dir(&worktree_path).exec();
+                        Err(LaunchError::AgentSpawnError(err.to_string()))
+                    }
+                }
+            }
+            LaunchMode::SplitPane => {
+                let terminal = self.terminal.as_ref().ok_or_else(|| {
+                    LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
+                })?;
+                println!("Opening split pane for claude in worktree...");
+                match terminal.split_pane(&worktree_path) {
+                    Ok(()) => {
+                        println!(
+                            "Agent launched in split pane at: {}",
+                            worktree_path.display()
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to open split pane: {}", e);
+                        eprintln!("Falling back to launching claude in current process...");
+                        let err = Command::new("claude").current_dir(&worktree_path).exec();
+                        Err(LaunchError::AgentSpawnError(err.to_string()))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -95,11 +144,11 @@ mod tests {
             project_name: "test-project".to_string(),
         };
 
-        let launcher = GitWorktreeLauncher::new(mock_git, None, None);
+        let launcher = GitWorktreeLauncher::new(mock_git, None, None, None);
 
         // We expect an error because Command::exec will fail in test environment
         // but we can check if the worktree creation was attempted.
-        let result = launcher.launch();
+        let result = launcher.launch(LaunchMode::ExecReplace);
         assert!(result.is_err());
 
         if let Err(LaunchError::AgentSpawnError(_)) = result {

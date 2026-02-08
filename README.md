@@ -24,6 +24,8 @@ This creates a new worktree (in the parent directory of the repo by default) wit
 
 - `--worktree-base <path>` — Base directory for the worktree (default: parent of repo)
 - `--branch <name>` — Custom branch name (default: auto-generated from project name)
+- `--tab` — Launch the agent in a new terminal tab instead of replacing the current process
+- `--split-pane` — Launch the agent in a vertical split pane (iTerm2 only)
 
 ## Development
 
