@@ -52,6 +52,14 @@ View all active agents running in worktrees of the current repository:
 silo ps
 ```
 
+### Clean up worktrees
+
+Remove inactive worktrees where no agents are currently running:
+
+```bash
+silo cleanup
+```
+
 ## Development
 
 ### Prerequisites

@@ -85,6 +85,17 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
 
         Ok(agents)
     }
+
+    pub fn get_active_worktree_paths(&self) -> Result<Vec<PathBuf>, ListError> {
+        let running_agents = self.list_running_agents()?;
+
+        let active_paths: Vec<PathBuf> = running_agents
+            .into_iter()
+            .map(|agent| agent.worktree_path)
+            .collect();
+
+        Ok(active_paths)
+    }
 }
 
 fn extract_agent_type(args: &str) -> String {
@@ -123,6 +134,10 @@ mod tests {
 
         fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>, GitError> {
             Ok(self.worktrees.clone())
+        }
+
+        fn remove_worktree(&self, _path: &Path) -> Result<(), GitError> {
+            Ok(())
         }
     }
 

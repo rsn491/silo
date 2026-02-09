@@ -84,6 +84,10 @@ mod tests {
         fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>, GitError> {
             Ok(vec![])
         }
+
+        fn remove_worktree(&self, _path: &Path) -> Result<(), GitError> {
+            Ok(())
+        }
     }
 
     #[test]

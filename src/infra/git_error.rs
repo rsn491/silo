@@ -5,6 +5,7 @@ pub enum GitError {
     NotAGitRepo,
     CommandFailed(String),
     WorktreeCreationFailed(String),
+    WorktreeRemovalFailed(String),
 }
 
 impl fmt::Display for GitError {
@@ -13,6 +14,7 @@ impl fmt::Display for GitError {
             GitError::NotAGitRepo => write!(f, "not a git repository"),
             GitError::CommandFailed(msg) => write!(f, "git error: {}", msg),
             GitError::WorktreeCreationFailed(msg) => write!(f, "worktree creation failed: {}", msg),
+            GitError::WorktreeRemovalFailed(msg) => write!(f, "worktree removal failed: {}", msg),
         }
     }
 }

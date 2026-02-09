@@ -14,9 +14,10 @@ pub trait GitOperations {
     fn get_project_name(&self) -> Result<String, GitError>;
     fn create_worktree(&self, path: &Path, branch: &str) -> Result<(), GitError>;
     fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>, GitError>;
+    fn remove_worktree(&self, path: &Path) -> Result<(), GitError>;
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Git;
 
 impl GitOperations for Git {
@@ -82,6 +83,21 @@ impl GitOperations for Git {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(parse_worktree_list(&stdout))
+    }
+
+    fn remove_worktree(&self, path: &Path) -> Result<(), GitError> {
+        let output = Command::new("git")
+            .args(["worktree", "remove", "--force"])
+            .arg(path)
+            .output()
+            .map_err(|e| GitError::WorktreeRemovalFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::WorktreeRemovalFailed(stderr.to_string()));
+        }
+
+        Ok(())
     }
 }
 

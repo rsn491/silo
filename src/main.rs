@@ -9,6 +9,7 @@ use services::agent_launcher::{AgentLauncher, LaunchMode};
 use services::agent_list::AgentListService;
 use services::git_worktree_workspace::GitWorktreeWorkspace;
 use services::silo_config::SiloConfig;
+use services::worktree_cleanup::WorktreeCleanupService;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -27,6 +28,8 @@ pub enum Commands {
     Ps,
     /// Initialize the .silo directory in your home directory
     Init,
+    /// Clean up worktrees where no agents are running
+    Cleanup(CleanupArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -46,6 +49,17 @@ pub struct LaunchArgs {
     /// Launch the agent in a vertical split pane
     #[arg(long, group = "windowing")]
     pub split_pane: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct CleanupArgs {
+    /// Clean ALL worktrees in the repo, not just silo-managed ones in ~/.silo/
+    #[arg(long)]
+    pub all: bool,
+
+    /// Skip confirmation prompt
+    #[arg(long, short = 'y')]
+    pub yes: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -98,6 +112,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1);
             }
         },
+        Commands::Cleanup(args) => {
+            // Prompt for confirmation unless --yes is provided
+            if !args.yes {
+                use std::io::{self, Write};
+                print!("This will remove all inactive worktrees. Continue? [y/N]: ");
+                io::stdout().flush()?;
+
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+
+                if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+                    println!("Cleanup cancelled.");
+                    return Ok(());
+                }
+                println!();
+            }
+
+            let service = WorktreeCleanupService::new(Git, SystemProcess);
+            service.cleanup(args.all)?;
+        }
     };
 
     Ok(())

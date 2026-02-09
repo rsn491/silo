@@ -23,7 +23,7 @@ pub trait ProcessOperations {
     fn get_process_cwd(&self, pid: u32) -> Result<PathBuf, ProcessError>;
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SystemProcess;
 
 impl ProcessOperations for SystemProcess {
