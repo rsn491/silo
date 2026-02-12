@@ -3,7 +3,6 @@ use crate::infra::git_error::GitError;
 use crate::infra::terminal::Terminal;
 use crate::services::agent_workspace::AgentWorkspace;
 use std::fmt;
-use std::os::unix::process::CommandExt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LaunchMode {
@@ -67,6 +66,22 @@ where
         }
     }
 
+    fn launch_in_workspace(&self, workspace_path: &std::path::Path) -> Result<(), LaunchError> {
+        let status = self
+            .agent
+            .command()
+            .current_dir(workspace_path)
+            .status()
+            .map_err(|e| LaunchError::AgentSpawnError(e.to_string()))?;
+        if status.success() {
+            println!(
+                "\nAgent exited. To resume, run: silo launch from {}",
+                workspace_path.display()
+            );
+        }
+        Ok(())
+    }
+
     pub fn launch(&self) -> Result<(), LaunchError> {
         // Step 1: Create workspace
         let workspace_path = self.workspace.create()?;
@@ -75,8 +90,7 @@ where
         match self.launch_mode {
             LaunchMode::ExecReplace => {
                 println!("Launching {:?} in worktree...", self.agent);
-                let err = self.agent.command().current_dir(&workspace_path).exec();
-                Err(LaunchError::AgentSpawnError(err.to_string()))
+                self.launch_in_workspace(&workspace_path)
             }
             LaunchMode::NewTab => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
@@ -94,8 +108,7 @@ where
                             "Falling back to launching {:?} in current process...",
                             self.agent
                         );
-                        let err = self.agent.command().current_dir(&workspace_path).exec();
-                        Err(LaunchError::AgentSpawnError(err.to_string()))
+                        self.launch_in_workspace(&workspace_path)
                     }
                 }
             }
@@ -118,8 +131,7 @@ where
                             "Falling back to launching {:?} in current process...",
                             self.agent
                         );
-                        let err = self.agent.command().current_dir(&workspace_path).exec();
-                        Err(LaunchError::AgentSpawnError(err.to_string()))
+                        self.launch_in_workspace(&workspace_path)
                     }
                 }
             }
