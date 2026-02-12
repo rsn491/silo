@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 use infra::agent::Agent;
 use infra::git::Git;
 use infra::process::SystemProcess;
-use infra::terminal::{self, Terminal};
+use infra::terminal;
 use services::agent_launcher::{AgentLauncher, LaunchMode};
 use services::agent_list::AgentListService;
 use services::git_worktree_workspace::GitWorktreeWorkspace;
@@ -74,20 +74,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Launch(args) => {
             let agent = args.agent;
 
-            let (launch_mode, terminal): (LaunchMode, Option<Box<dyn Terminal>>) =
-                if args.tab || args.split_pane {
-                    let term = terminal::detect_terminal()?;
-                    if args.split_pane {
-                        (LaunchMode::SplitPane, Some(term))
-                    } else {
-                        (LaunchMode::NewTab, Some(term))
-                    }
+            let (launch_mode, terminal): (LaunchMode, Option<_>) = if args.tab || args.split_pane {
+                let term = terminal::detect_terminal()?;
+                if args.split_pane {
+                    (LaunchMode::SplitPane, Some(term))
                 } else {
-                    (LaunchMode::ExecReplace, None)
-                };
+                    (LaunchMode::NewTab, Some(term))
+                }
+            } else {
+                (LaunchMode::ExecReplace, None)
+            };
 
             let workspace = GitWorktreeWorkspace::new(Git, args.worktree_base, args.branch);
-            let launcher = AgentLauncher::new(Box::new(workspace), terminal, launch_mode, agent);
+            let launcher = AgentLauncher::new(workspace, terminal, launch_mode, agent);
             launcher.launch()?;
         }
         Commands::Ps => {

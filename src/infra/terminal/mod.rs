@@ -17,14 +17,14 @@ pub trait Terminal: std::fmt::Debug {
     fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError>;
 }
 
-pub fn create_terminal(kind: &TerminalKind) -> Box<dyn Terminal> {
+pub fn create_terminal(kind: &TerminalKind) -> ITerm2 {
     match kind {
-        TerminalKind::ITerm2 => Box::new(ITerm2),
+        TerminalKind::ITerm2 => ITerm2,
     }
 }
 
 /// Detect and create a terminal from `$TERM_PROGRAM`.
-pub fn detect_terminal() -> Result<Box<dyn Terminal>, LaunchError> {
+pub fn detect_terminal() -> Result<ITerm2, LaunchError> {
     let term_program = std::env::var("TERM_PROGRAM").ok();
     let value = term_program.as_deref();
 
@@ -60,7 +60,7 @@ mod tests {
         }
         let terminal = detect_terminal().unwrap();
         // Test that we got a terminal of the correct type
-        // We can verify it's a Box<dyn Terminal> by checking it implements Debug
+        // We can verify it's an ITerm2 by checking it implements Debug
         let debug_str = format!("{:?}", terminal);
         assert!(debug_str.contains("ITerm2"));
         // Clean up

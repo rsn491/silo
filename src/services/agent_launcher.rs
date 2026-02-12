@@ -42,20 +42,23 @@ impl From<GitError> for LaunchError {
     }
 }
 
-pub struct AgentLauncher {
-    workspace: Box<dyn AgentWorkspace>,
-    terminal: Option<Box<dyn Terminal>>,
+pub struct AgentLauncher<W, T>
+where
+    W: AgentWorkspace,
+    T: Terminal,
+{
+    workspace: W,
+    terminal: Option<T>,
     launch_mode: LaunchMode,
     agent: Agent,
 }
 
-impl AgentLauncher {
-    pub fn new(
-        workspace: Box<dyn AgentWorkspace>,
-        terminal: Option<Box<dyn Terminal>>,
-        launch_mode: LaunchMode,
-        agent: Agent,
-    ) -> Self {
+impl<W, T> AgentLauncher<W, T>
+where
+    W: AgentWorkspace,
+    T: Terminal,
+{
+    pub fn new(workspace: W, terminal: Option<T>, launch_mode: LaunchMode, agent: Agent) -> Self {
         Self {
             workspace,
             terminal,
