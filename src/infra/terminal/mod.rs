@@ -2,6 +2,7 @@ mod iterm2;
 
 use std::path::Path;
 
+use crate::infra::agent::Agent;
 use crate::services::agent_launcher::LaunchError;
 
 pub use iterm2::ITerm2;
@@ -12,8 +13,8 @@ pub enum TerminalKind {
 }
 
 pub trait Terminal: std::fmt::Debug {
-    fn open_tab(&self, worktree_path: &Path) -> Result<(), LaunchError>;
-    fn split_pane(&self, worktree_path: &Path) -> Result<(), LaunchError>;
+    fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError>;
+    fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError>;
 }
 
 pub fn create_terminal(kind: &TerminalKind) -> Box<dyn Terminal> {

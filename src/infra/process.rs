@@ -19,7 +19,7 @@ impl std::fmt::Display for ProcessError {
 impl std::error::Error for ProcessError {}
 
 pub trait ProcessOperations {
-    fn find_processes_by_name(&self, name: &str) -> Result<Vec<(u32, String)>, ProcessError>;
+    fn find_processes_by_names(&self, names: &[&str]) -> Result<Vec<(u32, String)>, ProcessError>;
     fn get_process_cwd(&self, pid: u32) -> Result<PathBuf, ProcessError>;
 }
 
@@ -27,7 +27,7 @@ pub trait ProcessOperations {
 pub struct SystemProcess;
 
 impl ProcessOperations for SystemProcess {
-    fn find_processes_by_name(&self, name: &str) -> Result<Vec<(u32, String)>, ProcessError> {
+    fn find_processes_by_names(&self, names: &[&str]) -> Result<Vec<(u32, String)>, ProcessError> {
         let output = Command::new("ps")
             .args(["-eo", "pid,args"])
             .output()
@@ -40,7 +40,7 @@ impl ProcessOperations for SystemProcess {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let own_pid = std::process::id();
-        Ok(parse_ps_output(&stdout, name, own_pid))
+        Ok(parse_ps_output_with_patterns(&stdout, names, own_pid))
     }
 
     fn get_process_cwd(&self, pid: u32) -> Result<PathBuf, ProcessError> {
@@ -59,7 +59,11 @@ impl ProcessOperations for SystemProcess {
     }
 }
 
-fn parse_ps_output(output: &str, pattern: &str, own_pid: u32) -> Vec<(u32, String)> {
+fn parse_ps_output_with_patterns(
+    output: &str,
+    patterns: &[&str],
+    own_pid: u32,
+) -> Vec<(u32, String)> {
     let mut processes = Vec::new();
 
     for line in output.lines().skip(1) {
@@ -87,8 +91,8 @@ fn parse_ps_output(output: &str, pattern: &str, own_pid: u32) -> Vec<(u32, Strin
 
         let args = parts[1].trim();
 
-        // Check if args contains the pattern
-        if args.contains(pattern) {
+        // Check if args contains any of the patterns
+        if patterns.iter().any(|pattern| args.contains(pattern)) {
             processes.push((pid, args.to_string()));
         }
     }
@@ -119,7 +123,7 @@ mod tests {
   456 /usr/bin/other-process
   789 /path/to/claude code";
 
-        let processes = parse_ps_output(output, "claude", 999);
+        let processes = parse_ps_output_with_patterns(output, &["claude"], 999);
         assert_eq!(processes.len(), 2);
         assert_eq!(processes[0].0, 123);
         assert!(processes[0].1.contains("claude"));
@@ -133,7 +137,7 @@ mod tests {
   123 /usr/bin/claude --some-args
   456 /usr/bin/claude --other-args";
 
-        let processes = parse_ps_output(output, "claude", 123);
+        let processes = parse_ps_output_with_patterns(output, &["claude"], 123);
         assert_eq!(processes.len(), 1);
         assert_eq!(processes[0].0, 456);
     }
@@ -144,8 +148,26 @@ mod tests {
   123 /usr/bin/other
   456 /usr/bin/different";
 
-        let processes = parse_ps_output(output, "claude", 999);
+        let processes = parse_ps_output_with_patterns(output, &["claude"], 999);
         assert_eq!(processes.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ps_output_with_multiple_patterns() {
+        let output = "  PID ARGS
+  123 /usr/bin/claude --some-args
+  456 /usr/bin/opencode --other-args
+  789 /usr/bin/other-process
+  101 /path/to/claude code";
+
+        let processes = parse_ps_output_with_patterns(output, &["claude", "opencode"], 999);
+        assert_eq!(processes.len(), 3);
+        assert_eq!(processes[0].0, 123);
+        assert!(processes[0].1.contains("claude"));
+        assert_eq!(processes[1].0, 456);
+        assert!(processes[1].1.contains("opencode"));
+        assert_eq!(processes[2].0, 101);
+        assert!(processes[2].1.contains("claude"));
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::infra::agent::Agent;
 use crate::infra::git::GitOperations;
 use crate::infra::git_error::GitError;
 use crate::infra::process::{ProcessError, ProcessOperations};
@@ -7,7 +8,7 @@ use crate::infra::process::{ProcessError, ProcessOperations};
 #[derive(Debug)]
 pub struct RunningAgent {
     pub pid: u32,
-    pub agent_type: String,
+    pub agent_type: Option<Agent>,
     pub worktree_path: PathBuf,
     pub branch: Option<String>,
 }
@@ -55,8 +56,9 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
         // Get all worktrees for the current repository
         let worktrees = self.git.list_worktrees()?;
 
-        // Find all processes matching "claude"
-        let processes = self.process.find_processes_by_name("claude")?;
+        // Find processes matching known agent names
+        let agent_names = Agent::all_names();
+        let processes = self.process.find_processes_by_names(&agent_names)?;
 
         let mut agents = Vec::new();
 
@@ -98,14 +100,15 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
     }
 }
 
-fn extract_agent_type(args: &str) -> String {
-    // For now, just return "claude"
-    // In the future, this could be extended to detect different agent types
-    if args.contains("claude") {
-        "claude".to_string()
-    } else {
-        "unknown".to_string()
+fn extract_agent_type(args: &str) -> Option<Agent> {
+    // Extract the command name from the process args
+    let parts: Vec<&str> = args.split_whitespace().collect();
+    if let Some(first) = parts.first()
+        && let Some(name) = first.split('/').next_back()
+    {
+        return Agent::try_from_str(name);
     }
+    None
 }
 
 #[cfg(test)]
@@ -148,7 +151,10 @@ mod tests {
     }
 
     impl ProcessOperations for MockProcess {
-        fn find_processes_by_name(&self, _name: &str) -> Result<Vec<(u32, String)>, ProcessError> {
+        fn find_processes_by_names(
+            &self,
+            _names: &[&str],
+        ) -> Result<Vec<(u32, String)>, ProcessError> {
             Ok(self.processes.clone())
         }
 

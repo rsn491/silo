@@ -2,6 +2,7 @@ mod infra;
 mod services;
 
 use clap::{Parser, Subcommand};
+use infra::agent::Agent;
 use infra::git::Git;
 use infra::process::SystemProcess;
 use infra::terminal::{self, Terminal};
@@ -22,7 +23,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Create a new git worktree and launch Claude in it
+    /// Create a new git worktree and launch an agent in it
     Launch(LaunchArgs),
     /// List running agents in worktrees of the current repository
     Ps,
@@ -49,6 +50,10 @@ pub struct LaunchArgs {
     /// Launch the agent in a vertical split pane
     #[arg(long, group = "windowing")]
     pub split_pane: bool,
+
+    /// Agent command to launch (default: claude)
+    #[arg(long, default_value_t = Agent::default())]
+    pub agent: Agent,
 }
 
 #[derive(Parser, Debug)]
@@ -67,6 +72,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Launch(args) => {
+            let agent = args.agent;
+
             let (launch_mode, terminal): (LaunchMode, Option<Box<dyn Terminal>>) =
                 if args.tab || args.split_pane {
                     let term = terminal::detect_terminal()?;
@@ -80,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
             let workspace = GitWorktreeWorkspace::new(Git, args.worktree_base, args.branch);
-            let launcher = AgentLauncher::new(Box::new(workspace), terminal, launch_mode);
+            let launcher = AgentLauncher::new(Box::new(workspace), terminal, launch_mode, agent);
             launcher.launch()?;
         }
         Commands::Ps => {
@@ -91,10 +98,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 println!("{:<8} {:<10} {:<20} WORKTREE", "PID", "AGENT", "BRANCH");
                 for agent in &agents {
+                    let agent_name = agent
+                        .agent_type
+                        .as_ref()
+                        .map(|a| a.to_string())
+                        .unwrap_or_else(|| "(unknown)".to_string());
                     println!(
                         "{:<8} {:<10} {:<20} {}",
                         agent.pid,
-                        agent.agent_type,
+                        agent_name,
                         agent.branch.as_deref().unwrap_or("(detached)"),
                         agent.worktree_path.display()
                     );

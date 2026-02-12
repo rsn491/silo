@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::infra::agent::Agent;
 use crate::infra::osascript::run_osascript;
 use crate::services::agent_launcher::LaunchError;
 
@@ -9,8 +10,10 @@ use super::Terminal;
 pub struct ITerm2;
 
 impl Terminal for ITerm2 {
-    fn open_tab(&self, worktree_path: &Path) -> Result<(), LaunchError> {
+    fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError> {
         let path_str = worktree_path.display().to_string();
+        let cmd = agent.command();
+        let program = cmd.get_program().to_string_lossy().to_string();
         let script = format!(
             r#"tell application "iTerm2"
                 activate
@@ -20,17 +23,19 @@ impl Terminal for ITerm2 {
                 tell current window
                     create tab with default profile
                     tell current session
-                        write text "cd '{}' && claude"
+                        write text "cd '{}' && {}"
                     end tell
                 end tell
             end tell"#,
-            path_str
+            path_str, program
         );
         run_osascript(&script).map_err(LaunchError::AgentSpawnError)
     }
 
-    fn split_pane(&self, worktree_path: &Path) -> Result<(), LaunchError> {
+    fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError> {
         let path_str = worktree_path.display().to_string();
+        let cmd = agent.command();
+        let program = cmd.get_program().to_string_lossy().to_string();
         let script = format!(
             r#"tell application "iTerm2"
                 activate
@@ -40,11 +45,11 @@ impl Terminal for ITerm2 {
                 tell current session of current window
                     set newSession to (split vertically with default profile)
                     tell newSession
-                        write text "cd '{}' && claude"
+                        write text "cd '{}' && {}"
                     end tell
                 end tell
             end tell"#,
-            path_str
+            path_str, program
         );
         run_osascript(&script).map_err(LaunchError::AgentSpawnError)
     }

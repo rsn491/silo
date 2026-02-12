@@ -1,9 +1,9 @@
+use crate::infra::agent::Agent;
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::Terminal;
 use crate::services::agent_workspace::AgentWorkspace;
 use std::fmt;
 use std::os::unix::process::CommandExt;
-use std::process::Command;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LaunchMode {
@@ -46,6 +46,7 @@ pub struct AgentLauncher {
     workspace: Box<dyn AgentWorkspace>,
     terminal: Option<Box<dyn Terminal>>,
     launch_mode: LaunchMode,
+    agent: Agent,
 }
 
 impl AgentLauncher {
@@ -53,11 +54,13 @@ impl AgentLauncher {
         workspace: Box<dyn AgentWorkspace>,
         terminal: Option<Box<dyn Terminal>>,
         launch_mode: LaunchMode,
+        agent: Agent,
     ) -> Self {
         Self {
             workspace,
             terminal,
             launch_mode,
+            agent,
         }
     }
 
@@ -68,24 +71,27 @@ impl AgentLauncher {
         // Step 2: Launch agent in the workspace
         match self.launch_mode {
             LaunchMode::ExecReplace => {
-                println!("Launching claude in worktree...");
-                let err = Command::new("claude").current_dir(&workspace_path).exec();
+                println!("Launching {:?} in worktree...", self.agent);
+                let err = self.agent.command().current_dir(&workspace_path).exec();
                 Err(LaunchError::AgentSpawnError(err.to_string()))
             }
             LaunchMode::NewTab => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for new tab".to_string())
                 })?;
-                println!("Opening new tab for claude in worktree...");
-                match terminal.open_tab(&workspace_path) {
+                println!("Opening new tab for {:?} in worktree...", self.agent);
+                match terminal.open_tab(&workspace_path, &self.agent) {
                     Ok(()) => {
                         println!("Agent launched in new tab at: {}", workspace_path.display());
                         Ok(())
                     }
                     Err(e) => {
                         eprintln!("Failed to open new tab: {}", e);
-                        eprintln!("Falling back to launching claude in current process...");
-                        let err = Command::new("claude").current_dir(&workspace_path).exec();
+                        eprintln!(
+                            "Falling back to launching {:?} in current process...",
+                            self.agent
+                        );
+                        let err = self.agent.command().current_dir(&workspace_path).exec();
                         Err(LaunchError::AgentSpawnError(err.to_string()))
                     }
                 }
@@ -94,8 +100,8 @@ impl AgentLauncher {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
                 })?;
-                println!("Opening split pane for claude in worktree...");
-                match terminal.split_pane(&workspace_path) {
+                println!("Opening split pane for {:?} in worktree...", self.agent);
+                match terminal.split_pane(&workspace_path, &self.agent) {
                     Ok(()) => {
                         println!(
                             "Agent launched in split pane at: {}",
@@ -105,8 +111,11 @@ impl AgentLauncher {
                     }
                     Err(e) => {
                         eprintln!("Failed to open split pane: {}", e);
-                        eprintln!("Falling back to launching claude in current process...");
-                        let err = Command::new("claude").current_dir(&workspace_path).exec();
+                        eprintln!(
+                            "Falling back to launching {:?} in current process...",
+                            self.agent
+                        );
+                        let err = self.agent.command().current_dir(&workspace_path).exec();
                         Err(LaunchError::AgentSpawnError(err.to_string()))
                     }
                 }
