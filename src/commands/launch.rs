@@ -1,0 +1,52 @@
+use clap::Parser;
+use std::path::PathBuf;
+
+use crate::infra::agent::Agent;
+use crate::infra::git::Git;
+use crate::infra::terminal;
+use crate::services::agent_launcher::{AgentLauncher, LaunchMode};
+use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
+
+#[derive(Parser, Debug)]
+pub struct LaunchArgs {
+    /// Base directory for the worktree (default: parent of repo)
+    #[arg(long)]
+    pub worktree_base: Option<PathBuf>,
+
+    /// Custom branch name (default: worktree name)
+    #[arg(long)]
+    pub branch: Option<String>,
+
+    /// Launch the agent in a new terminal tab instead of replacing the current process
+    #[arg(long, group = "windowing")]
+    pub tab: bool,
+
+    /// Launch the agent in a vertical split pane
+    #[arg(long, group = "windowing")]
+    pub split_pane: bool,
+
+    /// Agent command to launch (default: claude)
+    #[arg(long, default_value_t = Agent::default())]
+    pub agent: Agent,
+}
+
+pub fn run(args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let agent = args.agent;
+
+    let (launch_mode, terminal): (LaunchMode, Option<_>) = if args.tab || args.split_pane {
+        let term = terminal::detect_terminal()?;
+        if args.split_pane {
+            (LaunchMode::SplitPane, Some(term))
+        } else {
+            (LaunchMode::NewTab, Some(term))
+        }
+    } else {
+        (LaunchMode::ExecReplace, None)
+    };
+
+    let workspace = GitWorktreeWorkspace::new(Git, args.worktree_base);
+    let launcher = AgentLauncher::new(workspace, terminal, launch_mode, agent, args.branch);
+    launcher.launch()?;
+
+    Ok(())
+}

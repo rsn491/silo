@@ -3,47 +3,9 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::agent_launcher::LaunchError;
-use super::agent_workspace::AgentWorkspaceManager;
+use super::agent_workspace::{AgentWorkspaceManager, GitStatus, StatusError};
 use super::silo_config::SiloConfig;
 use crate::infra::git::{GitOperations, WorktreeInfo};
-use crate::infra::git_error::GitError;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct GitStatus {
-    pub path: PathBuf,
-    pub branch: Option<String>,
-    pub has_uncommitted_changes: bool,
-    pub uncommitted_file_count: usize,
-    pub commits_ahead: usize,
-    pub commits_behind: usize,
-}
-
-#[derive(Debug)]
-pub enum StatusError {
-    Git(GitError),
-}
-
-impl std::fmt::Display for StatusError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StatusError::Git(e) => write!(f, "Git error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for StatusError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            StatusError::Git(e) => Some(e),
-        }
-    }
-}
-
-impl From<GitError> for StatusError {
-    fn from(error: GitError) -> Self {
-        StatusError::Git(error)
-    }
-}
 
 pub struct GitWorktreeWorkspace<G: GitOperations> {
     git: G,
