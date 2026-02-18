@@ -4,6 +4,7 @@ mod services;
 
 use clap::{Parser, Subcommand};
 use commands::cleanup::CleanupArgs;
+use commands::completions::CompletionsArgs;
 use commands::launch::LaunchArgs;
 use commands::status::StatusArgs;
 
@@ -27,6 +28,8 @@ pub enum Commands {
     Cleanup(CleanupArgs),
     /// Show status of worktrees (uncommitted changes and commits ahead/behind)
     Status(StatusArgs),
+    /// Generate shell completion scripts
+    Completions(CompletionsArgs),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,6 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Init => commands::init::run()?,
         Commands::Cleanup(args) => commands::cleanup::run(args)?,
         Commands::Status(args) => commands::status::run(args)?,
+        Commands::Completions(args) => commands::completions::run(args)?,
     }
 
     Ok(())

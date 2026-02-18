@@ -1,8 +1,10 @@
+use clap::ValueEnum;
 use std::process::Command;
 use strum::{Display, EnumIter, EnumString, IntoStaticStr};
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumString, Display, EnumIter, IntoStaticStr)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumString, Display, EnumIter, IntoStaticStr, ValueEnum)]
 #[strum(serialize_all = "lowercase")]
+#[clap(rename_all = "lowercase")]
 pub enum Agent {
     ClaudeCode,
     OpenCode,

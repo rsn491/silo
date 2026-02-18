@@ -71,6 +71,25 @@ Remove inactive worktrees where no agents are currently running:
 silo cleanup
 ```
 
+### Shell completions
+
+Zsh
+```bash
+mkdir -p ~/.zsh/completions
+silo completions zsh > ~/.zsh/completions/_silo
+printf '\n# The following lines have been added by silo to enable CLI completions.\nfpath=(~/.zsh/completions $fpath)\nautoload -Uz compinit\ncompinit\n# End of silo completions' >> ~/.zshrc
+```
+
+Bash
+```bash
+silo completions bash > ~/.local/share/bash-completion/completions/silo
+```
+
+Fish
+```bash
+silo completions fish > ~/.config/fish/completions/silo.fish
+```
+
 ## Development
 
 ### Prerequisites
