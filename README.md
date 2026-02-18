@@ -53,6 +53,16 @@ View all active agents running in worktrees of the current repository:
 silo ps
 ```
 
+### Show worktree status
+
+View uncommitted changes and commits ahead/behind for each worktree:
+
+```bash
+silo status
+```
+
+Use `--all` to include clean worktrees.
+
 ### Clean up worktrees
 
 Remove inactive worktrees where no agents are currently running:

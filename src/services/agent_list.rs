@@ -142,6 +142,30 @@ mod tests {
         fn remove_worktree(&self, _path: &Path) -> Result<(), GitError> {
             Ok(())
         }
+
+        fn get_default_remote_branch(&self) -> Result<String, GitError> {
+            Ok("origin/main".to_string())
+        }
+
+        fn get_status_porcelain(&self, _worktree_path: &Path) -> Result<String, GitError> {
+            Ok(String::new())
+        }
+
+        fn count_commits_ahead(
+            &self,
+            _worktree_path: &Path,
+            _base_branch: &str,
+        ) -> Result<usize, GitError> {
+            Ok(0)
+        }
+
+        fn count_commits_behind(
+            &self,
+            _worktree_path: &Path,
+            _base_branch: &str,
+        ) -> Result<usize, GitError> {
+            Ok(0)
+        }
     }
 
     // Mock ProcessOperations

@@ -8,6 +8,7 @@ use infra::process::SystemProcess;
 use infra::terminal;
 use services::agent_launcher::{AgentLauncher, LaunchMode};
 use services::agent_list::AgentListService;
+use services::agent_workspace::AgentWorkspaceManager;
 use services::git_worktree_workspace::GitWorktreeWorkspace;
 use services::silo_config::SiloConfig;
 use services::worktree_cleanup::WorktreeCleanupService;
@@ -31,6 +32,8 @@ pub enum Commands {
     Init,
     /// Clean up worktrees where no agents are running
     Cleanup(CleanupArgs),
+    /// Show status of worktrees (uncommitted changes and commits ahead/behind)
+    Status(StatusArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -67,6 +70,13 @@ pub struct CleanupArgs {
     pub yes: bool,
 }
 
+#[derive(Parser, Debug)]
+pub struct StatusArgs {
+    /// Show all worktrees, including clean ones
+    #[arg(long)]
+    pub all: bool,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
@@ -85,8 +95,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (LaunchMode::ExecReplace, None)
             };
 
-            let workspace = GitWorktreeWorkspace::new(Git, args.worktree_base, args.branch);
-            let launcher = AgentLauncher::new(workspace, terminal, launch_mode, agent);
+            let workspace = GitWorktreeWorkspace::new(Git, args.worktree_base);
+            let launcher = AgentLauncher::new(workspace, terminal, launch_mode, agent, args.branch);
             launcher.launch()?;
         }
         Commands::Ps => {
@@ -142,6 +152,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let service = WorktreeCleanupService::new(Git, SystemProcess);
             service.cleanup(args.all)?;
+        }
+        Commands::Status(args) => {
+            let workspace = GitWorktreeWorkspace::new(Git, None);
+            let statuses = workspace.get_statuses(args.all)?;
+
+            if statuses.is_empty() {
+                if args.all {
+                    println!("No worktrees found (excluding main worktree).");
+                } else {
+                    println!("No worktrees with changes or commits ahead/behind.");
+                    println!("Use --all to see all worktrees.");
+                }
+                return Ok(());
+            }
+
+            // Table header
+            println!(
+                "{:<50} {:<20} {:<12} {:<12}",
+                "WORKTREE", "BRANCH", "UNCOMMITTED", "AHEAD/BEHIND"
+            );
+
+            // Table rows
+            for status in &statuses {
+                let branch = status.branch.as_deref().unwrap_or("(detached)");
+
+                let uncommitted = if status.has_uncommitted_changes {
+                    format!("{} files", status.uncommitted_file_count)
+                } else {
+                    "-".to_string()
+                };
+
+                let divergence = if status.commits_ahead > 0 || status.commits_behind > 0 {
+                    format!("+{} -{}", status.commits_ahead, status.commits_behind)
+                } else {
+                    "-".to_string()
+                };
+
+                println!(
+                    "{:<50} {:<20} {:<12} {:<12}",
+                    status.path.display(),
+                    branch,
+                    uncommitted,
+                    divergence
+                );
+            }
         }
     };
 

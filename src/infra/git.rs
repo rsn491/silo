@@ -15,6 +15,18 @@ pub trait GitOperations {
     fn create_worktree(&self, path: &Path, branch: &str) -> Result<(), GitError>;
     fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>, GitError>;
     fn remove_worktree(&self, path: &Path) -> Result<(), GitError>;
+    fn get_default_remote_branch(&self) -> Result<String, GitError>;
+    fn get_status_porcelain(&self, worktree_path: &Path) -> Result<String, GitError>;
+    fn count_commits_ahead(
+        &self,
+        worktree_path: &Path,
+        base_branch: &str,
+    ) -> Result<usize, GitError>;
+    fn count_commits_behind(
+        &self,
+        worktree_path: &Path,
+        base_branch: &str,
+    ) -> Result<usize, GitError>;
 }
 
 #[derive(Default, Clone)]
@@ -98,6 +110,89 @@ impl GitOperations for Git {
         }
 
         Ok(())
+    }
+
+    fn get_default_remote_branch(&self) -> Result<String, GitError> {
+        let output = Command::new("git")
+            .args(["symbolic-ref", "refs/remotes/origin/HEAD"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if output.status.success() {
+            let branch = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .strip_prefix("refs/remotes/")
+                .unwrap_or("origin/main")
+                .to_string();
+            Ok(branch)
+        } else {
+            // Fallback to origin/main if command fails
+            Ok("origin/main".to_string())
+        }
+    }
+
+    fn get_status_porcelain(&self, worktree_path: &Path) -> Result<String, GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(worktree_path)
+            .args(["status", "--porcelain"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.to_string()));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
+    fn count_commits_ahead(
+        &self,
+        worktree_path: &Path,
+        base_branch: &str,
+    ) -> Result<usize, GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(worktree_path)
+            .args(["rev-list", "--count"])
+            .arg(format!("{}..HEAD", base_branch))
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if output.status.success() {
+            let count = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .parse::<usize>()
+                .unwrap_or(0);
+            Ok(count)
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn count_commits_behind(
+        &self,
+        worktree_path: &Path,
+        base_branch: &str,
+    ) -> Result<usize, GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(worktree_path)
+            .args(["rev-list", "--count"])
+            .arg(format!("HEAD..{}", base_branch))
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if output.status.success() {
+            let count = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .parse::<usize>()
+                .unwrap_or(0);
+            Ok(count)
+        } else {
+            Ok(0)
+        }
     }
 }
 

@@ -1,10 +1,20 @@
 use std::path::PathBuf;
 
-use crate::services::agent_launcher::LaunchError;
+use crate::services::{
+    agent_launcher::LaunchError,
+    git_worktree_workspace::{GitStatus, StatusError},
+};
 
-/// Trait for managing agent workspaces.
-/// Implementers create isolated workspaces and return the path where an agent should be launched.
-pub trait AgentWorkspace {
+pub trait AgentWorkspaceManager {
     /// Creates a new workspace and returns its path.
-    fn create(&self) -> Result<PathBuf, LaunchError>;
+    ///
+    /// # Arguments
+    /// * `branch` - Optional branch name for the workspace. If None, a default branch name will be generated.
+    fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError>;
+
+    /// Returns the git status of each workspace.
+    ///
+    /// # Arguments
+    /// * `show_all` - If true, returns git status for each workspace, including clean workspaces.
+    fn get_statuses(&self, show_all: bool) -> Result<Vec<GitStatus>, StatusError>;
 }

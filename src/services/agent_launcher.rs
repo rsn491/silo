@@ -1,7 +1,7 @@
 use crate::infra::agent::Agent;
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::Terminal;
-use crate::services::agent_workspace::AgentWorkspace;
+use crate::services::agent_workspace::AgentWorkspaceManager;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,26 +43,34 @@ impl From<GitError> for LaunchError {
 
 pub struct AgentLauncher<W, T>
 where
-    W: AgentWorkspace,
+    W: AgentWorkspaceManager,
     T: Terminal,
 {
     workspace: W,
     terminal: Option<T>,
     launch_mode: LaunchMode,
     agent: Agent,
+    branch: Option<String>,
 }
 
 impl<W, T> AgentLauncher<W, T>
 where
-    W: AgentWorkspace,
+    W: AgentWorkspaceManager,
     T: Terminal,
 {
-    pub fn new(workspace: W, terminal: Option<T>, launch_mode: LaunchMode, agent: Agent) -> Self {
+    pub fn new(
+        workspace: W,
+        terminal: Option<T>,
+        launch_mode: LaunchMode,
+        agent: Agent,
+        branch: Option<String>,
+    ) -> Self {
         Self {
             workspace,
             terminal,
             launch_mode,
             agent,
+            branch,
         }
     }
 
@@ -84,7 +92,7 @@ where
 
     pub fn launch(&self) -> Result<(), LaunchError> {
         // Step 1: Create workspace
-        let workspace_path = self.workspace.create()?;
+        let workspace_path = self.workspace.create(self.branch.clone())?;
 
         // Step 2: Launch agent in the workspace
         match self.launch_mode {
