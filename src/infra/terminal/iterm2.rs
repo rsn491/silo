@@ -12,8 +12,10 @@ pub struct ITerm2;
 impl Terminal for ITerm2 {
     fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError> {
         let path_str = worktree_path.display().to_string();
+        let escaped_path = path_str.replace('\'', "'\\''");
         let cmd = agent.command();
         let program = cmd.get_program().to_string_lossy().to_string();
+        let escaped_program = program.replace('\'', "'\\''");
         let script = format!(
             r#"tell application "iTerm2"
                 activate
@@ -27,15 +29,17 @@ impl Terminal for ITerm2 {
                     end tell
                 end tell
             end tell"#,
-            path_str, program
+            escaped_path, escaped_program
         );
         run_osascript(&script).map_err(LaunchError::AgentSpawnError)
     }
 
     fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError> {
         let path_str = worktree_path.display().to_string();
+        let escaped_path = path_str.replace('\'', "'\\''");
         let cmd = agent.command();
         let program = cmd.get_program().to_string_lossy().to_string();
+        let escaped_program = program.replace('\'', "'\\''");
         let script = format!(
             r#"tell application "iTerm2"
                 activate
@@ -49,7 +53,7 @@ impl Terminal for ITerm2 {
                     end tell
                 end tell
             end tell"#,
-            path_str, program
+            escaped_path, escaped_program
         );
         run_osascript(&script).map_err(LaunchError::AgentSpawnError)
     }
