@@ -57,7 +57,7 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
         let worktrees = self.git.list_worktrees()?;
 
         // Find processes matching known agent names
-        let agent_names = Agent::all_names();
+        let agent_names = Agent::all_process_names();
         let processes = self.process.find_processes_by_names(&agent_names)?;
 
         let mut agents = Vec::new();
@@ -106,7 +106,7 @@ fn extract_agent_type(args: &str) -> Option<Agent> {
     if let Some(first) = parts.first()
         && let Some(name) = first.split('/').next_back()
     {
-        return Agent::try_from_str(name);
+        return Agent::try_from_process_name(name);
     }
     None
 }
