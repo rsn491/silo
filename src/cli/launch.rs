@@ -12,6 +12,7 @@ use crate::services::agent_workspace::{
 };
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
+use crate::services::silo_config::SiloConfig;
 
 #[derive(Parser, Debug)]
 pub struct LaunchArgs {
@@ -27,9 +28,9 @@ pub struct LaunchArgs {
     #[arg(long, group = "windowing")]
     pub split_pane: bool,
 
-    /// Agent command to launch (default: claude)
-    #[arg(long, default_value_t = Agent::default())]
-    pub agent: Agent,
+    /// Agent command to launch (default: settings.json or claude)
+    #[arg(long)]
+    pub agent: Option<Agent>,
 
     /// Use git clone instead of git worktrees for workspace isolation
     #[arg(long)]
@@ -96,17 +97,18 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
     }
 
     pub fn run(self, args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
+        let agent = resolve_agent(args.agent);
         let workspace_kind = match &self.workspace {
             WorkspaceBackend::Worktree(_) => "worktree",
             WorkspaceBackend::Checkout(_) => "checkout",
         };
-        eprintln!("Launching {:?} in {}...", args.agent, workspace_kind);
+        eprintln!("Launching {:?} in {}...", agent, workspace_kind);
 
         let workspace_path = AgentLauncher::new(
             self.workspace,
             self.terminal,
             self.launch_mode,
-            args.agent,
+            agent,
             args.branch,
         )
         .launch()?;
@@ -117,5 +119,34 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         );
 
         Ok(())
+    }
+}
+
+fn resolve_agent(agent: Option<Agent>) -> Agent {
+    if let Some(agent) = agent {
+        return agent;
+    }
+
+    let settings = match SiloConfig::load_settings() {
+        Ok(settings) => settings,
+        Err(err) => {
+            eprintln!("Warning: failed to load settings.json: {}", err);
+            return Agent::default();
+        }
+    };
+
+    let Some(agent_str) = settings.agent else {
+        return Agent::default();
+    };
+
+    match Agent::try_from_str(&agent_str) {
+        Some(agent) => agent,
+        None => {
+            eprintln!(
+                "Warning: invalid agent '{}' in settings.json; falling back to default",
+                agent_str
+            );
+            Agent::default()
+        }
     }
 }

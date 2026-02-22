@@ -5,7 +5,7 @@ mod services;
 use clap::{Parser, Subcommand};
 use cli::cleanup::{CleanupArgs, CleanupCommand};
 use cli::completions::{CompletionsArgs, CompletionsCommand};
-use cli::init::InitCommand;
+use cli::init::{InitArgs, InitCommand};
 use cli::launch::{LaunchArgs, LaunchCommand, WorkspaceBackend};
 use cli::ps::PsCommand;
 use cli::status::{StatusArgs, StatusCommand};
@@ -34,7 +34,7 @@ pub enum Commands {
     /// List running agents in worktrees of the current repository
     Ps,
     /// Initialize the .silo directory in your home directory
-    Init,
+    Init(InitArgs),
     /// Clean up worktrees where no agents are running
     Cleanup(CleanupArgs),
     /// Show status of worktrees (uncommitted changes and commits ahead/behind)
@@ -78,7 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Ps => {
             PsCommand::new(AgentListService::new(Git, SystemProcess)).run()?;
         }
-        Commands::Init => InitCommand::new().run()?,
+        Commands::Init(args) => InitCommand::new().run(args)?,
         Commands::Cleanup(args) => {
             CleanupCommand::new(WorkspaceCleanupService::new(Git, SystemProcess)).run(args)?;
         }

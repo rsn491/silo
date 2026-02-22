@@ -1,13 +1,16 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Error types for silo configuration operations
 #[derive(Debug)]
 pub enum SiloConfigError {
     IoError(io::Error),
     HomeDirectoryNotFound,
+    JsonParse(String),
+    JsonWrite(String),
 }
 
 impl fmt::Display for SiloConfigError {
@@ -17,6 +20,8 @@ impl fmt::Display for SiloConfigError {
             SiloConfigError::HomeDirectoryNotFound => {
                 write!(f, "could not determine home directory")
             }
+            SiloConfigError::JsonParse(msg) => write!(f, "failed to parse settings.json: {}", msg),
+            SiloConfigError::JsonWrite(msg) => write!(f, "failed to write settings.json: {}", msg),
         }
     }
 }
@@ -26,6 +31,8 @@ impl std::error::Error for SiloConfigError {
         match self {
             SiloConfigError::IoError(err) => Some(err),
             SiloConfigError::HomeDirectoryNotFound => None,
+            SiloConfigError::JsonParse(_) => None,
+            SiloConfigError::JsonWrite(_) => None,
         }
     }
 }
@@ -34,6 +41,11 @@ impl From<io::Error> for SiloConfigError {
     fn from(err: io::Error) -> Self {
         SiloConfigError::IoError(err)
     }
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct SiloSettings {
+    pub agent: Option<String>,
 }
 
 /// Configuration management for silo directory
@@ -54,11 +66,47 @@ impl SiloConfig {
 
         Ok(silo_dir)
     }
+
+    pub fn get_settings_path() -> Result<PathBuf, SiloConfigError> {
+        let silo_dir = Self::get_silo_dir().ok_or(SiloConfigError::HomeDirectoryNotFound)?;
+        Ok(silo_dir.join("settings.json"))
+    }
+
+    pub fn load_settings() -> Result<SiloSettings, SiloConfigError> {
+        let settings_path = Self::get_settings_path()?;
+        Self::load_settings_from_path(&settings_path)
+    }
+
+    pub fn save_settings(settings: &SiloSettings) -> Result<(), SiloConfigError> {
+        let settings_path = Self::get_settings_path()?;
+        Self::save_settings_to_path(&settings_path, settings)
+    }
+
+    fn load_settings_from_path(path: &Path) -> Result<SiloSettings, SiloConfigError> {
+        if !path.exists() {
+            return Ok(SiloSettings::default());
+        }
+
+        let contents = fs::read_to_string(path)?;
+        serde_json::from_str(&contents).map_err(|e| SiloConfigError::JsonParse(e.to_string()))
+    }
+
+    fn save_settings_to_path(path: &Path, settings: &SiloSettings) -> Result<(), SiloConfigError> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let contents = serde_json::to_string_pretty(settings)
+            .map_err(|e| SiloConfigError::JsonWrite(e.to_string()))?;
+        fs::write(path, contents)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_initialize_idempotent() {
@@ -83,5 +131,52 @@ mod tests {
         if let Some(path) = silo_dir {
             assert!(path.to_string_lossy().contains(".silo"));
         }
+    }
+
+    #[test]
+    fn test_load_settings_missing_file() {
+        let dir = tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+
+        let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        assert!(settings.agent.is_none());
+    }
+
+    #[test]
+    fn test_load_settings_valid_json() {
+        let dir = tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+        fs::write(&settings_path, r#"{"agent":"codex"}"#).unwrap();
+
+        let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        assert_eq!(settings.agent.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn test_load_settings_invalid_json() {
+        let dir = tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+        fs::write(&settings_path, "{invalid").unwrap();
+
+        let err = SiloConfig::load_settings_from_path(&settings_path).unwrap_err();
+        match err {
+            SiloConfigError::JsonParse(_) => {}
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_save_settings() {
+        let dir = tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+
+        let settings = SiloSettings {
+            agent: Some("opencode".to_string()),
+        };
+
+        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
+        let contents = fs::read_to_string(&settings_path).unwrap();
+        assert!(contents.contains("\"agent\""));
+        assert!(contents.contains("opencode"));
     }
 }
