@@ -12,6 +12,10 @@ pub struct CleanupArgs {
     #[arg(long)]
     pub all: bool,
 
+    /// Force removal even if workspace has uncommitted work
+    #[arg(long)]
+    pub force: bool,
+
     /// Skip confirmation prompt
     #[arg(long, short = 'y')]
     pub yes: bool,
@@ -33,7 +37,7 @@ pub fn run(args: CleanupArgs) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let service = WorkspaceCleanupService::new(Git, SystemProcess);
-    let result = service.cleanup(args.all)?;
+    let result = service.cleanup(args.all, args.force)?;
 
     if result.removed.is_empty() && result.failed.is_empty() && result.skipped.is_empty() {
         println!("No workspaces to clean up.");
@@ -60,7 +64,7 @@ pub fn run(args: CleanupArgs) -> Result<(), Box<dyn std::error::Error>> {
             WorkspaceKind::Checkout => "checkout clone".to_string(),
         };
         println!(
-            "  ⚠ Skipped {} ({}, has {} unpushed commit(s))",
+            "  ⚠ Skipped {} ({}, has {} unpushed commit(s)) — use --force to remove anyway",
             ws.path.display(),
             detail,
             ws.commits_ahead

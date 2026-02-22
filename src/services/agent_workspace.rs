@@ -153,6 +153,7 @@ pub trait AgentWorkspaceManager {
         &self,
         excluded_paths: &HashSet<PathBuf>,
         all: bool,
+        force: bool,
     ) -> Result<CleanupResult, CleanupError>;
 
     /// Returns all workspaces.

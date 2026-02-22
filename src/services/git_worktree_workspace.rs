@@ -103,6 +103,7 @@ impl<G: GitOperations> AgentWorkspaceManager for GitWorktreeWorkspace<G> {
         &self,
         active_paths: &HashSet<PathBuf>,
         all: bool,
+        force: bool,
     ) -> Result<CleanupResult, CleanupError> {
         let all_worktrees = self.git.list_worktrees()?;
         let repo_root = self.git.get_repo_root()?;
@@ -132,7 +133,9 @@ impl<G: GitOperations> AgentWorkspaceManager for GitWorktreeWorkspace<G> {
         let base_branch = self.git.get_default_remote_branch().ok();
 
         for wt in candidates {
-            if let Some(ahead) = commits_ahead_of_remote(&self.git, &wt.path, &base_branch) {
+            if !force
+                && let Some(ahead) = commits_ahead_of_remote(&self.git, &wt.path, &base_branch)
+            {
                 result.skipped.push(SkippedWorkspace {
                     path: wt.path.clone(),
                     kind: WorkspaceKind::Worktree,
@@ -618,7 +621,7 @@ mod tests {
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let active = HashSet::new();
-        let result = workspace.cleanup(&active, true).unwrap(); // Use all: true to include all worktrees
+        let result = workspace.cleanup(&active, true, false).unwrap(); // Use all: true to include all worktrees
 
         // worktree1 should be skipped, worktree2 should be removed
         assert_eq!(result.removed.len(), 1);

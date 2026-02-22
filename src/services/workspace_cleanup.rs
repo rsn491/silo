@@ -23,7 +23,7 @@ impl<G: GitOperations + Clone, P: ProcessOperations + Clone> WorkspaceCleanupSer
         }
     }
 
-    pub fn cleanup(&self, all: bool) -> Result<CleanupResult, CleanupError> {
+    pub fn cleanup(&self, all: bool, force: bool) -> Result<CleanupResult, CleanupError> {
         let active_paths: HashSet<PathBuf> = self
             .agent_list_service
             .get_active_worktree_paths()
@@ -31,8 +31,8 @@ impl<G: GitOperations + Clone, P: ProcessOperations + Clone> WorkspaceCleanupSer
             .into_iter()
             .collect();
 
-        let mut result = self.worktree_workspace.cleanup(&active_paths, all)?;
-        result.extend(self.checkout_workspace.cleanup(&active_paths, all)?);
+        let mut result = self.worktree_workspace.cleanup(&active_paths, all, force)?;
+        result.extend(self.checkout_workspace.cleanup(&active_paths, all, force)?);
 
         Ok(result)
     }

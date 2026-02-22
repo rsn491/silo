@@ -113,6 +113,7 @@ impl<G: GitOperations> AgentWorkspaceManager for GitCheckoutWorkspace<G> {
         &self,
         exclude_paths: &HashSet<PathBuf>,
         _all: bool,
+        force: bool,
     ) -> Result<CleanupResult, CleanupError> {
         let silo_dir = SiloConfig::get_silo_dir();
         let project_prefix = format!("{}-", self.git.get_project_name()?);
@@ -128,7 +129,7 @@ impl<G: GitOperations> AgentWorkspaceManager for GitCheckoutWorkspace<G> {
         let base_branch = self.git.get_default_remote_branch().ok();
 
         for path in candidates {
-            if let Some(ahead) = commits_ahead_of_remote(&self.git, &path, &base_branch) {
+            if !force && let Some(ahead) = commits_ahead_of_remote(&self.git, &path, &base_branch) {
                 let branch = self.git.get_current_branch(&path).ok().flatten();
                 result.skipped.push(SkippedWorkspace {
                     path: path.clone(),

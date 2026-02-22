@@ -72,6 +72,18 @@ Remove inactive worktrees where no agents are currently running:
 silo cleanup
 ```
 
+By default, cleanup skips worktrees with unpushed commits. Use `--force` to remove them anyway:
+
+```bash
+silo cleanup --force
+```
+
+#### Options
+
+- `--all` — Remove all worktrees in the repo, not just silo-managed ones in `~/.silo/`
+- `--force` — Remove worktrees even if they have unpushed commits
+- `--yes` — Skip confirmation prompt
+
 ### Shell completions
 
 Zsh
