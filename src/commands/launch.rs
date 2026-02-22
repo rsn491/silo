@@ -1,5 +1,4 @@
 use clap::Parser;
-use std::path::PathBuf;
 
 use crate::infra::agent::Agent;
 use crate::infra::git::Git;
@@ -10,10 +9,6 @@ use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 
 #[derive(Parser, Debug)]
 pub struct LaunchArgs {
-    /// Base directory for the worktree (default: parent of repo)
-    #[arg(long)]
-    pub worktree_base: Option<PathBuf>,
-
     /// Custom branch name (default: worktree name)
     #[arg(long)]
     pub branch: Option<String>,
@@ -60,7 +55,7 @@ pub fn run(args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
         let workspace = GitCheckoutWorkspace::new(Git);
         AgentLauncher::new(workspace, terminal, launch_mode, agent, args.branch).launch()?;
     } else {
-        let workspace = GitWorktreeWorkspace::new(Git, args.worktree_base);
+        let workspace = GitWorktreeWorkspace::new(Git);
         AgentLauncher::new(workspace, terminal, launch_mode, agent, args.branch).launch()?;
     }
 

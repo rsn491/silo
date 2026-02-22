@@ -18,7 +18,7 @@ impl<G: GitOperations + Clone, P: ProcessOperations + Clone> WorkspaceCleanupSer
     pub fn new(git: G, process: P) -> Self {
         Self {
             agent_list_service: AgentListService::new(git.clone(), process),
-            worktree_workspace: GitWorktreeWorkspace::new(git.clone(), None),
+            worktree_workspace: GitWorktreeWorkspace::new(git.clone()),
             checkout_workspace: GitCheckoutWorkspace::new(git),
         }
     }

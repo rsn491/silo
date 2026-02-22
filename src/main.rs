@@ -7,6 +7,7 @@ use commands::cleanup::CleanupArgs;
 use commands::completions::CompletionsArgs;
 use commands::launch::LaunchArgs;
 use commands::status::StatusArgs;
+use services::silo_config::SiloConfig;
 
 #[derive(Parser)]
 #[command(name = "silo")]
@@ -33,8 +34,12 @@ pub enum Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
+    if let Err(e) = SiloConfig::initialize() {
+        eprintln!("Failed to initialize silo: {}", e);
+        std::process::exit(1);
+    }
 
+    let cli = Cli::parse();
     match cli.command {
         Commands::Launch(args) => commands::launch::run(args)?,
         Commands::Ps => commands::ps::run()?,

@@ -57,7 +57,7 @@ impl<G: GitOperations + Clone, P: ProcessOperations> AgentListService<G, P> {
     }
 
     pub fn list_running_agents(&self) -> Result<Vec<RunningAgent>, ListError> {
-        let worktrees = GitWorktreeWorkspace::new(self.git.clone(), None).get_all()?;
+        let worktrees = GitWorktreeWorkspace::new(self.git.clone()).get_all()?;
         let checkouts = GitCheckoutWorkspace::new(self.git.clone()).get_all()?;
         let workspaces: Vec<_> = worktrees
             .iter()

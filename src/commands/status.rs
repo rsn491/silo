@@ -13,7 +13,7 @@ pub struct StatusArgs {
 }
 
 pub fn run(args: StatusArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let worktree_workspace = GitWorktreeWorkspace::new(Git, None);
+    let worktree_workspace = GitWorktreeWorkspace::new(Git);
     let mut statuses = worktree_workspace.get_statuses(args.all)?;
 
     let checkout_workspace = GitCheckoutWorkspace::new(Git);

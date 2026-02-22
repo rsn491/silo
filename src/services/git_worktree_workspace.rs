@@ -13,19 +13,17 @@ use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 
 pub struct GitWorktreeWorkspace<G: GitOperations> {
     git: G,
-    worktree_base: Option<PathBuf>,
 }
 
 impl<G: GitOperations> GitWorktreeWorkspace<G> {
-    pub fn new(git: G, worktree_base: Option<PathBuf>) -> Self {
-        Self { git, worktree_base }
+    pub fn new(git: G) -> Self {
+        Self { git }
     }
 
     fn generate_worktree_path(&self) -> Result<PathBuf, LaunchError> {
-        let repo_root = self.git.get_repo_root()?;
-
-        // Use SiloConfig for resolution with priority logic
-        let base_dir = SiloConfig::resolve_worktree_base(self.worktree_base.clone(), &repo_root);
+        let base_dir = SiloConfig::get_silo_dir().ok_or_else(|| {
+            LaunchError::AgentSpawnError("could not determine home directory".into())
+        })?;
 
         let worktree_name = format!(
             "{}-{}",
@@ -261,7 +259,7 @@ mod tests {
             divergence: vec![],
         };
 
-        let workspace = GitWorktreeWorkspace::new(mock_git, None);
+        let workspace = GitWorktreeWorkspace::new(mock_git);
         let result = workspace.create(None);
 
         assert!(result.is_ok());
@@ -296,7 +294,7 @@ mod tests {
             divergence: vec![(repo_root.clone(), 3, 0), (worktree1_path.clone(), 2, 0)],
         };
 
-        let workspace = GitWorktreeWorkspace::new(mock_git, None);
+        let workspace = GitWorktreeWorkspace::new(mock_git);
         let status = workspace.get_git_status(worktree1_info).unwrap();
 
         assert_eq!(status.path, worktree1_path);
@@ -330,7 +328,7 @@ mod tests {
             divergence: vec![(worktree1_path.clone(), 2, 0)],
         };
 
-        let workspace = GitWorktreeWorkspace::new(mock_git, None);
+        let workspace = GitWorktreeWorkspace::new(mock_git);
         let status = workspace.get_git_status(worktree1_info).unwrap();
 
         assert_eq!(status.path, worktree1_path);
@@ -361,7 +359,7 @@ mod tests {
             divergence: vec![(worktree2_path.clone(), 0, 0)],
         };
 
-        let workspace = GitWorktreeWorkspace::new(mock_git, None);
+        let workspace = GitWorktreeWorkspace::new(mock_git);
         let status = workspace.get_git_status(worktree2_info).unwrap();
 
         assert_eq!(status.path, worktree2_path);
@@ -394,7 +392,7 @@ mod tests {
             divergence: vec![(worktree1_path.clone(), 5, 1)],
         };
 
-        let workspace = GitWorktreeWorkspace::new(mock_git, None);
+        let workspace = GitWorktreeWorkspace::new(mock_git);
         let status = workspace.get_git_status(worktree1_info).unwrap();
 
         assert_eq!(status.commits_ahead, 5);
@@ -421,7 +419,7 @@ mod tests {
             divergence: vec![],
         };
 
-        let workspace = GitWorktreeWorkspace::new(mock_git, None);
+        let workspace = GitWorktreeWorkspace::new(mock_git);
         let result = workspace.get_git_status(nonexistent_info);
 
         // Mock returns Ok with default values (no uncommitted changes, no divergence)
@@ -485,7 +483,7 @@ mod tests {
             divergence: vec![(repo_root.clone(), 3, 0), (worktree1_path.clone(), 2, 0)],
         };
 
-        let workspace = GitWorktreeWorkspace::new(mock_git, None);
+        let workspace = GitWorktreeWorkspace::new(mock_git);
         let statuses = workspace.get_statuses(true).unwrap();
 
         // Should only return the non-main worktree
@@ -526,7 +524,7 @@ mod tests {
             ],
         };
 
-        let workspace = GitWorktreeWorkspace::new(mock_git, None);
+        let workspace = GitWorktreeWorkspace::new(mock_git);
         let statuses = workspace.get_statuses(false).unwrap();
 
         // Should only return worktree1 which has changes
@@ -567,7 +565,7 @@ mod tests {
             ],
         };
 
-        let workspace = GitWorktreeWorkspace::new(mock_git, None);
+        let workspace = GitWorktreeWorkspace::new(mock_git);
         let statuses = workspace.get_statuses(true).unwrap();
 
         // Should return both worktrees (excluding main)
