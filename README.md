@@ -1,139 +1,114 @@
 # silo
 
-Automated environment isolation for multi-agent development
-
-Current LLM agents are powerful, but managing their environments is a chore. silo automates the "boring stuff"—cloning repos, setting up worktrees, and partitioning environments—so you can deploy a fleet of agents to solve tasks in parallel.
-
-How it works:
-1. Define Tasks: Feed a list of objectives via CLI or the Web UI.
-1. Provision: The system automatically spins up isolated environments (Local Worktrees or Remote Containers).
-1. Execute: Agents (Claude, Gemini, Codex) work independently without file conflicts.
-1. Review: Merge the successful outputs back into your main branch.
+A CLI tool for managing isolated Git workspaces for multi-agent development. Silo lets multiple AI agents (Claude Code, OpenCode, Codex) work simultaneously on the same repository without interfering with each other, by creating separate Git worktrees or clones for each agent.
 
 ## Usage
 
-### Initialize silo
+### Initialize
 
-Optionally create a dedicated directory for all your worktrees:
+Set up the `~/.silo/` directory where workspaces will be stored:
 
-```bash
+```sh
 silo init
 ```
 
-This creates a `~/.silo/` directory in your home folder. Once initialized, all future worktrees will be created here by default instead of in the parent directory of each repository.
-
 ### Launch an agent
 
-Launch an agent in an isolated git worktree:
+Create an isolated workspace and launch an AI agent inside it:
 
-```bash
-silo launch
+```sh
+silo launch                            # Launch Claude Code (default)
+silo launch --agent opencode           # Launch OpenCode
+silo launch --agent codex              # Launch Codex
+silo launch --branch my-feature        # Use a specific branch name
+silo launch --tab                      # Open in a new iTerm2 tab
+silo launch --split-pane               # Open in a split iTerm2 pane
+silo launch --checkout                 # Use git clone instead of worktree
 ```
-
-This creates a new worktree with a unique branch and starts a Claude session inside it.
-
-The worktree location is determined by this priority:
-1. Explicit `--worktree-base` argument (highest priority)
-2. `~/.silo/` directory (if it exists from running `silo init`)
-3. Parent directory of the repo (fallback)
-
-#### Options
-
-- `--worktree-base <path>` — Base directory for the worktree (overrides default)
-- `--branch <name>` — Custom branch name (default: auto-generated from project name)
-- `--agent <name>` — Agent to launch: `claude` or `opencode` (default: `claude`)
-- `--checkout` — Use git clone instead of git worktrees for workspace isolation (requires `~/.silo/` to exist)
-- `--tab` — Launch the agent in a new terminal tab instead of replacing the current process
-- `--split-pane` — Launch the agent in a vertical split pane (iTerm2 only)
 
 ### List running agents
 
-View all active agents running in worktrees of the current repository:
+Show all AI agents currently running in silo workspaces:
 
-```bash
+```sh
 silo ps
 ```
 
-### Show worktree status
+### Show workspace status
 
-View uncommitted changes and commits ahead/behind for each worktree:
+Display the status of all worktrees with commit information:
 
-```bash
+```sh
 silo status
 ```
 
-Use `--all` to include clean worktrees.
+### Clean up workspaces
 
-### Clean up worktrees
+Remove inactive workspaces. By default, workspaces with uncommitted changes are skipped:
 
-Remove inactive worktrees where no agents are currently running:
-
-```bash
-silo cleanup
+```sh
+silo cleanup                           # Remove inactive workspaces (prompts for confirmation)
+silo cleanup --all                     # Remove all workspaces
+silo cleanup --force                   # Remove even workspaces with uncommitted changes
+silo cleanup -y                        # Skip confirmation prompt
 ```
-
-By default, cleanup skips worktrees with unpushed commits. Use `--force` to remove them anyway:
-
-```bash
-silo cleanup --force
-```
-
-#### Options
-
-- `--all` — Remove all worktrees in the repo, not just silo-managed ones in `~/.silo/`
-- `--force` — Remove worktrees even if they have unpushed commits
-- `--yes` — Skip confirmation prompt
 
 ### Shell completions
 
-Zsh
-```bash
-mkdir -p ~/.zsh/completions
-silo completions zsh > ~/.zsh/completions/_silo
-printf '\n# The following lines have been added by silo to enable CLI completions.\nfpath=(~/.zsh/completions $fpath)\nautoload -Uz compinit\ncompinit\n# End of silo completions' >> ~/.zshrc
+Generate shell completion scripts:
+
+```sh
+silo completions --shell bash          # Bash completions
+silo completions --shell zsh           # Zsh completions
+silo completions --shell fish          # Fish completions
 ```
 
-Bash
-```bash
-silo completions bash > ~/.local/share/bash-completion/completions/silo
-```
+## Dependencies
 
-Fish
-```bash
-silo completions fish > ~/.config/fish/completions/silo.fish
-```
+Silo requires the following to be installed:
+
+- **Git** — for worktree and clone operations
+- At least one AI agent CLI:
+  - [Claude Code](https://claude.ai/code)
+  - [OpenCode](https://opencode.ai)
+  - [Codex](https://openai.com/index/openai-codex/)
 
 ## Development
 
-### Prerequisites
+**Requirements**: Rust 1.93.0+ (see `rust-toolchain.toml`)
 
-- Rust 1.93.0 or later
+```sh
+# Build
+cargo build
 
-### Pre-commit hooks
+# Run
+cargo run -- <command>
 
-Install [pre-commit](https://pre-commit.com/) and set up the git hooks:
+# Run tests
+cargo test
 
-```bash
+# Format code
+cargo fmt
+
+# Lint
+cargo clippy
+```
+
+Pre-commit hooks run `fmt`, `clippy`, `check`, and `test` automatically. To install them:
+
+```sh
 pip install pre-commit
 pre-commit install
 ```
 
-The hooks run `cargo fmt`, `clippy`, `check`, and `test` automatically on each commit.
+### Project structure
 
-### Build
-
-```bash
-cargo build
+```
+src/
+├── main.rs                 # CLI entry point, dependency injection
+├── commands/               # Command handlers (launch, ps, cleanup, ...)
+├── services/               # Business logic (generic, trait-bounded)
+└── infra/                  # System interactions (git, process, terminal)
 ```
 
-For a release build:
-
-```bash
-cargo build --release
-```
-
-### Test
-
-```bash
-cargo test
-```
+The codebase follows a three-layer architecture where dependencies flow strictly downward: CLI → Services → Infrastructure. Services use generic type parameters with trait bounds to keep business logic testable and decoupled from system calls.
