@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::agent_launcher::LaunchError;
 use super::agent_workspace::{
     AgentWorkspaceManager, CleanupError, CleanupResult, FailedWorkspace, GitStatus,
-    RemovedWorkspace, StatusError, WorkspaceKind,
+    RemovedWorkspace, SkippedWorkspace, StatusError, WorkspaceKind, commits_ahead_of_remote,
 };
 use super::silo_config::SiloConfig;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
@@ -129,7 +129,19 @@ impl<G: GitOperations> AgentWorkspaceManager for GitWorktreeWorkspace<G> {
 
         let mut result = CleanupResult::default();
 
+        let base_branch = self.git.get_default_remote_branch().ok();
+
         for wt in candidates {
+            if let Some(ahead) = commits_ahead_of_remote(&self.git, &wt.path, &base_branch) {
+                result.skipped.push(SkippedWorkspace {
+                    path: wt.path.clone(),
+                    kind: WorkspaceKind::Worktree,
+                    branch: wt.branch.clone(),
+                    commits_ahead: ahead,
+                });
+                continue;
+            }
+
             match self.git.remove_worktree(&wt.path) {
                 Ok(_) => result.removed.push(RemovedWorkspace {
                     path: wt.path.clone(),
@@ -570,5 +582,49 @@ mod tests {
 
         // Should return both worktrees (excluding main)
         assert_eq!(statuses.len(), 2);
+    }
+
+    #[test]
+    fn test_cleanup_skips_worktrees_with_unpushed_commits() {
+        let repo_root = PathBuf::from("/repo");
+        let silo_dir = PathBuf::from("/Users/test/.silo");
+        let worktree1_path = silo_dir.join("worktree1");
+        let worktree2_path = silo_dir.join("worktree2");
+
+        let mock_git = MockGit {
+            repo_root: repo_root.clone(),
+            project_name: "test-project".to_string(),
+            worktrees: vec![
+                GitWorkspaceInfo {
+                    path: repo_root.clone(),
+                    branch: Some("main".to_string()),
+                },
+                GitWorkspaceInfo {
+                    path: worktree1_path.clone(),
+                    branch: Some("feature1".to_string()),
+                },
+                GitWorkspaceInfo {
+                    path: worktree2_path.clone(),
+                    branch: Some("feature2".to_string()),
+                },
+            ],
+            base_branch: "origin/main".to_string(),
+            uncommitted_changes: vec![],
+            divergence: vec![
+                (worktree1_path.clone(), 3, 0), // 3 commits ahead
+                (worktree2_path.clone(), 0, 0), // 0 commits ahead
+            ],
+        };
+
+        let workspace = GitWorktreeWorkspace::new(mock_git);
+        let active = HashSet::new();
+        let result = workspace.cleanup(&active, true).unwrap(); // Use all: true to include all worktrees
+
+        // worktree1 should be skipped, worktree2 should be removed
+        assert_eq!(result.removed.len(), 1);
+        assert_eq!(result.removed[0].path, worktree2_path);
+        assert_eq!(result.skipped.len(), 1);
+        assert_eq!(result.skipped[0].path, worktree1_path);
+        assert_eq!(result.skipped[0].commits_ahead, 3);
     }
 }

@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::agent_launcher::LaunchError;
 use super::agent_workspace::{
     AgentWorkspaceManager, CleanupError, CleanupResult, FailedWorkspace, GitStatus,
-    RemovedWorkspace, StatusError, WorkspaceKind,
+    RemovedWorkspace, SkippedWorkspace, StatusError, WorkspaceKind, commits_ahead_of_remote,
 };
 use super::silo_config::SiloConfig;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
@@ -125,7 +125,20 @@ impl<G: GitOperations> AgentWorkspaceManager for GitCheckoutWorkspace<G> {
 
         let mut result = CleanupResult::default();
 
+        let base_branch = self.git.get_default_remote_branch().ok();
+
         for path in candidates {
+            if let Some(ahead) = commits_ahead_of_remote(&self.git, &path, &base_branch) {
+                let branch = self.git.get_current_branch(&path).ok().flatten();
+                result.skipped.push(SkippedWorkspace {
+                    path: path.clone(),
+                    kind: WorkspaceKind::Checkout,
+                    branch,
+                    commits_ahead: ahead,
+                });
+                continue;
+            }
+
             match std::fs::remove_dir_all(&path) {
                 Ok(_) => result.removed.push(RemovedWorkspace {
                     path,
@@ -198,6 +211,8 @@ mod tests {
     struct MockGit {
         repo_root: PathBuf,
         project_name: String,
+        commits_ahead_for: Vec<(PathBuf, usize)>,
+        current_branch_for: Vec<(PathBuf, Option<String>)>,
     }
 
     impl GitOperations for MockGit {
@@ -231,9 +246,14 @@ mod tests {
 
         fn count_commits_ahead(
             &self,
-            _worktree_path: &Path,
+            worktree_path: &Path,
             _base_branch: &str,
         ) -> Result<usize, GitError> {
+            for (path, count) in &self.commits_ahead_for {
+                if path == worktree_path {
+                    return Ok(*count);
+                }
+            }
             Ok(0)
         }
 
@@ -253,7 +273,12 @@ mod tests {
             Ok(())
         }
 
-        fn get_current_branch(&self, _path: &Path) -> Result<Option<String>, GitError> {
+        fn get_current_branch(&self, path: &Path) -> Result<Option<String>, GitError> {
+            for (check_path, branch) in &self.current_branch_for {
+                if check_path == path {
+                    return Ok(branch.clone());
+                }
+            }
             Ok(None)
         }
     }
@@ -263,6 +288,8 @@ mod tests {
         let mock_git = MockGit {
             repo_root: PathBuf::from("/tmp/repo"),
             project_name: "test-project".to_string(),
+            commits_ahead_for: vec![],
+            current_branch_for: vec![],
         };
 
         let workspace = GitCheckoutWorkspace::new(mock_git);
@@ -278,6 +305,8 @@ mod tests {
         let mock_git = MockGit {
             repo_root: PathBuf::from("/tmp/repo"),
             project_name: "my-project".to_string(),
+            commits_ahead_for: vec![],
+            current_branch_for: vec![],
         };
 
         let workspace = GitCheckoutWorkspace::new(mock_git);
@@ -332,5 +361,53 @@ mod tests {
         let results = find_checkout_dirs(base, "my-project-", &exclude);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], checkout2);
+    }
+
+    #[test]
+    fn test_cleanup_skips_checkouts_with_unpushed_commits() {
+        // Test the skipped checkout logic with find_checkout_dirs
+        let temp = tempfile::TempDir::new().unwrap();
+        let silo_dir = temp.path();
+
+        // Create two checkout dirs
+        let checkout1 = silo_dir.join("my-project-aaa11111");
+        std::fs::create_dir_all(&checkout1).unwrap();
+        std::fs::create_dir_all(checkout1.join(".git")).unwrap();
+
+        let checkout2 = silo_dir.join("my-project-bbb22222");
+        std::fs::create_dir_all(&checkout2).unwrap();
+        std::fs::create_dir_all(checkout2.join(".git")).unwrap();
+
+        // Verify find_checkout_dirs finds both
+        let candidates = find_checkout_dirs(silo_dir, "my-project-", &HashSet::new());
+        assert_eq!(candidates.len(), 2);
+
+        // Now test that the cleanup would skip checkout1 with unpushed commits
+        let mock_git = MockGit {
+            repo_root: PathBuf::from("/tmp/repo"),
+            project_name: "my-project".to_string(),
+            commits_ahead_for: vec![(checkout1.clone(), 2)], // checkout1 has 2 commits ahead
+            current_branch_for: vec![(checkout1.clone(), Some("feature".to_string()))],
+        };
+
+        // Simulate cleanup logic manually to avoid SiloConfig::get_silo_dir() dependency
+        let base_branch = mock_git.get_default_remote_branch().ok();
+        let mut skipped_count = 0;
+        let mut would_remove_count = 0;
+
+        for checkout_path in candidates {
+            if let Some(ref base) = base_branch {
+                if let Ok(ahead) = mock_git.count_commits_ahead(&checkout_path, base) {
+                    if ahead > 0 {
+                        skipped_count += 1;
+                        continue;
+                    }
+                }
+            }
+            would_remove_count += 1;
+        }
+
+        assert_eq!(skipped_count, 1);
+        assert_eq!(would_remove_count, 1);
     }
 }

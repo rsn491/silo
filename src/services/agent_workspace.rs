@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::infra::git::GitWorkspaceInfo;
+use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 use crate::services::agent_launcher::LaunchError;
 
@@ -70,16 +70,25 @@ pub struct FailedWorkspace {
     pub error: String,
 }
 
+pub struct SkippedWorkspace {
+    pub path: PathBuf,
+    pub kind: WorkspaceKind,
+    pub branch: Option<String>,
+    pub commits_ahead: usize,
+}
+
 #[derive(Default)]
 pub struct CleanupResult {
     pub removed: Vec<RemovedWorkspace>,
     pub failed: Vec<FailedWorkspace>,
+    pub skipped: Vec<SkippedWorkspace>,
 }
 
 impl CleanupResult {
     pub fn extend(&mut self, other: CleanupResult) {
         self.removed.extend(other.removed);
         self.failed.extend(other.failed);
+        self.skipped.extend(other.skipped);
     }
 }
 
@@ -111,6 +120,19 @@ impl From<GitError> for CleanupError {
     fn from(error: GitError) -> Self {
         CleanupError::Git(error)
     }
+}
+
+/// Returns `Some(commits_ahead)` when the workspace at `path` has unpushed
+/// commits relative to `base_branch`, otherwise `None` (no remote, git error,
+/// or zero commits ahead).
+pub fn commits_ahead_of_remote<G: GitOperations>(
+    git: &G,
+    path: &Path,
+    base_branch: &Option<String>,
+) -> Option<usize> {
+    let base = base_branch.as_deref()?;
+    let ahead = git.count_commits_ahead(path, base).ok()?;
+    if ahead > 0 { Some(ahead) } else { None }
 }
 
 pub trait AgentWorkspaceManager {
