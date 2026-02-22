@@ -75,18 +75,12 @@ where
     }
 
     fn launch_in_workspace(&self, workspace_path: &std::path::Path) -> Result<(), LaunchError> {
-        let status = self
+        let _status = self
             .agent
             .command()
             .current_dir(workspace_path)
             .status()
             .map_err(|e| LaunchError::AgentSpawnError(e.to_string()))?;
-        if status.success() {
-            println!(
-                "\nAgent exited. To resume, run: silo launch from {}",
-                workspace_path.display()
-            );
-        }
         Ok(())
     }
 
@@ -96,51 +90,23 @@ where
 
         // Step 2: Launch agent in the workspace
         match self.launch_mode {
-            LaunchMode::ExecReplace => {
-                println!("Launching {:?} in worktree...", self.agent);
-                self.launch_in_workspace(&workspace_path)
-            }
+            LaunchMode::ExecReplace => self.launch_in_workspace(&workspace_path),
             LaunchMode::NewTab => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for new tab".to_string())
                 })?;
-                println!("Opening new tab for {:?} in worktree...", self.agent);
                 match terminal.open_tab(&workspace_path, &self.agent) {
-                    Ok(()) => {
-                        println!("Agent launched in new tab at: {}", workspace_path.display());
-                        Ok(())
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to open new tab: {}", e);
-                        eprintln!(
-                            "Falling back to launching {:?} in current process...",
-                            self.agent
-                        );
-                        self.launch_in_workspace(&workspace_path)
-                    }
+                    Ok(()) => Ok(()),
+                    Err(_e) => self.launch_in_workspace(&workspace_path),
                 }
             }
             LaunchMode::SplitPane => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
                 })?;
-                println!("Opening split pane for {:?} in worktree...", self.agent);
                 match terminal.split_pane(&workspace_path, &self.agent) {
-                    Ok(()) => {
-                        println!(
-                            "Agent launched in split pane at: {}",
-                            workspace_path.display()
-                        );
-                        Ok(())
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to open split pane: {}", e);
-                        eprintln!(
-                            "Falling back to launching {:?} in current process...",
-                            self.agent
-                        );
-                        self.launch_in_workspace(&workspace_path)
-                    }
+                    Ok(()) => Ok(()),
+                    Err(_e) => self.launch_in_workspace(&workspace_path),
                 }
             }
         }

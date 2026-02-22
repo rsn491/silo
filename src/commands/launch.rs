@@ -49,6 +49,13 @@ pub fn run(args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
         (LaunchMode::ExecReplace, None)
     };
 
+    let workspace_kind = if args.checkout {
+        "checkout"
+    } else {
+        "worktree"
+    };
+    eprintln!("Launching {:?} in {}...", agent, workspace_kind);
+
     if args.checkout {
         let workspace = GitCheckoutWorkspace::new(Git);
         AgentLauncher::new(workspace, terminal, launch_mode, agent, args.branch).launch()?;

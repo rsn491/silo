@@ -73,9 +73,6 @@ impl<G: GitOperations> AgentWorkspaceManager for GitWorktreeWorkspace<G> {
         let worktree_name = worktree_path.file_name().unwrap().to_string_lossy();
         let branch_name = branch.unwrap_or_else(|| worktree_name.to_string());
 
-        println!("Creating worktree at: {}", worktree_path.display());
-        println!("Branch: {}", branch_name);
-
         self.git.create_worktree(&worktree_path, &branch_name)?;
 
         Ok(worktree_path)

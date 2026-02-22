@@ -41,9 +41,6 @@ impl<G: GitOperations> AgentWorkspaceManager for GitCheckoutWorkspace<G> {
         let dest_name = dest.file_name().unwrap().to_string_lossy();
         let branch_name = branch.unwrap_or_else(|| dest_name.to_string());
 
-        println!("Cloning repository to: {}", dest.display());
-        println!("Branch: {}", branch_name);
-
         self.git.clone_local(&repo_root, &dest)?;
         self.git.checkout_new_branch(&dest, &branch_name)?;
 
