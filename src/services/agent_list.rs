@@ -7,6 +7,7 @@ use crate::infra::process::{ProcessError, ProcessOperations};
 use crate::services::agent_workspace::AgentWorkspaceManager;
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
+use strum::IntoEnumIterator;
 
 #[derive(Debug)]
 pub struct RunningAgent {
@@ -76,9 +77,19 @@ impl<G: GitOperations + Clone, P: ProcessOperations> AgentListService<G, P> {
 
             for (path, branch) in &workspaces {
                 if cwd.starts_with(path) {
+                    let agent_type = extract_agent_type(&args);
+
+                    // Deduplicate: skip if we already have an agent of this type in this workspace
+                    if agents
+                        .iter()
+                        .any(|a: &RunningAgent| a.path == **path && a.agent_type == agent_type)
+                    {
+                        break;
+                    }
+
                     agents.push(RunningAgent {
                         pid,
-                        agent_type: extract_agent_type(&args),
+                        agent_type,
                         path: path.to_path_buf(),
                         branch: (*branch).clone(),
                     });
@@ -109,9 +120,7 @@ fn extract_agent_type(args: &str) -> Option<Agent> {
         return Some(agent);
     }
 
-    [Agent::ClaudeCode, Agent::OpenCode]
-        .into_iter()
-        .find(|agent| args.contains(agent.process_name()))
+    Agent::iter().find(|agent| args.contains(agent.process_name()))
 }
 
 #[cfg(test)]
