@@ -106,7 +106,7 @@ pre-commit install
 ```
 src/
 ├── main.rs                 # CLI entry point, dependency injection
-├── commands/               # Command handlers (launch, ps, cleanup, ...)
+├── cli/                    # Command handlers (launch, ps, cleanup, ...)
 ├── services/               # Business logic (generic, trait-bounded)
 └── infra/                  # System interactions (git, process, terminal)
 ```

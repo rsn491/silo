@@ -1,13 +1,23 @@
-mod commands;
+mod cli;
 mod infra;
 mod services;
 
 use clap::{Parser, Subcommand};
-use commands::cleanup::CleanupArgs;
-use commands::completions::CompletionsArgs;
-use commands::launch::LaunchArgs;
-use commands::status::StatusArgs;
+use cli::cleanup::{CleanupArgs, CleanupCommand};
+use cli::completions::{CompletionsArgs, CompletionsCommand};
+use cli::init::InitCommand;
+use cli::launch::{LaunchArgs, LaunchCommand, WorkspaceBackend};
+use cli::ps::PsCommand;
+use cli::status::{StatusArgs, StatusCommand};
+use infra::git::Git;
+use infra::process::SystemProcess;
+use infra::terminal;
+use services::agent_launcher::LaunchMode;
+use services::agent_list::AgentListService;
+use services::git_checkout_workspace::GitCheckoutWorkspace;
+use services::git_worktree_workspace::GitWorktreeWorkspace;
 use services::silo_config::SiloConfig;
+use services::workspace_cleanup::WorkspaceCleanupService;
 
 #[derive(Parser)]
 #[command(name = "silo")]
@@ -41,12 +51,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
     match cli.command {
-        Commands::Launch(args) => commands::launch::run(args)?,
-        Commands::Ps => commands::ps::run()?,
-        Commands::Init => commands::init::run()?,
-        Commands::Cleanup(args) => commands::cleanup::run(args)?,
-        Commands::Status(args) => commands::status::run(args)?,
-        Commands::Completions(args) => commands::completions::run(args)?,
+        Commands::Launch(args) => {
+            let tab = args.tab;
+            let split_pane = args.split_pane;
+            let checkout = args.checkout;
+
+            let (launch_mode, terminal) = if tab || split_pane {
+                let term = terminal::detect_terminal()?;
+                if split_pane {
+                    (LaunchMode::SplitPane, Some(term))
+                } else {
+                    (LaunchMode::NewTab, Some(term))
+                }
+            } else {
+                (LaunchMode::ExecReplace, None)
+            };
+
+            let workspace = if checkout {
+                WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(Git))
+            } else {
+                WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(Git))
+            };
+
+            LaunchCommand::new(workspace, terminal, launch_mode).run(args)?;
+        }
+        Commands::Ps => {
+            PsCommand::new(AgentListService::new(Git, SystemProcess)).run()?;
+        }
+        Commands::Init => InitCommand::new().run()?,
+        Commands::Cleanup(args) => {
+            CleanupCommand::new(WorkspaceCleanupService::new(Git, SystemProcess)).run(args)?;
+        }
+        Commands::Status(args) => {
+            StatusCommand::new(
+                GitWorktreeWorkspace::new(Git),
+                GitCheckoutWorkspace::new(Git),
+            )
+            .run(args)?;
+        }
+        Commands::Completions(args) => CompletionsCommand::new().run(args)?,
     }
 
     Ok(())
