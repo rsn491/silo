@@ -84,20 +84,20 @@ where
         Ok(())
     }
 
-    pub fn launch(&self) -> Result<(), LaunchError> {
+    pub fn launch(&self) -> Result<std::path::PathBuf, LaunchError> {
         // Step 1: Create workspace
         let workspace_path = self.workspace.create(self.branch.clone())?;
 
         // Step 2: Launch agent in the workspace
         match self.launch_mode {
-            LaunchMode::ExecReplace => self.launch_in_workspace(&workspace_path),
+            LaunchMode::ExecReplace => self.launch_in_workspace(&workspace_path)?,
             LaunchMode::NewTab => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for new tab".to_string())
                 })?;
                 match terminal.open_tab(&workspace_path, &self.agent) {
-                    Ok(()) => Ok(()),
-                    Err(_e) => self.launch_in_workspace(&workspace_path),
+                    Ok(()) => {}
+                    Err(_e) => self.launch_in_workspace(&workspace_path)?,
                 }
             }
             LaunchMode::SplitPane => {
@@ -105,10 +105,12 @@ where
                     LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
                 })?;
                 match terminal.split_pane(&workspace_path, &self.agent) {
-                    Ok(()) => Ok(()),
-                    Err(_e) => self.launch_in_workspace(&workspace_path),
+                    Ok(()) => {}
+                    Err(_e) => self.launch_in_workspace(&workspace_path)?,
                 }
             }
         }
+
+        Ok(workspace_path)
     }
 }

@@ -102,7 +102,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         };
         eprintln!("Launching {:?} in {}...", args.agent, workspace_kind);
 
-        AgentLauncher::new(
+        let workspace_path = AgentLauncher::new(
             self.workspace,
             self.terminal,
             self.launch_mode,
@@ -110,6 +110,11 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
             args.branch,
         )
         .launch()?;
+
+        eprintln!(
+            "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
+            workspace_path.display()
+        );
 
         Ok(())
     }
