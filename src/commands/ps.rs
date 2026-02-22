@@ -6,9 +6,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let agents = AgentListService::new(Git, SystemProcess).list_running_agents()?;
 
     if agents.is_empty() {
-        println!("No running agents found in this repository's worktrees.");
+        println!("No running agents found in this repository's workspaces.");
     } else {
-        println!("{:<8} {:<10} {:<20} WORKTREE", "PID", "AGENT", "BRANCH");
+        println!("{:<8} {:<10} {:<20} WORKSPACE", "PID", "AGENT", "BRANCH");
         for agent in &agents {
             let agent_name = agent
                 .agent_type
@@ -20,7 +20,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 agent.pid,
                 agent_name,
                 agent.branch.as_deref().unwrap_or("(detached)"),
-                agent.worktree_path.display()
+                agent.path.display()
             );
         }
     }

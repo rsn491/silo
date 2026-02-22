@@ -42,6 +42,7 @@ The worktree location is determined by this priority:
 - `--worktree-base <path>` — Base directory for the worktree (overrides default)
 - `--branch <name>` — Custom branch name (default: auto-generated from project name)
 - `--agent <name>` — Agent to launch: `claude` or `opencode` (default: `claude`)
+- `--checkout` — Use git clone instead of git worktrees for workspace isolation (requires `~/.silo/` to exist)
 - `--tab` — Launch the agent in a new terminal tab instead of replacing the current process
 - `--split-pane` — Launch the agent in a vertical split pane (iTerm2 only)
 

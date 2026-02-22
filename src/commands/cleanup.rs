@@ -3,7 +3,8 @@ use std::io::{self, Write};
 
 use crate::infra::git::Git;
 use crate::infra::process::SystemProcess;
-use crate::services::worktree_cleanup::WorktreeCleanupService;
+use crate::services::agent_workspace::WorkspaceKind;
+use crate::services::workspace_cleanup::WorkspaceCleanupService;
 
 #[derive(Parser, Debug)]
 pub struct CleanupArgs {
@@ -31,8 +32,31 @@ pub fn run(args: CleanupArgs) -> Result<(), Box<dyn std::error::Error>> {
         println!();
     }
 
-    let service = WorktreeCleanupService::new(Git, SystemProcess);
-    service.cleanup(args.all)?;
+    let service = WorkspaceCleanupService::new(Git, SystemProcess);
+    let result = service.cleanup(args.all)?;
+
+    if result.removed.is_empty() && result.failed.is_empty() {
+        println!("No workspaces to clean up.");
+        return Ok(());
+    }
+
+    for ws in &result.removed {
+        let detail = match ws.kind {
+            WorkspaceKind::Worktree => {
+                format!("branch: {}", ws.branch.as_deref().unwrap_or("(detached)"))
+            }
+            WorkspaceKind::Checkout => "checkout clone".to_string(),
+        };
+        println!("  ✓ Removed {} ({})", ws.path.display(), detail);
+    }
+    for ws in &result.failed {
+        println!("  ✗ Failed to remove {}: {}", ws.path.display(), ws.error);
+    }
+
+    println!("Successfully removed {} workspace(s)", result.removed.len());
+    if !result.failed.is_empty() {
+        println!("Failed to remove {} workspace(s)", result.failed.len());
+    }
 
     Ok(())
 }

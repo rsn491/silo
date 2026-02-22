@@ -5,6 +5,7 @@ use crate::infra::agent::Agent;
 use crate::infra::git::Git;
 use crate::infra::terminal;
 use crate::services::agent_launcher::{AgentLauncher, LaunchMode};
+use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 
 #[derive(Parser, Debug)]
@@ -28,6 +29,10 @@ pub struct LaunchArgs {
     /// Agent command to launch (default: claude)
     #[arg(long, default_value_t = Agent::default())]
     pub agent: Agent,
+
+    /// Use git clone instead of git worktrees for workspace isolation
+    #[arg(long)]
+    pub checkout: bool,
 }
 
 pub fn run(args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -44,9 +49,13 @@ pub fn run(args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
         (LaunchMode::ExecReplace, None)
     };
 
-    let workspace = GitWorktreeWorkspace::new(Git, args.worktree_base);
-    let launcher = AgentLauncher::new(workspace, terminal, launch_mode, agent, args.branch);
-    launcher.launch()?;
+    if args.checkout {
+        let workspace = GitCheckoutWorkspace::new(Git);
+        AgentLauncher::new(workspace, terminal, launch_mode, agent, args.branch).launch()?;
+    } else {
+        let workspace = GitWorktreeWorkspace::new(Git, args.worktree_base);
+        AgentLauncher::new(workspace, terminal, launch_mode, agent, args.branch).launch()?;
+    }
 
     Ok(())
 }

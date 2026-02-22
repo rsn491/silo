@@ -4,12 +4,15 @@ use crate::infra::agent::Agent;
 use crate::infra::git::GitOperations;
 use crate::infra::git_error::GitError;
 use crate::infra::process::{ProcessError, ProcessOperations};
+use crate::services::agent_workspace::AgentWorkspaceManager;
+use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
+use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 
 #[derive(Debug)]
 pub struct RunningAgent {
     pub pid: u32,
     pub agent_type: Option<Agent>,
-    pub worktree_path: PathBuf,
+    pub path: PathBuf,
     pub branch: Option<String>,
 }
 
@@ -42,43 +45,42 @@ impl From<ProcessError> for ListError {
     }
 }
 
-pub struct AgentListService<G: GitOperations, P: ProcessOperations> {
+pub struct AgentListService<G: GitOperations + Clone, P: ProcessOperations> {
     git: G,
     process: P,
 }
 
-impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
+impl<G: GitOperations + Clone, P: ProcessOperations> AgentListService<G, P> {
     pub fn new(git: G, process: P) -> Self {
         Self { git, process }
     }
 
     pub fn list_running_agents(&self) -> Result<Vec<RunningAgent>, ListError> {
-        // Get all worktrees for the current repository
-        let worktrees = self.git.list_worktrees()?;
+        let worktrees = GitWorktreeWorkspace::new(self.git.clone(), None).get_all()?;
+        let checkouts = GitCheckoutWorkspace::new(self.git.clone()).get_all()?;
+        let workspaces: Vec<_> = worktrees
+            .iter()
+            .map(|w| (&w.path, &w.branch))
+            .chain(checkouts.iter().map(|c| (&c.path, &c.branch)))
+            .collect();
 
-        // Find processes matching known agent names
-        let agent_names = Agent::all_process_names();
-        let processes = self.process.find_processes_by_names(&agent_names)?;
-
+        let processes = self
+            .process
+            .find_processes_by_names(&Agent::all_process_names())?;
         let mut agents = Vec::new();
-
-        // Match processes to worktrees
         for (pid, args) in processes {
-            // Try to get the process's current working directory
-            // Skip on error (process may have exited)
             let cwd = match self.process.get_process_cwd(pid) {
                 Ok(path) => path,
                 Err(_) => continue,
             };
 
-            // Check if this CWD matches any worktree
-            for worktree in &worktrees {
-                if cwd.starts_with(&worktree.path) {
+            for (path, branch) in &workspaces {
+                if cwd.starts_with(path) {
                     agents.push(RunningAgent {
                         pid,
                         agent_type: extract_agent_type(&args),
-                        worktree_path: worktree.path.clone(),
-                        branch: worktree.branch.clone(),
+                        path: path.to_path_buf(),
+                        branch: (*branch).clone(),
                     });
                     break;
                 }
@@ -91,35 +93,37 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
     pub fn get_active_worktree_paths(&self) -> Result<Vec<PathBuf>, ListError> {
         let running_agents = self.list_running_agents()?;
 
-        let active_paths: Vec<PathBuf> = running_agents
-            .into_iter()
-            .map(|agent| agent.worktree_path)
-            .collect();
+        let active_paths: Vec<PathBuf> =
+            running_agents.into_iter().map(|agent| agent.path).collect();
 
         Ok(active_paths)
     }
 }
 
 fn extract_agent_type(args: &str) -> Option<Agent> {
-    // Extract the command name from the process args
     let parts: Vec<&str> = args.split_whitespace().collect();
     if let Some(first) = parts.first()
         && let Some(name) = first.split('/').next_back()
+        && let Some(agent) = Agent::try_from_process_name(name)
     {
-        return Agent::try_from_process_name(name);
+        return Some(agent);
     }
-    None
+
+    [Agent::ClaudeCode, Agent::OpenCode]
+        .into_iter()
+        .find(|agent| args.contains(agent.process_name()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infra::git::WorktreeInfo;
+    use crate::infra::git::GitWorkspaceInfo;
     use std::path::Path;
 
     // Mock GitOperations
+    #[derive(Clone)]
     struct MockGit {
-        worktrees: Vec<WorktreeInfo>,
+        worktrees: Vec<GitWorkspaceInfo>,
     }
 
     impl GitOperations for MockGit {
@@ -135,7 +139,7 @@ mod tests {
             Ok(())
         }
 
-        fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>, GitError> {
+        fn list_worktrees(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
             Ok(self.worktrees.clone())
         }
 
@@ -166,6 +170,18 @@ mod tests {
         ) -> Result<usize, GitError> {
             Ok(0)
         }
+
+        fn clone_local(&self, _source: &Path, _dest: &Path) -> Result<(), GitError> {
+            todo!()
+        }
+
+        fn checkout_new_branch(&self, _path: &Path, _branch: &str) -> Result<(), GitError> {
+            todo!()
+        }
+
+        fn get_current_branch(&self, _path: &Path) -> Result<Option<String>, GitError> {
+            todo!()
+        }
     }
 
     // Mock ProcessOperations
@@ -195,11 +211,11 @@ mod tests {
     fn test_list_running_agents_in_worktrees() {
         let mock_git = MockGit {
             worktrees: vec![
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: PathBuf::from("/repo/worktree1"),
                     branch: Some("feature-1".to_string()),
                 },
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: PathBuf::from("/repo/worktree2"),
                     branch: Some("feature-2".to_string()),
                 },
@@ -222,17 +238,17 @@ mod tests {
 
         assert_eq!(agents.len(), 2);
         assert_eq!(agents[0].pid, 123);
-        assert_eq!(agents[0].worktree_path, PathBuf::from("/repo/worktree1"));
+        assert_eq!(agents[0].path, PathBuf::from("/repo/worktree1"));
         assert_eq!(agents[0].branch, Some("feature-1".to_string()));
         assert_eq!(agents[1].pid, 456);
-        assert_eq!(agents[1].worktree_path, PathBuf::from("/repo/worktree2"));
+        assert_eq!(agents[1].path, PathBuf::from("/repo/worktree2"));
         assert_eq!(agents[1].branch, Some("feature-2".to_string()));
     }
 
     #[test]
     fn test_list_running_agents_outside_worktrees() {
         let mock_git = MockGit {
-            worktrees: vec![WorktreeInfo {
+            worktrees: vec![GitWorkspaceInfo {
                 path: PathBuf::from("/repo/worktree1"),
                 branch: Some("feature-1".to_string()),
             }],
@@ -252,7 +268,7 @@ mod tests {
     #[test]
     fn test_list_running_agents_cwd_resolution_failure() {
         let mock_git = MockGit {
-            worktrees: vec![WorktreeInfo {
+            worktrees: vec![GitWorkspaceInfo {
                 path: PathBuf::from("/repo/worktree1"),
                 branch: Some("feature-1".to_string()),
             }],
@@ -289,7 +305,7 @@ mod tests {
 
         // No processes
         let mock_git = MockGit {
-            worktrees: vec![WorktreeInfo {
+            worktrees: vec![GitWorkspaceInfo {
                 path: PathBuf::from("/repo/worktree1"),
                 branch: Some("feature-1".to_string()),
             }],

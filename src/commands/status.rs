@@ -2,32 +2,36 @@ use clap::Parser;
 
 use crate::infra::git::Git;
 use crate::services::agent_workspace::AgentWorkspaceManager;
+use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 
 #[derive(Parser, Debug)]
 pub struct StatusArgs {
-    /// Show all worktrees, including clean ones
+    /// Show all workspaces, including clean ones
     #[arg(long)]
     pub all: bool,
 }
 
 pub fn run(args: StatusArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let workspace = GitWorktreeWorkspace::new(Git, None);
-    let statuses = workspace.get_statuses(args.all)?;
+    let worktree_workspace = GitWorktreeWorkspace::new(Git, None);
+    let mut statuses = worktree_workspace.get_statuses(args.all)?;
+
+    let checkout_workspace = GitCheckoutWorkspace::new(Git);
+    statuses.extend(checkout_workspace.get_statuses(args.all)?);
 
     if statuses.is_empty() {
         if args.all {
-            println!("No worktrees found (excluding main worktree).");
+            println!("No workspaces found (excluding main worktree).");
         } else {
-            println!("No worktrees with changes or commits ahead/behind.");
-            println!("Use --all to see all worktrees.");
+            println!("No workspaces with changes or commits ahead/behind.");
+            println!("Use --all to see all workspaces.");
         }
         return Ok(());
     }
 
     println!(
-        "{:<50} {:<20} {:<12} {:<12}",
-        "WORKTREE", "BRANCH", "UNCOMMITTED", "AHEAD/BEHIND"
+        "{:<10} {:<50} {:<20} {:<12} {:<12}",
+        "TYPE", "PATH", "BRANCH", "UNCOMMITTED", "AHEAD/BEHIND"
     );
 
     for status in &statuses {
@@ -46,7 +50,8 @@ pub fn run(args: StatusArgs) -> Result<(), Box<dyn std::error::Error>> {
         };
 
         println!(
-            "{:<50} {:<20} {:<12} {:<12}",
+            "{:<10} {:<50} {:<20} {:<12} {:<12}",
+            status.kind,
             status.path.display(),
             branch,
             uncommitted,

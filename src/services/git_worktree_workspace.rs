@@ -1,11 +1,15 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use uuid::Uuid;
 
 use super::agent_launcher::LaunchError;
-use super::agent_workspace::{AgentWorkspaceManager, GitStatus, StatusError};
+use super::agent_workspace::{
+    AgentWorkspaceManager, CleanupError, CleanupResult, FailedWorkspace, GitStatus,
+    RemovedWorkspace, StatusError, WorkspaceKind,
+};
 use super::silo_config::SiloConfig;
-use crate::infra::git::{GitOperations, WorktreeInfo};
+use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 
 pub struct GitWorktreeWorkspace<G: GitOperations> {
     git: G,
@@ -40,7 +44,7 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
         (has_changes, file_count)
     }
 
-    pub fn get_git_status(&self, worktree: WorktreeInfo) -> Result<GitStatus, StatusError> {
+    pub fn get_git_status(&self, worktree: GitWorkspaceInfo) -> Result<GitStatus, StatusError> {
         let base_branch = self.git.get_default_remote_branch()?;
         let status_output = self.git.get_status_porcelain(&worktree.path)?;
         let (has_uncommitted_changes, uncommitted_file_count) =
@@ -52,6 +56,7 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
             .count_commits_behind(&worktree.path, &base_branch)?;
 
         Ok(GitStatus {
+            kind: WorkspaceKind::Worktree,
             path: worktree.path.clone(),
             branch: worktree.branch.clone(),
             has_uncommitted_changes,
@@ -98,12 +103,63 @@ impl<G: GitOperations> AgentWorkspaceManager for GitWorktreeWorkspace<G> {
 
         Ok(statuses)
     }
+
+    fn cleanup(
+        &self,
+        active_paths: &HashSet<PathBuf>,
+        all: bool,
+    ) -> Result<CleanupResult, CleanupError> {
+        let all_worktrees = self.git.list_worktrees()?;
+        let repo_root = self.git.get_repo_root()?;
+        let silo_dir = SiloConfig::get_silo_dir();
+
+        let candidates: Vec<_> = all_worktrees
+            .iter()
+            .filter(|wt| {
+                if wt.path == repo_root {
+                    return false;
+                }
+                if active_paths.contains(&wt.path) {
+                    return false;
+                }
+                if !all {
+                    if let Some(ref silo) = silo_dir {
+                        return wt.path.starts_with(silo);
+                    }
+                    return false;
+                }
+                true
+            })
+            .collect();
+
+        let mut result = CleanupResult::default();
+
+        for wt in candidates {
+            match self.git.remove_worktree(&wt.path) {
+                Ok(_) => result.removed.push(RemovedWorkspace {
+                    path: wt.path.clone(),
+                    kind: WorkspaceKind::Worktree,
+                    branch: wt.branch.clone(),
+                }),
+                Err(e) => result.failed.push(FailedWorkspace {
+                    path: wt.path.clone(),
+                    error: e.to_string(),
+                }),
+            }
+        }
+
+        Ok(result)
+    }
+
+    fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, crate::infra::git_error::GitError> {
+        self.git.list_worktrees()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infra::git::WorktreeInfo;
+    use crate::infra::git::GitWorkspaceInfo;
     use crate::infra::git_error::GitError;
     use std::path::{Path, PathBuf};
 
@@ -111,7 +167,7 @@ mod tests {
     struct MockGit {
         repo_root: PathBuf,
         project_name: String,
-        worktrees: Vec<WorktreeInfo>,
+        worktrees: Vec<GitWorkspaceInfo>,
         base_branch: String,
         uncommitted_changes: Vec<(PathBuf, bool, usize)>,
         divergence: Vec<(PathBuf, usize, usize)>,
@@ -130,7 +186,7 @@ mod tests {
             Ok(())
         }
 
-        fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>, GitError> {
+        fn list_worktrees(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
             Ok(self.worktrees.clone())
         }
 
@@ -183,6 +239,18 @@ mod tests {
             }
             Ok(0)
         }
+
+        fn clone_local(&self, _source: &Path, _dest: &Path) -> Result<(), GitError> {
+            Ok(())
+        }
+
+        fn checkout_new_branch(&self, _path: &Path, _branch: &str) -> Result<(), GitError> {
+            Ok(())
+        }
+
+        fn get_current_branch(&self, _path: &Path) -> Result<Option<String>, GitError> {
+            Ok(None)
+        }
     }
 
     #[test]
@@ -208,7 +276,7 @@ mod tests {
     fn test_get_status_for_specific_worktree() {
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
-        let worktree1_info = WorktreeInfo {
+        let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
             branch: Some("feature".to_string()),
         };
@@ -217,7 +285,7 @@ mod tests {
             project_name: "test-project".to_string(),
             worktrees: vec![
                 // Main worktree is always first
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: repo_root.clone(),
                     branch: Some("main".to_string()),
                 },
@@ -236,7 +304,7 @@ mod tests {
 
         assert_eq!(status.path, worktree1_path);
         assert_eq!(status.branch, Some("feature".to_string()));
-        assert_eq!(status.has_uncommitted_changes, true);
+        assert!(status.has_uncommitted_changes);
         assert_eq!(status.uncommitted_file_count, 3);
         assert_eq!(status.commits_ahead, 2);
         assert_eq!(status.commits_behind, 0);
@@ -246,7 +314,7 @@ mod tests {
     fn test_get_status_with_uncommitted_changes() {
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
-        let worktree1_info = WorktreeInfo {
+        let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
             branch: Some("feature1".to_string()),
         };
@@ -254,7 +322,7 @@ mod tests {
             repo_root: repo_root.clone(),
             project_name: "test-project".to_string(),
             worktrees: vec![
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: repo_root.clone(),
                     branch: Some("main".to_string()),
                 },
@@ -269,7 +337,7 @@ mod tests {
         let status = workspace.get_git_status(worktree1_info).unwrap();
 
         assert_eq!(status.path, worktree1_path);
-        assert_eq!(status.has_uncommitted_changes, true);
+        assert!(status.has_uncommitted_changes);
         assert_eq!(status.uncommitted_file_count, 3);
     }
 
@@ -277,7 +345,7 @@ mod tests {
     fn test_get_status_for_clean_worktree() {
         let repo_root = PathBuf::from("/repo");
         let worktree2_path = PathBuf::from("/repo/worktree2");
-        let worktree2_info = WorktreeInfo {
+        let worktree2_info = GitWorkspaceInfo {
             path: worktree2_path.clone(),
             branch: Some("feature2".to_string()),
         };
@@ -285,7 +353,7 @@ mod tests {
             repo_root: repo_root.clone(),
             project_name: "test-project".to_string(),
             worktrees: vec![
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: repo_root.clone(),
                     branch: Some("main".to_string()),
                 },
@@ -300,7 +368,7 @@ mod tests {
         let status = workspace.get_git_status(worktree2_info).unwrap();
 
         assert_eq!(status.path, worktree2_path);
-        assert_eq!(status.has_uncommitted_changes, false);
+        assert!(!status.has_uncommitted_changes);
         assert_eq!(status.uncommitted_file_count, 0);
         assert_eq!(status.commits_ahead, 0);
         assert_eq!(status.commits_behind, 0);
@@ -310,7 +378,7 @@ mod tests {
     fn test_get_status_with_divergence() {
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
-        let worktree1_info = WorktreeInfo {
+        let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
             branch: Some("feature1".to_string()),
         };
@@ -318,7 +386,7 @@ mod tests {
             repo_root: repo_root.clone(),
             project_name: "test-project".to_string(),
             worktrees: vec![
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: repo_root.clone(),
                     branch: Some("main".to_string()),
                 },
@@ -340,14 +408,14 @@ mod tests {
     fn test_get_status_for_nonexistent_worktree() {
         let repo_root = PathBuf::from("/repo");
         let nonexistent_path = PathBuf::from("/repo/nonexistent");
-        let nonexistent_info = WorktreeInfo {
+        let nonexistent_info = GitWorkspaceInfo {
             path: nonexistent_path.clone(),
             branch: Some("feature".to_string()),
         };
         let mock_git = MockGit {
             repo_root: repo_root.clone(),
             project_name: "test-project".to_string(),
-            worktrees: vec![WorktreeInfo {
+            worktrees: vec![GitWorkspaceInfo {
                 path: repo_root.clone(),
                 branch: Some("main".to_string()),
             }],
@@ -363,7 +431,7 @@ mod tests {
         assert!(result.is_ok());
         let status = result.unwrap();
         assert_eq!(status.path, nonexistent_path);
-        assert_eq!(status.has_uncommitted_changes, false);
+        assert!(!status.has_uncommitted_changes);
         assert_eq!(status.commits_ahead, 0);
         assert_eq!(status.commits_behind, 0);
     }
@@ -373,7 +441,7 @@ mod tests {
         let status_output = " M file1.txt\n M file2.txt\n M file3.txt\n";
         let (has_changes, count) =
             GitWorktreeWorkspace::<MockGit>::parse_uncommitted_changes(status_output);
-        assert_eq!(has_changes, true);
+        assert!(has_changes);
         assert_eq!(count, 3);
     }
 
@@ -382,7 +450,7 @@ mod tests {
         let status_output = "";
         let (has_changes, count) =
             GitWorktreeWorkspace::<MockGit>::parse_uncommitted_changes(status_output);
-        assert_eq!(has_changes, false);
+        assert!(!has_changes);
         assert_eq!(count, 0);
     }
 
@@ -391,7 +459,7 @@ mod tests {
         let status_output = " M file1.txt\n\n M file2.txt\n";
         let (has_changes, count) =
             GitWorktreeWorkspace::<MockGit>::parse_uncommitted_changes(status_output);
-        assert_eq!(has_changes, true);
+        assert!(has_changes);
         assert_eq!(count, 2); // Should only count non-empty lines
     }
 
@@ -403,11 +471,11 @@ mod tests {
             repo_root: repo_root.clone(),
             project_name: "test-project".to_string(),
             worktrees: vec![
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: repo_root.clone(),
                     branch: Some("main".to_string()),
                 },
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: worktree1_path.clone(),
                     branch: Some("feature".to_string()),
                 },
@@ -437,15 +505,15 @@ mod tests {
             repo_root: repo_root.clone(),
             project_name: "test-project".to_string(),
             worktrees: vec![
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: repo_root.clone(),
                     branch: Some("main".to_string()),
                 },
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: worktree1_path.clone(),
                     branch: Some("feature1".to_string()),
                 },
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: worktree2_path.clone(),
                     branch: Some("feature2".to_string()),
                 },
@@ -478,15 +546,15 @@ mod tests {
             repo_root: repo_root.clone(),
             project_name: "test-project".to_string(),
             worktrees: vec![
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: repo_root.clone(),
                     branch: Some("main".to_string()),
                 },
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: worktree1_path.clone(),
                     branch: Some("feature1".to_string()),
                 },
-                WorktreeInfo {
+                GitWorkspaceInfo {
                     path: worktree2_path.clone(),
                     branch: Some("feature2".to_string()),
                 },

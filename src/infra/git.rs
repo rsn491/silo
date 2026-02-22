@@ -4,7 +4,7 @@ use std::process::Command;
 use crate::infra::git_error::GitError;
 
 #[derive(Debug, Clone)]
-pub struct WorktreeInfo {
+pub struct GitWorkspaceInfo {
     pub path: PathBuf,
     pub branch: Option<String>,
 }
@@ -13,7 +13,7 @@ pub trait GitOperations {
     fn get_repo_root(&self) -> Result<PathBuf, GitError>;
     fn get_project_name(&self) -> Result<String, GitError>;
     fn create_worktree(&self, path: &Path, branch: &str) -> Result<(), GitError>;
-    fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>, GitError>;
+    fn list_worktrees(&self) -> Result<Vec<GitWorkspaceInfo>, GitError>;
     fn remove_worktree(&self, path: &Path) -> Result<(), GitError>;
     fn get_default_remote_branch(&self) -> Result<String, GitError>;
     fn get_status_porcelain(&self, worktree_path: &Path) -> Result<String, GitError>;
@@ -27,6 +27,9 @@ pub trait GitOperations {
         worktree_path: &Path,
         base_branch: &str,
     ) -> Result<usize, GitError>;
+    fn clone_local(&self, source: &Path, dest: &Path) -> Result<(), GitError>;
+    fn checkout_new_branch(&self, path: &Path, branch: &str) -> Result<(), GitError>;
+    fn get_current_branch(&self, path: &Path) -> Result<Option<String>, GitError>;
 }
 
 #[derive(Default, Clone)]
@@ -82,7 +85,7 @@ impl GitOperations for Git {
         Ok(())
     }
 
-    fn list_worktrees(&self) -> Result<Vec<WorktreeInfo>, GitError> {
+    fn list_worktrees(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
         let output = Command::new("git")
             .args(["worktree", "list", "--porcelain"])
             .output()
@@ -194,6 +197,58 @@ impl GitOperations for Git {
             Ok(0)
         }
     }
+
+    fn clone_local(&self, source: &Path, dest: &Path) -> Result<(), GitError> {
+        let output = Command::new("git")
+            .args(["clone", "--local"])
+            .arg(source)
+            .arg(dest)
+            .output()
+            .map_err(|e| GitError::CloneFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CloneFailed(stderr.to_string()));
+        }
+
+        Ok(())
+    }
+
+    fn checkout_new_branch(&self, path: &Path, branch: &str) -> Result<(), GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["checkout", "-b", branch])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.to_string()));
+        }
+
+        Ok(())
+    }
+
+    fn get_current_branch(&self, path: &Path) -> Result<Option<String>, GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            return Ok(None);
+        }
+
+        let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if branch == "HEAD" {
+            Ok(None)
+        } else {
+            Ok(Some(branch))
+        }
+    }
 }
 
 fn extract_project_name_from_url(url: &str) -> Option<String> {
@@ -213,7 +268,7 @@ fn extract_project_name_from_url(url: &str) -> Option<String> {
     }
 }
 
-fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
+fn parse_worktree_list(output: &str) -> Vec<GitWorkspaceInfo> {
     let mut worktrees = Vec::new();
     let mut current_path: Option<PathBuf> = None;
     let mut current_branch: Option<String> = None;
@@ -222,7 +277,7 @@ fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
         if line.starts_with("worktree ") {
             // Save previous worktree if exists
             if let Some(path) = current_path.take() {
-                worktrees.push(WorktreeInfo {
+                worktrees.push(GitWorkspaceInfo {
                     path,
                     branch: current_branch.take(),
                 });
@@ -237,7 +292,7 @@ fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
         } else if line.is_empty() {
             // Empty line separates worktree entries
             if let Some(path) = current_path.take() {
-                worktrees.push(WorktreeInfo {
+                worktrees.push(GitWorkspaceInfo {
                     path,
                     branch: current_branch.take(),
                 });
@@ -247,7 +302,7 @@ fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
 
     // Handle last worktree if no trailing empty line
     if let Some(path) = current_path {
-        worktrees.push(WorktreeInfo {
+        worktrees.push(GitWorkspaceInfo {
             path,
             branch: current_branch,
         });
