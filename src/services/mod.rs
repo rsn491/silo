@@ -5,3 +5,4 @@ pub mod git_checkout_workspace;
 pub mod git_worktree_workspace;
 pub mod silo_config;
 pub mod workspace_cleanup;
+pub mod workspace_kind;

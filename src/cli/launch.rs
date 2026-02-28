@@ -13,6 +13,7 @@ use crate::services::agent_workspace::{
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
+use crate::services::workspace_kind::WorkspaceKind;
 
 #[derive(Parser, Debug)]
 pub struct LaunchArgs {
@@ -33,11 +34,15 @@ pub struct LaunchArgs {
     pub agent: Option<Agent>,
 
     /// Use git clone instead of git worktrees for workspace isolation
-    #[arg(long)]
+    #[arg(long, group = "workspace")]
     pub checkout: bool,
+
+    /// Use git worktrees for workspace isolation (overrides settings.json default)
+    #[arg(long, group = "workspace")]
+    pub worktree: bool,
 }
 
-pub enum WorkspaceBackend<G: GitOperations> {
+enum WorkspaceBackend<G: GitOperations> {
     Worktree(GitWorktreeWorkspace<G>),
     Checkout(GitCheckoutWorkspace<G>),
 }
@@ -78,19 +83,15 @@ impl<G: GitOperations> AgentWorkspaceManager for WorkspaceBackend<G> {
 }
 
 pub struct LaunchCommand<G: GitOperations, T: Terminal> {
-    workspace: WorkspaceBackend<G>,
+    git: G,
     terminal: Option<T>,
     launch_mode: LaunchMode,
 }
 
 impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
-    pub fn new(
-        workspace: WorkspaceBackend<G>,
-        terminal: Option<T>,
-        launch_mode: LaunchMode,
-    ) -> Self {
+    pub fn new(git: G, terminal: Option<T>, launch_mode: LaunchMode) -> Self {
         Self {
-            workspace,
+            git,
             terminal,
             launch_mode,
         }
@@ -98,14 +99,22 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 
     pub fn run(self, args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
         let agent = resolve_agent(args.agent);
-        let workspace_kind = match &self.workspace {
+        let workspace = match resolve_workspace_type(args.checkout, args.worktree) {
+            WorkspaceKind::Checkout => {
+                WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(self.git))
+            }
+            WorkspaceKind::Worktree => {
+                WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
+            }
+        };
+        let workspace_kind = match &workspace {
             WorkspaceBackend::Worktree(_) => "worktree",
             WorkspaceBackend::Checkout(_) => "checkout",
         };
         eprintln!("Launching {:?} in {}...", agent, workspace_kind);
 
         let workspace_path = AgentLauncher::new(
-            self.workspace,
+            workspace,
             self.terminal,
             self.launch_mode,
             agent,
@@ -120,6 +129,25 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 
         Ok(())
     }
+}
+
+fn resolve_workspace_type(checkout: bool, worktree: bool) -> WorkspaceKind {
+    if checkout {
+        return WorkspaceKind::Checkout;
+    }
+    if worktree {
+        return WorkspaceKind::Worktree;
+    }
+
+    let settings = match SiloConfig::load_settings() {
+        Ok(s) => s,
+        Err(err) => {
+            eprintln!("Warning: failed to load settings.json: {}", err);
+            return WorkspaceKind::Worktree;
+        }
+    };
+
+    settings.workspace_type.unwrap_or(WorkspaceKind::Worktree)
 }
 
 fn resolve_agent(agent: Option<Agent>) -> Agent {

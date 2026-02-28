@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use cli::cleanup::{CleanupArgs, CleanupCommand};
 use cli::completions::{CompletionsArgs, CompletionsCommand};
 use cli::init::{InitArgs, InitCommand};
-use cli::launch::{LaunchArgs, LaunchCommand, WorkspaceBackend};
+use cli::launch::{LaunchArgs, LaunchCommand};
 use cli::ps::PsCommand;
 use cli::status::{StatusArgs, StatusCommand};
 use infra::git::Git;
@@ -54,8 +54,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Launch(args) => {
             let tab = args.tab;
             let split_pane = args.split_pane;
-            let checkout = args.checkout;
-
             let (launch_mode, terminal) = if tab || split_pane {
                 let term = terminal::detect_terminal()?;
                 if split_pane {
@@ -67,13 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (LaunchMode::ExecReplace, None)
             };
 
-            let workspace = if checkout {
-                WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(Git))
-            } else {
-                WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(Git))
-            };
-
-            LaunchCommand::new(workspace, terminal, launch_mode).run(args)?;
+            LaunchCommand::new(Git, terminal, launch_mode).run(args)?;
         }
         Commands::Ps => {
             PsCommand::new(AgentListService::new(Git, SystemProcess)).run()?;

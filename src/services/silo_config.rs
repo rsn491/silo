@@ -1,3 +1,5 @@
+use crate::services::workspace_kind::WorkspaceKind;
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
@@ -43,9 +45,17 @@ impl From<io::Error> for SiloConfigError {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkspaceType {
+    Worktree,
+    Checkout,
+}
+
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SiloSettings {
     pub agent: Option<String>,
+    pub workspace_type: Option<WorkspaceKind>,
 }
 
 /// Configuration management for silo directory
@@ -172,11 +182,37 @@ mod tests {
 
         let settings = SiloSettings {
             agent: Some("opencode".to_string()),
+            workspace_type: None,
         };
 
         SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
         let contents = fs::read_to_string(&settings_path).unwrap();
         assert!(contents.contains("\"agent\""));
         assert!(contents.contains("opencode"));
+    }
+
+    #[test]
+    fn test_save_and_load_workspace_type() {
+        let dir = tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+
+        let settings = SiloSettings {
+            agent: None,
+            workspace_type: Some(WorkspaceKind::Checkout),
+        };
+        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
+
+        let loaded = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        assert_eq!(loaded.workspace_type, Some(WorkspaceKind::Checkout));
+    }
+
+    #[test]
+    fn test_workspace_type_default_is_absent() {
+        let dir = tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+        fs::write(&settings_path, r#"{"agent":"claude"}"#).unwrap();
+
+        let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        assert!(settings.workspace_type.is_none());
     }
 }

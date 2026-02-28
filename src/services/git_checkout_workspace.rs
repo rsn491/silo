@@ -6,9 +6,10 @@ use uuid::Uuid;
 use super::agent_launcher::LaunchError;
 use super::agent_workspace::{
     AgentWorkspaceManager, CleanupError, CleanupResult, FailedWorkspace, GitStatus,
-    RemovedWorkspace, SkippedWorkspace, StatusError, WorkspaceKind, commits_ahead_of_remote,
+    RemovedWorkspace, SkippedWorkspace, StatusError, commits_ahead_of_remote,
 };
 use super::silo_config::SiloConfig;
+use super::workspace_kind::WorkspaceKind;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 

@@ -3,8 +3,8 @@ use std::io::{self, Write};
 
 use crate::infra::git::GitOperations;
 use crate::infra::process::ProcessOperations;
-use crate::services::agent_workspace::WorkspaceKind;
 use crate::services::workspace_cleanup::WorkspaceCleanupService;
+use crate::services::workspace_kind::WorkspaceKind;
 
 #[derive(Parser, Debug)]
 pub struct CleanupArgs {

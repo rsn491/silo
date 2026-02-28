@@ -5,21 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 use crate::services::agent_launcher::LaunchError;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum WorkspaceKind {
-    Worktree,
-    Checkout,
-}
-
-impl fmt::Display for WorkspaceKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            WorkspaceKind::Worktree => write!(f, "worktree"),
-            WorkspaceKind::Checkout => write!(f, "checkout"),
-        }
-    }
-}
+use crate::services::workspace_kind::WorkspaceKind;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GitStatus {
