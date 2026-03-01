@@ -11,11 +11,11 @@ pub struct StatusArgs {
     pub all: bool,
 }
 
-pub struct StatusCommand<G: GitOperations + Clone> {
+pub struct StatusCommand<G: GitOperations> {
     workspaces: GlobalWorkspaceManager<G>,
 }
 
-impl<G: GitOperations + Clone> StatusCommand<G> {
+impl<G: GitOperations> StatusCommand<G> {
     pub fn new(workspaces: GlobalWorkspaceManager<G>) -> Self {
         Self { workspaces }
     }

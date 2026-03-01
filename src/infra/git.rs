@@ -9,6 +9,7 @@ pub struct GitWorkspaceInfo {
     pub branch: Option<String>,
 }
 
+#[cfg_attr(test, mockall::automock)]
 pub trait GitOperations {
     fn get_repo_root(&self) -> Result<PathBuf, GitError>;
     fn get_project_name(&self) -> Result<String, GitError>;

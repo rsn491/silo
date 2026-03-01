@@ -24,12 +24,12 @@ pub struct CleanupArgs {
     pub yes: bool,
 }
 
-pub struct CleanupCommand<G: GitOperations + Clone, P: ProcessOperations + Clone> {
+pub struct CleanupCommand<G: GitOperations, P: ProcessOperations + Clone> {
     workspaces: GlobalWorkspaceManager<G>,
     agent_list: AgentListService<G, P>,
 }
 
-impl<G: GitOperations + Clone, P: ProcessOperations + Clone> CleanupCommand<G, P> {
+impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
     pub fn new(workspaces: GlobalWorkspaceManager<G>, agent_list: AgentListService<G, P>) -> Self {
         Self {
             workspaces,
