@@ -147,37 +147,29 @@ mod tests {
         }
     }
 
-    fn make_workspace_manager(
-        worktrees: Vec<GitWorkspaceInfo>,
-    ) -> GlobalWorkspaceManager<MockGitOperations> {
+    #[test]
+    fn test_list_running_agents_in_worktrees() {
         let mut worktree_mock = MockGitOperations::new();
-        worktree_mock
-            .expect_list_worktrees()
-            .return_once(move || Ok(worktrees));
-
+        worktree_mock.expect_list_worktrees().return_once(|| {
+            Ok(vec![
+                GitWorkspaceInfo {
+                    path: PathBuf::from("/repo/worktree1"),
+                    branch: Some("feature-1".to_string()),
+                },
+                GitWorkspaceInfo {
+                    path: PathBuf::from("/repo/worktree2"),
+                    branch: Some("feature-2".to_string()),
+                },
+            ])
+        });
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock
             .expect_get_project_name()
             .returning(|| Ok("test-project".to_string()));
-
-        GlobalWorkspaceManager::new(
+        let workspace_manager = GlobalWorkspaceManager::new(
             GitWorktreeWorkspace::new(worktree_mock),
             GitCheckoutWorkspace::new(checkout_mock),
-        )
-    }
-
-    #[test]
-    fn test_list_running_agents_in_worktrees() {
-        let workspace_manager = make_workspace_manager(vec![
-            GitWorkspaceInfo {
-                path: PathBuf::from("/repo/worktree1"),
-                branch: Some("feature-1".to_string()),
-            },
-            GitWorkspaceInfo {
-                path: PathBuf::from("/repo/worktree2"),
-                branch: Some("feature-2".to_string()),
-            },
-        ]);
+        );
 
         let mock_process = MockProcess {
             processes: vec![
@@ -204,10 +196,21 @@ mod tests {
 
     #[test]
     fn test_list_running_agents_outside_worktrees() {
-        let workspace_manager = make_workspace_manager(vec![GitWorkspaceInfo {
-            path: PathBuf::from("/repo/worktree1"),
-            branch: Some("feature-1".to_string()),
-        }]);
+        let mut worktree_mock = MockGitOperations::new();
+        worktree_mock.expect_list_worktrees().return_once(|| {
+            Ok(vec![GitWorkspaceInfo {
+                path: PathBuf::from("/repo/worktree1"),
+                branch: Some("feature-1".to_string()),
+            }])
+        });
+        let mut checkout_mock = MockGitOperations::new();
+        checkout_mock
+            .expect_get_project_name()
+            .returning(|| Ok("test-project".to_string()));
+        let workspace_manager = GlobalWorkspaceManager::new(
+            GitWorktreeWorkspace::new(worktree_mock),
+            GitCheckoutWorkspace::new(checkout_mock),
+        );
 
         let mock_process = MockProcess {
             processes: vec![(123, "/usr/bin/claude --args".to_string())],
@@ -222,10 +225,21 @@ mod tests {
 
     #[test]
     fn test_list_running_agents_cwd_resolution_failure() {
-        let workspace_manager = make_workspace_manager(vec![GitWorkspaceInfo {
-            path: PathBuf::from("/repo/worktree1"),
-            branch: Some("feature-1".to_string()),
-        }]);
+        let mut worktree_mock = MockGitOperations::new();
+        worktree_mock.expect_list_worktrees().return_once(|| {
+            Ok(vec![GitWorkspaceInfo {
+                path: PathBuf::from("/repo/worktree1"),
+                branch: Some("feature-1".to_string()),
+            }])
+        });
+        let mut checkout_mock = MockGitOperations::new();
+        checkout_mock
+            .expect_get_project_name()
+            .returning(|| Ok("test-project".to_string()));
+        let workspace_manager = GlobalWorkspaceManager::new(
+            GitWorktreeWorkspace::new(worktree_mock),
+            GitCheckoutWorkspace::new(checkout_mock),
+        );
 
         let mock_process = MockProcess {
             processes: vec![
@@ -247,7 +261,18 @@ mod tests {
     #[test]
     fn test_list_running_agents_empty_cases() {
         // No worktrees
-        let workspace_manager = make_workspace_manager(vec![]);
+        let mut worktree_mock = MockGitOperations::new();
+        worktree_mock
+            .expect_list_worktrees()
+            .return_once(|| Ok(vec![]));
+        let mut checkout_mock = MockGitOperations::new();
+        checkout_mock
+            .expect_get_project_name()
+            .returning(|| Ok("test-project".to_string()));
+        let workspace_manager = GlobalWorkspaceManager::new(
+            GitWorktreeWorkspace::new(worktree_mock),
+            GitCheckoutWorkspace::new(checkout_mock),
+        );
         let mock_process = MockProcess {
             processes: vec![(123, "/usr/bin/claude --args".to_string())],
             cwds: vec![(123, PathBuf::from("/repo/worktree1"))],
@@ -257,10 +282,21 @@ mod tests {
         assert_eq!(agents.len(), 0);
 
         // No processes
-        let workspace_manager = make_workspace_manager(vec![GitWorkspaceInfo {
-            path: PathBuf::from("/repo/worktree1"),
-            branch: Some("feature-1".to_string()),
-        }]);
+        let mut worktree_mock = MockGitOperations::new();
+        worktree_mock.expect_list_worktrees().return_once(|| {
+            Ok(vec![GitWorkspaceInfo {
+                path: PathBuf::from("/repo/worktree1"),
+                branch: Some("feature-1".to_string()),
+            }])
+        });
+        let mut checkout_mock = MockGitOperations::new();
+        checkout_mock
+            .expect_get_project_name()
+            .returning(|| Ok("test-project".to_string()));
+        let workspace_manager = GlobalWorkspaceManager::new(
+            GitWorktreeWorkspace::new(worktree_mock),
+            GitCheckoutWorkspace::new(checkout_mock),
+        );
         let mock_process = MockProcess {
             processes: vec![],
             cwds: vec![],
