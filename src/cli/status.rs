@@ -1,9 +1,8 @@
 use clap::Parser;
 
 use crate::infra::git::GitOperations;
-use crate::services::agent_workspace::AgentWorkspaceManager;
-use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
-use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
+use crate::services::agent_workspace::WorkspaceManager;
+use crate::services::global_workspace::GlobalWorkspaceManager;
 
 #[derive(Parser, Debug)]
 pub struct StatusArgs {
@@ -12,26 +11,17 @@ pub struct StatusArgs {
     pub all: bool,
 }
 
-pub struct StatusCommand<G: GitOperations> {
-    worktree_workspace: GitWorktreeWorkspace<G>,
-    checkout_workspace: GitCheckoutWorkspace<G>,
+pub struct StatusCommand<G: GitOperations + Clone> {
+    workspaces: GlobalWorkspaceManager<G>,
 }
 
-impl<G: GitOperations> StatusCommand<G> {
-    pub fn new(
-        worktree_workspace: GitWorktreeWorkspace<G>,
-        checkout_workspace: GitCheckoutWorkspace<G>,
-    ) -> Self {
-        Self {
-            worktree_workspace,
-            checkout_workspace,
-        }
+impl<G: GitOperations + Clone> StatusCommand<G> {
+    pub fn new(workspaces: GlobalWorkspaceManager<G>) -> Self {
+        Self { workspaces }
     }
 
     pub fn run(&self, args: StatusArgs) -> Result<(), Box<dyn std::error::Error>> {
-        let mut statuses = self.worktree_workspace.get_statuses(args.all)?;
-        statuses.extend(self.checkout_workspace.get_statuses(args.all)?);
-
+        let statuses = self.workspaces.get_statuses(args.all)?;
         if statuses.is_empty() {
             if args.all {
                 println!("No workspaces found (excluding main worktree).");

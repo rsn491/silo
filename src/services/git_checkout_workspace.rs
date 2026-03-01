@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use super::agent_launcher::LaunchError;
 use super::agent_workspace::{
-    AgentWorkspaceManager, CleanupError, CleanupResult, FailedWorkspace, GitStatus,
-    RemovedWorkspace, SkippedWorkspace, StatusError, commits_ahead_of_remote,
+    CleanupError, CleanupResult, FailedWorkspace, GitStatus, RemovedWorkspace, SkippedWorkspace,
+    StatusError, WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
 };
 use super::silo_config::SiloConfig;
 use super::workspace_kind::WorkspaceKind;
@@ -35,7 +35,7 @@ impl<G: GitOperations> GitCheckoutWorkspace<G> {
     }
 }
 
-impl<G: GitOperations> AgentWorkspaceManager for GitCheckoutWorkspace<G> {
+impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
         let repo_root = self.git.get_repo_root()?;
         let dest = self.generate_checkout_path()?;
@@ -47,7 +47,9 @@ impl<G: GitOperations> AgentWorkspaceManager for GitCheckoutWorkspace<G> {
 
         Ok(dest)
     }
+}
 
+impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
     fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
         let base_dir = SiloConfig::get_silo_dir().unwrap();
         let project_prefix = format!("{}-", self.git.get_project_name()?);

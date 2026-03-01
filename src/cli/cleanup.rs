@@ -1,9 +1,12 @@
 use clap::Parser;
+use std::collections::HashSet;
 use std::io::{self, Write};
 
 use crate::infra::git::GitOperations;
 use crate::infra::process::ProcessOperations;
-use crate::services::workspace_cleanup::WorkspaceCleanupService;
+use crate::services::agent_list::AgentListService;
+use crate::services::agent_workspace::WorkspaceManager;
+use crate::services::global_workspace::GlobalWorkspaceManager;
 use crate::services::workspace_kind::WorkspaceKind;
 
 #[derive(Parser, Debug)]
@@ -22,12 +25,16 @@ pub struct CleanupArgs {
 }
 
 pub struct CleanupCommand<G: GitOperations + Clone, P: ProcessOperations + Clone> {
-    service: WorkspaceCleanupService<G, P>,
+    workspaces: GlobalWorkspaceManager<G>,
+    agent_list: AgentListService<G, P>,
 }
 
 impl<G: GitOperations + Clone, P: ProcessOperations + Clone> CleanupCommand<G, P> {
-    pub fn new(service: WorkspaceCleanupService<G, P>) -> Self {
-        Self { service }
+    pub fn new(workspaces: GlobalWorkspaceManager<G>, agent_list: AgentListService<G, P>) -> Self {
+        Self {
+            workspaces,
+            agent_list,
+        }
     }
 
     pub fn run(&self, args: CleanupArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -45,7 +52,16 @@ impl<G: GitOperations + Clone, P: ProcessOperations + Clone> CleanupCommand<G, P
             println!();
         }
 
-        let result = self.service.cleanup(args.all, args.force)?;
+        let active_paths: HashSet<_> = self
+            .agent_list
+            .get_active_paths()
+            .map_err(|_| "Failed to list running agents")?
+            .into_iter()
+            .collect();
+
+        let result = self
+            .workspaces
+            .cleanup(&active_paths, args.all, args.force)?;
 
         if result.removed.is_empty() && result.failed.is_empty() && result.skipped.is_empty() {
             println!("No workspaces to clean up.");

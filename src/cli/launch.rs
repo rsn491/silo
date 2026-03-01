@@ -1,15 +1,11 @@
 use clap::Parser;
-use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::infra::agent::Agent;
-use crate::infra::git::{GitOperations, GitWorkspaceInfo};
-use crate::infra::git_error::GitError;
+use crate::infra::git::GitOperations;
 use crate::infra::terminal::Terminal;
 use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
-use crate::services::agent_workspace::{
-    AgentWorkspaceManager, CleanupError, CleanupResult, GitStatus, StatusError,
-};
+use crate::services::agent_workspace::WorkspaceFactory;
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
@@ -47,37 +43,11 @@ enum WorkspaceBackend<G: GitOperations> {
     Checkout(GitCheckoutWorkspace<G>),
 }
 
-impl<G: GitOperations> AgentWorkspaceManager for WorkspaceBackend<G> {
+impl<G: GitOperations> WorkspaceFactory for WorkspaceBackend<G> {
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
         match self {
             WorkspaceBackend::Worktree(w) => w.create(branch),
             WorkspaceBackend::Checkout(w) => w.create(branch),
-        }
-    }
-
-    fn get_statuses(&self, show_all: bool) -> Result<Vec<GitStatus>, StatusError> {
-        match self {
-            WorkspaceBackend::Worktree(w) => w.get_statuses(show_all),
-            WorkspaceBackend::Checkout(w) => w.get_statuses(show_all),
-        }
-    }
-
-    fn cleanup(
-        &self,
-        excluded_paths: &HashSet<PathBuf>,
-        all: bool,
-        force: bool,
-    ) -> Result<CleanupResult, CleanupError> {
-        match self {
-            WorkspaceBackend::Worktree(w) => w.cleanup(excluded_paths, all, force),
-            WorkspaceBackend::Checkout(w) => w.cleanup(excluded_paths, all, force),
-        }
-    }
-
-    fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
-        match self {
-            WorkspaceBackend::Worktree(w) => w.get_all(),
-            WorkspaceBackend::Checkout(w) => w.get_all(),
         }
     }
 }

@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use super::agent_launcher::LaunchError;
 use super::agent_workspace::{
-    AgentWorkspaceManager, CleanupError, CleanupResult, FailedWorkspace, GitStatus,
-    RemovedWorkspace, SkippedWorkspace, StatusError, commits_ahead_of_remote,
+    CleanupError, CleanupResult, FailedWorkspace, GitStatus, RemovedWorkspace, SkippedWorkspace,
+    StatusError, WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
 };
 use super::silo_config::SiloConfig;
 use super::workspace_kind::WorkspaceKind;
@@ -66,7 +66,7 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
     }
 }
 
-impl<G: GitOperations> AgentWorkspaceManager for GitWorktreeWorkspace<G> {
+impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
         let worktree_path = self.generate_worktree_path()?;
         let worktree_name = worktree_path.file_name().unwrap().to_string_lossy();
@@ -76,7 +76,9 @@ impl<G: GitOperations> AgentWorkspaceManager for GitWorktreeWorkspace<G> {
 
         Ok(worktree_path)
     }
+}
 
+impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
     fn get_statuses(&self, show_all: bool) -> Result<Vec<GitStatus>, StatusError> {
         let worktrees = self.git.list_worktrees()?;
         let mut statuses = Vec::new();

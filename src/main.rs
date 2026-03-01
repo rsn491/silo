@@ -14,10 +14,8 @@ use infra::process::SystemProcess;
 use infra::terminal;
 use services::agent_launcher::LaunchMode;
 use services::agent_list::AgentListService;
-use services::git_checkout_workspace::GitCheckoutWorkspace;
-use services::git_worktree_workspace::GitWorktreeWorkspace;
+use services::global_workspace::GlobalWorkspaceManager;
 use services::silo_config::SiloConfig;
-use services::workspace_cleanup::WorkspaceCleanupService;
 
 #[derive(Parser)]
 #[command(name = "silo")]
@@ -68,18 +66,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             LaunchCommand::new(Git, terminal, launch_mode).run(args)?;
         }
         Commands::Ps => {
-            PsCommand::new(AgentListService::new(Git, SystemProcess)).run()?;
+            PsCommand::new(AgentListService::new(
+                GlobalWorkspaceManager::with_git(Git),
+                SystemProcess,
+            ))
+            .run()?;
         }
         Commands::Init(args) => InitCommand::new().run(args)?,
         Commands::Cleanup(args) => {
-            CleanupCommand::new(WorkspaceCleanupService::new(Git, SystemProcess)).run(args)?;
-        }
-        Commands::Status(args) => {
-            StatusCommand::new(
-                GitWorktreeWorkspace::new(Git),
-                GitCheckoutWorkspace::new(Git),
+            CleanupCommand::new(
+                GlobalWorkspaceManager::with_git(Git),
+                AgentListService::new(GlobalWorkspaceManager::with_git(Git), SystemProcess),
             )
             .run(args)?;
+        }
+        Commands::Status(args) => {
+            StatusCommand::new(GlobalWorkspaceManager::with_git(Git)).run(args)?;
         }
         Commands::Completions(args) => CompletionsCommand::new().run(args)?,
     }

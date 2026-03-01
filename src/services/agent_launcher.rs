@@ -1,7 +1,7 @@
 use crate::infra::agent::Agent;
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::Terminal;
-use crate::services::agent_workspace::AgentWorkspaceManager;
+use crate::services::agent_workspace::WorkspaceFactory;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,7 +43,7 @@ impl From<GitError> for LaunchError {
 
 pub struct AgentLauncher<W, T>
 where
-    W: AgentWorkspaceManager,
+    W: WorkspaceFactory,
     T: Terminal,
 {
     workspace: W,
@@ -55,7 +55,7 @@ where
 
 impl<W, T> AgentLauncher<W, T>
 where
-    W: AgentWorkspaceManager,
+    W: WorkspaceFactory,
     T: Terminal,
 {
     pub fn new(

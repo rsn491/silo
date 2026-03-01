@@ -81,14 +81,12 @@ impl CleanupResult {
 #[derive(Debug)]
 pub enum CleanupError {
     Git(GitError),
-    Io(String),
 }
 
 impl fmt::Display for CleanupError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CleanupError::Git(e) => write!(f, "Git error: {}", e),
-            CleanupError::Io(s) => write!(f, "IO error: {}", s),
         }
     }
 }
@@ -97,7 +95,6 @@ impl std::error::Error for CleanupError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             CleanupError::Git(e) => Some(e),
-            CleanupError::Io(_) => None,
         }
     }
 }
@@ -121,13 +118,15 @@ pub fn commits_ahead_of_remote<G: GitOperations>(
     if ahead > 0 { Some(ahead) } else { None }
 }
 
-pub trait AgentWorkspaceManager {
+pub trait WorkspaceFactory {
     /// Creates a new workspace and returns its path.
     ///
     /// # Arguments
     /// * `branch` - Optional branch name for the workspace. If None, a default branch name will be generated.
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError>;
+}
 
+pub trait WorkspaceManager {
     /// Returns the git status of each workspace.
     ///
     /// # Arguments

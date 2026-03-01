@@ -4,9 +4,8 @@ use crate::infra::agent::Agent;
 use crate::infra::git::GitOperations;
 use crate::infra::git_error::GitError;
 use crate::infra::process::{ProcessError, ProcessOperations};
-use crate::services::agent_workspace::AgentWorkspaceManager;
-use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
-use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
+use crate::services::agent_workspace::WorkspaceManager;
+use crate::services::global_workspace::GlobalWorkspaceManager;
 use strum::IntoEnumIterator;
 
 #[derive(Debug)]
@@ -47,24 +46,20 @@ impl From<ProcessError> for ListError {
 }
 
 pub struct AgentListService<G: GitOperations + Clone, P: ProcessOperations> {
-    git: G,
+    workspace_manager: GlobalWorkspaceManager<G>,
     process: P,
 }
 
 impl<G: GitOperations + Clone, P: ProcessOperations> AgentListService<G, P> {
-    pub fn new(git: G, process: P) -> Self {
-        Self { git, process }
+    pub fn new(workspace_manager: GlobalWorkspaceManager<G>, process: P) -> Self {
+        Self {
+            workspace_manager,
+            process,
+        }
     }
 
     pub fn list_running_agents(&self) -> Result<Vec<RunningAgent>, ListError> {
-        let worktrees = GitWorktreeWorkspace::new(self.git.clone()).get_all()?;
-        let checkouts = GitCheckoutWorkspace::new(self.git.clone()).get_all()?;
-        let workspaces: Vec<_> = worktrees
-            .iter()
-            .map(|w| (&w.path, &w.branch))
-            .chain(checkouts.iter().map(|c| (&c.path, &c.branch)))
-            .collect();
-
+        let workspaces = self.workspace_manager.get_all()?;
         let processes = self
             .process
             .find_processes_by_names(&Agent::all_process_names())?;
@@ -75,23 +70,22 @@ impl<G: GitOperations + Clone, P: ProcessOperations> AgentListService<G, P> {
                 Err(_) => continue,
             };
 
-            for (path, branch) in &workspaces {
-                if cwd.starts_with(path) {
+            for workspace in &workspaces {
+                if cwd.starts_with(&workspace.path) {
                     let agent_type = extract_agent_type(&args);
 
                     // Deduplicate: skip if we already have an agent of this type in this workspace
-                    if agents
-                        .iter()
-                        .any(|a: &RunningAgent| a.path == **path && a.agent_type == agent_type)
-                    {
+                    if agents.iter().any(|a: &RunningAgent| {
+                        a.path == workspace.path && a.agent_type == agent_type
+                    }) {
                         break;
                     }
 
                     agents.push(RunningAgent {
                         pid,
                         agent_type,
-                        path: path.to_path_buf(),
-                        branch: (*branch).clone(),
+                        path: workspace.path.clone(),
+                        branch: workspace.branch.clone(),
                     });
                     break;
                 }
@@ -101,7 +95,7 @@ impl<G: GitOperations + Clone, P: ProcessOperations> AgentListService<G, P> {
         Ok(agents)
     }
 
-    pub fn get_active_worktree_paths(&self) -> Result<Vec<PathBuf>, ListError> {
+    pub fn get_active_paths(&self) -> Result<Vec<PathBuf>, ListError> {
         let running_agents = self.list_running_agents()?;
 
         let active_paths: Vec<PathBuf> =
@@ -181,15 +175,15 @@ mod tests {
         }
 
         fn clone_local(&self, _source: &Path, _dest: &Path) -> Result<(), GitError> {
-            todo!()
+            Ok(())
         }
 
         fn checkout_new_branch(&self, _path: &Path, _branch: &str) -> Result<(), GitError> {
-            todo!()
+            Ok(())
         }
 
         fn get_current_branch(&self, _path: &Path) -> Result<Option<String>, GitError> {
-            todo!()
+            Ok(None)
         }
     }
 
@@ -242,7 +236,8 @@ mod tests {
             ],
         };
 
-        let service = AgentListService::new(mock_git, mock_process);
+        let service =
+            AgentListService::new(GlobalWorkspaceManager::with_git(mock_git), mock_process);
         let agents = service.list_running_agents().unwrap();
 
         assert_eq!(agents.len(), 2);
@@ -268,7 +263,8 @@ mod tests {
             cwds: vec![(123, PathBuf::from("/other/directory"))],
         };
 
-        let service = AgentListService::new(mock_git, mock_process);
+        let service =
+            AgentListService::new(GlobalWorkspaceManager::with_git(mock_git), mock_process);
         let agents = service.list_running_agents().unwrap();
 
         assert_eq!(agents.len(), 0);
@@ -292,7 +288,8 @@ mod tests {
             // PID 456 doesn't have a CWD entry, simulating a failure
         };
 
-        let service = AgentListService::new(mock_git, mock_process);
+        let service =
+            AgentListService::new(GlobalWorkspaceManager::with_git(mock_git), mock_process);
         let agents = service.list_running_agents().unwrap();
 
         // Should only find the agent with resolvable CWD
@@ -308,7 +305,8 @@ mod tests {
             processes: vec![(123, "/usr/bin/claude --args".to_string())],
             cwds: vec![(123, PathBuf::from("/repo/worktree1"))],
         };
-        let service = AgentListService::new(mock_git, mock_process);
+        let service =
+            AgentListService::new(GlobalWorkspaceManager::with_git(mock_git), mock_process);
         let agents = service.list_running_agents().unwrap();
         assert_eq!(agents.len(), 0);
 
@@ -323,7 +321,8 @@ mod tests {
             processes: vec![],
             cwds: vec![],
         };
-        let service = AgentListService::new(mock_git, mock_process);
+        let service =
+            AgentListService::new(GlobalWorkspaceManager::with_git(mock_git), mock_process);
         let agents = service.list_running_agents().unwrap();
         assert_eq!(agents.len(), 0);
     }
