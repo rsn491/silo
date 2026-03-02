@@ -39,7 +39,9 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
         let repo_root = self.git.get_repo_root()?;
         let dest = self.generate_checkout_path()?;
-        let dest_name = dest.file_name().unwrap().to_string_lossy();
+        let dest_name = dest.file_name().ok_or_else(|| {
+            LaunchError::AgentSpawnError("invalid checkout path".into())
+        })?.to_string_lossy();
         let branch_name = branch.unwrap_or_else(|| dest_name.to_string());
 
         self.git.clone_local(&repo_root, &dest)?;
@@ -51,7 +53,9 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
 
 impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
     fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
-        let base_dir = SiloConfig::get_silo_dir().unwrap();
+        let base_dir = SiloConfig::get_silo_dir().ok_or_else(|| {
+            GitError::CommandFailed("could not determine home directory".to_string())
+        })?;
         let project_prefix = format!("{}-", self.git.get_project_name()?);
         let checkout_dirs = find_checkout_dirs(&base_dir, &project_prefix, &HashSet::new());
 

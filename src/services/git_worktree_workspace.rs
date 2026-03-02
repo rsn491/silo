@@ -69,7 +69,9 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
 impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
         let worktree_path = self.generate_worktree_path()?;
-        let worktree_name = worktree_path.file_name().unwrap().to_string_lossy();
+        let worktree_name = worktree_path.file_name().ok_or_else(|| {
+            LaunchError::AgentSpawnError("invalid worktree path".into())
+        })?.to_string_lossy();
         let branch_name = branch.unwrap_or_else(|| worktree_name.to_string());
 
         self.git.create_worktree(&worktree_path, &branch_name)?;
