@@ -172,110 +172,15 @@ impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infra::git::GitWorkspaceInfo;
-    use crate::infra::git_error::GitError;
-    use std::path::{Path, PathBuf};
-
-    // Mock GitOperations
-    struct MockGit {
-        repo_root: PathBuf,
-        project_name: String,
-        worktrees: Vec<GitWorkspaceInfo>,
-        base_branch: String,
-        uncommitted_changes: Vec<(PathBuf, bool, usize)>,
-        divergence: Vec<(PathBuf, usize, usize)>,
-    }
-
-    impl GitOperations for MockGit {
-        fn get_repo_root(&self) -> Result<PathBuf, GitError> {
-            Ok(self.repo_root.clone())
-        }
-
-        fn get_project_name(&self) -> Result<String, GitError> {
-            Ok(self.project_name.clone())
-        }
-
-        fn create_worktree(&self, _path: &Path, _branch: &str) -> Result<(), GitError> {
-            Ok(())
-        }
-
-        fn list_worktrees(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
-            Ok(self.worktrees.clone())
-        }
-
-        fn remove_worktree(&self, _path: &Path) -> Result<(), GitError> {
-            Ok(())
-        }
-
-        fn get_default_remote_branch(&self) -> Result<String, GitError> {
-            Ok(self.base_branch.clone())
-        }
-
-        fn get_status_porcelain(&self, worktree_path: &Path) -> Result<String, GitError> {
-            for (path, has_changes, count) in &self.uncommitted_changes {
-                if path == worktree_path {
-                    if *has_changes {
-                        // Generate mock output with the specified number of files
-                        let lines: Vec<String> =
-                            (0..*count).map(|i| format!(" M file{}.txt", i)).collect();
-                        return Ok(lines.join("\n"));
-                    } else {
-                        return Ok(String::new());
-                    }
-                }
-            }
-            Ok(String::new())
-        }
-
-        fn count_commits_ahead(
-            &self,
-            worktree_path: &Path,
-            _base_branch: &str,
-        ) -> Result<usize, GitError> {
-            for (path, ahead, _) in &self.divergence {
-                if path == worktree_path {
-                    return Ok(*ahead);
-                }
-            }
-            Ok(0)
-        }
-
-        fn count_commits_behind(
-            &self,
-            worktree_path: &Path,
-            _base_branch: &str,
-        ) -> Result<usize, GitError> {
-            for (path, _, behind) in &self.divergence {
-                if path == worktree_path {
-                    return Ok(*behind);
-                }
-            }
-            Ok(0)
-        }
-
-        fn clone_local(&self, _source: &Path, _dest: &Path) -> Result<(), GitError> {
-            Ok(())
-        }
-
-        fn checkout_new_branch(&self, _path: &Path, _branch: &str) -> Result<(), GitError> {
-            Ok(())
-        }
-
-        fn get_current_branch(&self, _path: &Path) -> Result<Option<String>, GitError> {
-            Ok(None)
-        }
-    }
+    use crate::infra::git::{GitWorkspaceInfo, MockGitOperations};
 
     #[test]
     fn test_create_workspace() {
-        let mock_git = MockGit {
-            repo_root: PathBuf::from("/tmp/repo"),
-            project_name: "test-project".to_string(),
-            worktrees: vec![],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![],
-            divergence: vec![],
-        };
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_project_name()
+            .returning(|| Ok("test-project".to_string()));
+        mock_git.expect_create_worktree().returning(|_, _| Ok(()));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let result = workspace.create(None);
@@ -287,30 +192,33 @@ mod tests {
 
     #[test]
     fn test_get_status_for_specific_worktree() {
-        let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
             branch: Some("feature".to_string()),
         };
-        let mock_git = MockGit {
-            repo_root: repo_root.clone(),
-            project_name: "test-project".to_string(),
-            worktrees: vec![
-                // Main worktree is always first
-                GitWorkspaceInfo {
-                    path: repo_root.clone(),
-                    branch: Some("main".to_string()),
-                },
-                worktree1_info.clone(),
-            ],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![
-                (repo_root.clone(), true, 5),
-                (worktree1_path.clone(), true, 3),
-            ],
-            divergence: vec![(repo_root.clone(), 3, 0), (worktree1_path.clone(), 2, 0)],
-        };
+
+        let wt1 = worktree1_path.clone();
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
+        let wt1 = worktree1_path.clone();
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(move |path, _| if path == wt1 { Ok(2) } else { Ok(0) });
+        mock_git
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let status = workspace.get_git_status(worktree1_info).unwrap();
@@ -325,26 +233,32 @@ mod tests {
 
     #[test]
     fn test_get_status_with_uncommitted_changes() {
-        let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
             branch: Some("feature1".to_string()),
         };
-        let mock_git = MockGit {
-            repo_root: repo_root.clone(),
-            project_name: "test-project".to_string(),
-            worktrees: vec![
-                GitWorkspaceInfo {
-                    path: repo_root.clone(),
-                    branch: Some("main".to_string()),
-                },
-                worktree1_info.clone(),
-            ],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![(worktree1_path.clone(), true, 3)],
-            divergence: vec![(worktree1_path.clone(), 2, 0)],
-        };
+
+        let wt1 = worktree1_path.clone();
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(2));
+        mock_git
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let status = workspace.get_git_status(worktree1_info).unwrap();
@@ -356,26 +270,25 @@ mod tests {
 
     #[test]
     fn test_get_status_for_clean_worktree() {
-        let repo_root = PathBuf::from("/repo");
+        let mut mock_git = MockGitOperations::new();
         let worktree2_path = PathBuf::from("/repo/worktree2");
         let worktree2_info = GitWorkspaceInfo {
             path: worktree2_path.clone(),
             branch: Some("feature2".to_string()),
         };
-        let mock_git = MockGit {
-            repo_root: repo_root.clone(),
-            project_name: "test-project".to_string(),
-            worktrees: vec![
-                GitWorkspaceInfo {
-                    path: repo_root.clone(),
-                    branch: Some("main".to_string()),
-                },
-                worktree2_info.clone(),
-            ],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![(worktree2_path.clone(), false, 0)],
-            divergence: vec![(worktree2_path.clone(), 0, 0)],
-        };
+
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(0));
+        mock_git
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let status = workspace.get_git_status(worktree2_info).unwrap();
@@ -389,26 +302,25 @@ mod tests {
 
     #[test]
     fn test_get_status_with_divergence() {
-        let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
             branch: Some("feature1".to_string()),
         };
-        let mock_git = MockGit {
-            repo_root: repo_root.clone(),
-            project_name: "test-project".to_string(),
-            worktrees: vec![
-                GitWorkspaceInfo {
-                    path: repo_root.clone(),
-                    branch: Some("main".to_string()),
-                },
-                worktree1_info.clone(),
-            ],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![(worktree1_path.clone(), false, 0)],
-            divergence: vec![(worktree1_path.clone(), 5, 1)],
-        };
+
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(5));
+        mock_git
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(1));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let status = workspace.get_git_status(worktree1_info).unwrap();
@@ -419,23 +331,25 @@ mod tests {
 
     #[test]
     fn test_get_status_for_nonexistent_worktree() {
-        let repo_root = PathBuf::from("/repo");
         let nonexistent_path = PathBuf::from("/repo/nonexistent");
         let nonexistent_info = GitWorkspaceInfo {
             path: nonexistent_path.clone(),
             branch: Some("feature".to_string()),
         };
-        let mock_git = MockGit {
-            repo_root: repo_root.clone(),
-            project_name: "test-project".to_string(),
-            worktrees: vec![GitWorkspaceInfo {
-                path: repo_root.clone(),
-                branch: Some("main".to_string()),
-            }],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![],
-            divergence: vec![],
-        };
+
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(0));
+        mock_git
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let result = workspace.get_git_status(nonexistent_info);
@@ -453,7 +367,7 @@ mod tests {
     fn test_parse_uncommitted_changes_with_files() {
         let status_output = " M file1.txt\n M file2.txt\n M file3.txt\n";
         let (has_changes, count) =
-            GitWorktreeWorkspace::<MockGit>::parse_uncommitted_changes(status_output);
+            GitWorktreeWorkspace::<MockGitOperations>::parse_uncommitted_changes(status_output);
         assert!(has_changes);
         assert_eq!(count, 3);
     }
@@ -462,7 +376,7 @@ mod tests {
     fn test_parse_uncommitted_changes_empty() {
         let status_output = "";
         let (has_changes, count) =
-            GitWorktreeWorkspace::<MockGit>::parse_uncommitted_changes(status_output);
+            GitWorktreeWorkspace::<MockGitOperations>::parse_uncommitted_changes(status_output);
         assert!(!has_changes);
         assert_eq!(count, 0);
     }
@@ -471,7 +385,7 @@ mod tests {
     fn test_parse_uncommitted_changes_with_empty_lines() {
         let status_output = " M file1.txt\n\n M file2.txt\n";
         let (has_changes, count) =
-            GitWorktreeWorkspace::<MockGit>::parse_uncommitted_changes(status_output);
+            GitWorktreeWorkspace::<MockGitOperations>::parse_uncommitted_changes(status_output);
         assert!(has_changes);
         assert_eq!(count, 2); // Should only count non-empty lines
     }
@@ -480,26 +394,42 @@ mod tests {
     fn test_get_worktree_statuses_excludes_main() {
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
-        let mock_git = MockGit {
-            repo_root: repo_root.clone(),
-            project_name: "test-project".to_string(),
-            worktrees: vec![
-                GitWorkspaceInfo {
-                    path: repo_root.clone(),
-                    branch: Some("main".to_string()),
-                },
-                GitWorkspaceInfo {
-                    path: worktree1_path.clone(),
-                    branch: Some("feature".to_string()),
-                },
-            ],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![
-                (repo_root.clone(), true, 5),
-                (worktree1_path.clone(), true, 3),
-            ],
-            divergence: vec![(repo_root.clone(), 3, 0), (worktree1_path.clone(), 2, 0)],
-        };
+
+        let worktrees = vec![
+            GitWorkspaceInfo {
+                path: repo_root.clone(),
+                branch: Some("main".to_string()),
+            },
+            GitWorkspaceInfo {
+                path: worktree1_path.clone(),
+                branch: Some("feature".to_string()),
+            },
+        ];
+
+        let wt1 = worktree1_path.clone();
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_list_worktrees()
+            .return_once(move || Ok(worktrees));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
+        let wt1 = worktree1_path.clone();
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(move |path, _| if path == wt1 { Ok(2) } else { Ok(0) });
+        mock_git
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let statuses = workspace.get_statuses(true).unwrap();
@@ -514,33 +444,46 @@ mod tests {
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree2_path = PathBuf::from("/repo/worktree2");
-        let mock_git = MockGit {
-            repo_root: repo_root.clone(),
-            project_name: "test-project".to_string(),
-            worktrees: vec![
-                GitWorkspaceInfo {
-                    path: repo_root.clone(),
-                    branch: Some("main".to_string()),
-                },
-                GitWorkspaceInfo {
-                    path: worktree1_path.clone(),
-                    branch: Some("feature1".to_string()),
-                },
-                GitWorkspaceInfo {
-                    path: worktree2_path.clone(),
-                    branch: Some("feature2".to_string()),
-                },
-            ],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![
-                (worktree1_path.clone(), true, 3),
-                (worktree2_path.clone(), false, 0),
-            ],
-            divergence: vec![
-                (worktree1_path.clone(), 2, 0),
-                (worktree2_path.clone(), 0, 0),
-            ],
-        };
+
+        let worktrees = vec![
+            GitWorkspaceInfo {
+                path: repo_root.clone(),
+                branch: Some("main".to_string()),
+            },
+            GitWorkspaceInfo {
+                path: worktree1_path.clone(),
+                branch: Some("feature1".to_string()),
+            },
+            GitWorkspaceInfo {
+                path: worktree2_path.clone(),
+                branch: Some("feature2".to_string()),
+            },
+        ];
+
+        let wt1 = worktree1_path.clone();
+        let wt1b = worktree1_path.clone();
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_list_worktrees()
+            .return_once(move || Ok(worktrees));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(move |path, _| if path == wt1b { Ok(2) } else { Ok(0) });
+        mock_git
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let statuses = workspace.get_statuses(false).unwrap();
@@ -555,33 +498,45 @@ mod tests {
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree2_path = PathBuf::from("/repo/worktree2");
-        let mock_git = MockGit {
-            repo_root: repo_root.clone(),
-            project_name: "test-project".to_string(),
-            worktrees: vec![
-                GitWorkspaceInfo {
-                    path: repo_root.clone(),
-                    branch: Some("main".to_string()),
-                },
-                GitWorkspaceInfo {
-                    path: worktree1_path.clone(),
-                    branch: Some("feature1".to_string()),
-                },
-                GitWorkspaceInfo {
-                    path: worktree2_path.clone(),
-                    branch: Some("feature2".to_string()),
-                },
-            ],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![
-                (worktree1_path.clone(), true, 3),
-                (worktree2_path.clone(), false, 0),
-            ],
-            divergence: vec![
-                (worktree1_path.clone(), 2, 0),
-                (worktree2_path.clone(), 0, 0),
-            ],
-        };
+
+        let worktrees = vec![
+            GitWorkspaceInfo {
+                path: repo_root.clone(),
+                branch: Some("main".to_string()),
+            },
+            GitWorkspaceInfo {
+                path: worktree1_path.clone(),
+                branch: Some("feature1".to_string()),
+            },
+            GitWorkspaceInfo {
+                path: worktree2_path.clone(),
+                branch: Some("feature2".to_string()),
+            },
+        ];
+
+        let wt1 = worktree1_path.clone();
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_list_worktrees()
+            .return_once(move || Ok(worktrees));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(0));
+        mock_git
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let statuses = workspace.get_statuses(true).unwrap();
@@ -597,30 +552,36 @@ mod tests {
         let worktree1_path = silo_dir.join("worktree1");
         let worktree2_path = silo_dir.join("worktree2");
 
-        let mock_git = MockGit {
-            repo_root: repo_root.clone(),
-            project_name: "test-project".to_string(),
-            worktrees: vec![
-                GitWorkspaceInfo {
-                    path: repo_root.clone(),
-                    branch: Some("main".to_string()),
-                },
-                GitWorkspaceInfo {
-                    path: worktree1_path.clone(),
-                    branch: Some("feature1".to_string()),
-                },
-                GitWorkspaceInfo {
-                    path: worktree2_path.clone(),
-                    branch: Some("feature2".to_string()),
-                },
-            ],
-            base_branch: "origin/main".to_string(),
-            uncommitted_changes: vec![],
-            divergence: vec![
-                (worktree1_path.clone(), 3, 0), // 3 commits ahead
-                (worktree2_path.clone(), 0, 0), // 0 commits ahead
-            ],
-        };
+        let worktrees = vec![
+            GitWorkspaceInfo {
+                path: repo_root.clone(),
+                branch: Some("main".to_string()),
+            },
+            GitWorkspaceInfo {
+                path: worktree1_path.clone(),
+                branch: Some("feature1".to_string()),
+            },
+            GitWorkspaceInfo {
+                path: worktree2_path.clone(),
+                branch: Some("feature2".to_string()),
+            },
+        ];
+
+        let wt1 = worktree1_path.clone();
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_list_worktrees()
+            .return_once(move || Ok(worktrees));
+        mock_git
+            .expect_get_repo_root()
+            .returning(move || Ok(repo_root.clone()));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(move |path, _| if path == wt1 { Ok(3) } else { Ok(0) });
+        mock_git.expect_remove_worktree().returning(|_| Ok(()));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let active = HashSet::new();

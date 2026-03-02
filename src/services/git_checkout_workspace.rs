@@ -208,93 +208,21 @@ pub fn find_checkout_dirs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infra::git::GitWorkspaceInfo;
-    use crate::infra::git_error::GitError;
-    use std::path::{Path, PathBuf};
-
-    struct MockGit {
-        repo_root: PathBuf,
-        project_name: String,
-        commits_ahead_for: Vec<(PathBuf, usize)>,
-        current_branch_for: Vec<(PathBuf, Option<String>)>,
-    }
-
-    impl GitOperations for MockGit {
-        fn get_repo_root(&self) -> Result<PathBuf, GitError> {
-            Ok(self.repo_root.clone())
-        }
-
-        fn get_project_name(&self) -> Result<String, GitError> {
-            Ok(self.project_name.clone())
-        }
-
-        fn create_worktree(&self, _path: &Path, _branch: &str) -> Result<(), GitError> {
-            Ok(())
-        }
-
-        fn list_worktrees(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
-            Ok(vec![])
-        }
-
-        fn remove_worktree(&self, _path: &Path) -> Result<(), GitError> {
-            Ok(())
-        }
-
-        fn get_default_remote_branch(&self) -> Result<String, GitError> {
-            Ok("origin/main".to_string())
-        }
-
-        fn get_status_porcelain(&self, _worktree_path: &Path) -> Result<String, GitError> {
-            Ok(String::new())
-        }
-
-        fn count_commits_ahead(
-            &self,
-            worktree_path: &Path,
-            _base_branch: &str,
-        ) -> Result<usize, GitError> {
-            for (path, count) in &self.commits_ahead_for {
-                if path == worktree_path {
-                    return Ok(*count);
-                }
-            }
-            Ok(0)
-        }
-
-        fn count_commits_behind(
-            &self,
-            _worktree_path: &Path,
-            _base_branch: &str,
-        ) -> Result<usize, GitError> {
-            Ok(0)
-        }
-
-        fn clone_local(&self, _source: &Path, _dest: &Path) -> Result<(), GitError> {
-            Ok(())
-        }
-
-        fn checkout_new_branch(&self, _path: &Path, _branch: &str) -> Result<(), GitError> {
-            Ok(())
-        }
-
-        fn get_current_branch(&self, path: &Path) -> Result<Option<String>, GitError> {
-            for (check_path, branch) in &self.current_branch_for {
-                if check_path == path {
-                    return Ok(branch.clone());
-                }
-            }
-            Ok(None)
-        }
-    }
+    use crate::infra::git::MockGitOperations;
 
     #[test]
     fn test_create_checkout_workspace() {
-        let mock_git = MockGit {
-            repo_root: PathBuf::from("/tmp/repo"),
-            project_name: "test-project".to_string(),
-            commits_ahead_for: vec![],
-            current_branch_for: vec![],
-        };
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_project_name()
+            .returning(|| Ok("test-project".to_string()));
+        mock_git
+            .expect_get_repo_root()
+            .returning(|| Ok(PathBuf::from("/tmp/repo")));
+        mock_git.expect_clone_local().returning(|_, _| Ok(()));
+        mock_git
+            .expect_checkout_new_branch()
+            .returning(|_, _| Ok(()));
 
         let workspace = GitCheckoutWorkspace::new(mock_git);
         let result = workspace.create(None);
@@ -306,12 +234,17 @@ mod tests {
 
     #[test]
     fn test_create_checkout_workspace_custom_branch() {
-        let mock_git = MockGit {
-            repo_root: PathBuf::from("/tmp/repo"),
-            project_name: "my-project".to_string(),
-            commits_ahead_for: vec![],
-            current_branch_for: vec![],
-        };
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_project_name()
+            .returning(|| Ok("my-project".to_string()));
+        mock_git
+            .expect_get_repo_root()
+            .returning(|| Ok(PathBuf::from("/tmp/repo")));
+        mock_git.expect_clone_local().returning(|_, _| Ok(()));
+        mock_git
+            .expect_checkout_new_branch()
+            .returning(|_, _| Ok(()));
 
         let workspace = GitCheckoutWorkspace::new(mock_git);
         let result = workspace.create(Some("my-feature".to_string()));
@@ -387,12 +320,20 @@ mod tests {
         assert_eq!(candidates.len(), 2);
 
         // Now test that the cleanup would skip checkout1 with unpushed commits
-        let mock_git = MockGit {
-            repo_root: PathBuf::from("/tmp/repo"),
-            project_name: "my-project".to_string(),
-            commits_ahead_for: vec![(checkout1.clone(), 2)], // checkout1 has 2 commits ahead
-            current_branch_for: vec![(checkout1.clone(), Some("feature".to_string()))],
-        };
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        let checkout1_capture = checkout1.clone();
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(move |path, _| {
+                if path == checkout1_capture {
+                    Ok(2)
+                } else {
+                    Ok(0)
+                }
+            });
 
         // Simulate cleanup logic manually to avoid SiloConfig::get_silo_dir() dependency
         let base_branch = mock_git.get_default_remote_branch().ok();
