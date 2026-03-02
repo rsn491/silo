@@ -2,15 +2,13 @@ use std::path::Path;
 
 use crate::infra::agent::Agent;
 use crate::infra::osascript::run_osascript;
-use crate::services::agent_launcher::LaunchError;
-
-use super::Terminal;
+use super::{Terminal, TerminalError};
 
 #[derive(Debug)]
 pub struct ITerm2;
 
 impl Terminal for ITerm2 {
-    fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError> {
+    fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError> {
         let path_str = worktree_path.display().to_string();
         let escaped_path = path_str.replace('\'', "'\\''");
         let cmd = agent.command();
@@ -31,10 +29,10 @@ impl Terminal for ITerm2 {
             end tell"#,
             escaped_path, escaped_program
         );
-        run_osascript(&script).map_err(LaunchError::AgentSpawnError)
+        run_osascript(&script).map_err(|e| TerminalError::TabOpenFailed(e.to_string()))
     }
 
-    fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError> {
+    fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError> {
         let path_str = worktree_path.display().to_string();
         let escaped_path = path_str.replace('\'', "'\\''");
         let cmd = agent.command();
@@ -55,6 +53,6 @@ impl Terminal for ITerm2 {
             end tell"#,
             escaped_path, escaped_program
         );
-        run_osascript(&script).map_err(LaunchError::AgentSpawnError)
+        run_osascript(&script).map_err(|e| TerminalError::PaneSplitFailed(e.to_string()))
     }
 }
