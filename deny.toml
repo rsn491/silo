@@ -1,0 +1,43 @@
+[advisories]
+# Advisory IDs (RUSTSEC-YYYY-NNNN) or yanked crate specs to ignore.
+# Add entries here only with an accompanying reason when a vulnerability
+# does not apply to this project's usage.
+ignore = []
+
+[licenses]
+# Explicitly allowed SPDX license identifiers.
+# See https://spdx.org/licenses/ for the full list.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[licenses.private]
+# Skip license checks for workspace members that are not published to crates.io.
+ignore = true
+
+[bans]
+# Deny duplicate versions of the same crate; use skip entries for known,
+# unavoidable duplicates caused by mismatched transitive requirements.
+multiple-versions = "deny"
+wildcards = "allow"
+highlight = "all"
+skip = [
+    # uuid 1.x requires getrandom 0.2.x; tempfile 3.x requires getrandom 0.3.x
+    { crate = "getrandom", reason = "uuid 1.x and tempfile 3.x require different major versions of getrandom" },
+    # dirs-sys requires windows-sys 0.48.x; clap/anstyle ecosystem requires 0.61.x
+    { crate = "windows-sys", reason = "dirs-sys requires windows-sys 0.48.x while clap/anstyle requires 0.61.x" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
