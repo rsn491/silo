@@ -1,11 +1,42 @@
 mod iterm2;
 
+use std::fmt;
 use std::path::Path;
 
 use crate::infra::agent::Agent;
-use crate::services::agent_launcher::LaunchError;
+use crate::infra::git_error::GitError;
 
 pub use iterm2::ITerm2;
+
+#[derive(Debug)]
+pub enum LaunchError {
+    AgentSpawnError(String),
+    Git(GitError),
+}
+
+impl fmt::Display for LaunchError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LaunchError::AgentSpawnError(msg) => write!(f, "failed to spawn agent: {}", msg),
+            LaunchError::Git(err) => write!(f, "{}", err),
+        }
+    }
+}
+
+impl std::error::Error for LaunchError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            LaunchError::Git(err) => Some(err),
+            LaunchError::AgentSpawnError(_) => None,
+        }
+    }
+}
+
+impl From<GitError> for LaunchError {
+    fn from(err: GitError) -> Self {
+        LaunchError::Git(err)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TerminalKind {

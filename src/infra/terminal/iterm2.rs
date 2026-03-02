@@ -2,8 +2,8 @@ use std::path::Path;
 
 use crate::infra::agent::Agent;
 use crate::infra::osascript::run_osascript;
-use crate::services::agent_launcher::LaunchError;
 
+use super::LaunchError;
 use super::Terminal;
 
 #[derive(Debug)]
