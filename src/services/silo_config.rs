@@ -1,5 +1,4 @@
 use crate::services::workspace_kind::WorkspaceKind;
-use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
@@ -43,13 +42,6 @@ impl From<io::Error> for SiloConfigError {
     fn from(err: io::Error) -> Self {
         SiloConfigError::IoError(err)
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, ValueEnum)]
-#[serde(rename_all = "lowercase")]
-pub enum WorkspaceType {
-    Worktree,
-    Checkout,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
