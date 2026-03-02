@@ -1,8 +1,8 @@
 use std::path::Path;
 
+use super::{Terminal, TerminalError};
 use crate::infra::agent::Agent;
 use crate::infra::osascript::run_osascript;
-use super::{Terminal, TerminalError};
 
 #[derive(Debug)]
 pub struct ITerm2;
