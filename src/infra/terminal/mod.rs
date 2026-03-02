@@ -1,9 +1,10 @@
 mod iterm2;
+mod terminal_error;
 
 use std::path::Path;
 
 use crate::infra::agent::Agent;
-use crate::services::agent_launcher::LaunchError;
+pub use terminal_error::TerminalError;
 
 pub use iterm2::ITerm2;
 
@@ -13,8 +14,8 @@ pub enum TerminalKind {
 }
 
 pub trait Terminal: std::fmt::Debug {
-    fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError>;
-    fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), LaunchError>;
+    fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError>;
+    fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError>;
 }
 
 pub fn create_terminal(kind: &TerminalKind) -> ITerm2 {
@@ -24,20 +25,20 @@ pub fn create_terminal(kind: &TerminalKind) -> ITerm2 {
 }
 
 /// Detect and create a terminal from `$TERM_PROGRAM`.
-pub fn detect_terminal() -> Result<ITerm2, LaunchError> {
+pub fn detect_terminal() -> Result<ITerm2, TerminalError> {
     let term_program = std::env::var("TERM_PROGRAM").ok();
     let value = term_program.as_deref();
 
     let kind = match value.map(|s| s.to_lowercase()).as_deref() {
         Some("iterm" | "iterm2" | "iterm.app" | "iterm2.app") => TerminalKind::ITerm2,
         Some(other) => {
-            return Err(LaunchError::AgentSpawnError(format!(
+            return Err(TerminalError::TerminalNotSupported(format!(
                 "unsupported terminal '{}'. Supported terminals: iterm",
                 other
             )));
         }
         None => {
-            return Err(LaunchError::AgentSpawnError(
+            return Err(TerminalError::TerminalDetectionFailed(
                 "could not detect terminal. Set $TERM_PROGRAM. \
                  Supported terminals: iterm"
                     .to_string(),

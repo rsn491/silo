@@ -1,6 +1,6 @@
 use crate::infra::agent::Agent;
 use crate::infra::git_error::GitError;
-use crate::infra::terminal::Terminal;
+use crate::infra::terminal::{Terminal, TerminalError};
 use crate::services::agent_workspace::WorkspaceFactory;
 use std::fmt;
 
@@ -38,6 +38,12 @@ impl std::error::Error for LaunchError {
 impl From<GitError> for LaunchError {
     fn from(err: GitError) -> Self {
         LaunchError::Git(err)
+    }
+}
+
+impl From<TerminalError> for LaunchError {
+    fn from(err: TerminalError) -> Self {
+        LaunchError::AgentSpawnError(err.to_string())
     }
 }
 
