@@ -57,12 +57,6 @@ impl Agent {
     }
 }
 
-impl From<String> for Agent {
-    fn from(s: String) -> Self {
-        s.parse().unwrap_or_else(|_| panic!("Unknown agent: {}", s))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
