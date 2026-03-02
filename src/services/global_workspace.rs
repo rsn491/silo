@@ -165,14 +165,12 @@ mod tests {
         let wt1_path = PathBuf::from("/wt1");
 
         let mut worktree_mock = MockGitOperations::new();
-        worktree_mock
-            .expect_list_worktrees()
-            .return_once(move || {
-                Ok(vec![GitWorkspaceInfo {
-                    path: wt1_path.clone(),
-                    branch: Some("branch".to_string()),
-                }])
-            });
+        worktree_mock.expect_list_worktrees().return_once(move || {
+            Ok(vec![GitWorkspaceInfo {
+                path: wt1_path.clone(),
+                branch: Some("branch".to_string()),
+            }])
+        });
 
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock

@@ -180,9 +180,7 @@ mod tests {
         mock_git
             .expect_get_project_name()
             .returning(|| Ok("test-project".to_string()));
-        mock_git
-            .expect_create_worktree()
-            .returning(|_, _| Ok(()));
+        mock_git.expect_create_worktree().returning(|_, _| Ok(()));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let result = workspace.create(None);
@@ -205,13 +203,15 @@ mod tests {
         mock_git
             .expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
-        mock_git.expect_get_status_porcelain().returning(move |path| {
-            if path == wt1 {
-                Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
-            } else {
-                Ok(String::new())
-            }
-        });
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
         let wt1 = worktree1_path.clone();
         mock_git
             .expect_count_commits_ahead()
@@ -244,13 +244,15 @@ mod tests {
         mock_git
             .expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
-        mock_git.expect_get_status_porcelain().returning(move |path| {
-            if path == wt1 {
-                Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
-            } else {
-                Ok(String::new())
-            }
-        });
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
         mock_git
             .expect_count_commits_ahead()
             .returning(|_, _| Ok(2));
@@ -412,13 +414,15 @@ mod tests {
         mock_git
             .expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
-        mock_git.expect_get_status_porcelain().returning(move |path| {
-            if path == wt1 {
-                Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
-            } else {
-                Ok(String::new())
-            }
-        });
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
         let wt1 = worktree1_path.clone();
         mock_git
             .expect_count_commits_ahead()
@@ -465,13 +469,15 @@ mod tests {
         mock_git
             .expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
-        mock_git.expect_get_status_porcelain().returning(move |path| {
-            if path == wt1 {
-                Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
-            } else {
-                Ok(String::new())
-            }
-        });
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
         mock_git
             .expect_count_commits_ahead()
             .returning(move |path, _| if path == wt1b { Ok(2) } else { Ok(0) });
@@ -516,13 +522,15 @@ mod tests {
         mock_git
             .expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
-        mock_git.expect_get_status_porcelain().returning(move |path| {
-            if path == wt1 {
-                Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
-            } else {
-                Ok(String::new())
-            }
-        });
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                if path == wt1 {
+                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
+                } else {
+                    Ok(String::new())
+                }
+            });
         mock_git
             .expect_count_commits_ahead()
             .returning(|_, _| Ok(0));

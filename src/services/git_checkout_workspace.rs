@@ -325,9 +325,15 @@ mod tests {
             .expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
         let checkout1_capture = checkout1.clone();
-        mock_git.expect_count_commits_ahead().returning(move |path, _| {
-            if path == checkout1_capture { Ok(2) } else { Ok(0) }
-        });
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(move |path, _| {
+                if path == checkout1_capture {
+                    Ok(2)
+                } else {
+                    Ok(0)
+                }
+            });
 
         // Simulate cleanup logic manually to avoid SiloConfig::get_silo_dir() dependency
         let base_branch = mock_git.get_default_remote_branch().ok();
