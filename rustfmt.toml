@@ -1,0 +1,16 @@
+edition = "2024"
+
+# Merge all imports from the same crate into a single `use` statement.
+imports_granularity = "Crate"
+
+# Group imports: std first, then external crates, then crate-local.
+group_imports = "StdExternalCrate"
+
+# `Foo { x: x }` → `Foo { x }`
+use_field_init_shorthand = true
+
+# `try!(expr)` → `expr?`
+use_try_shorthand = true
+
+# Format Rust code blocks inside doc comments.
+format_code_in_doc_comments = true
