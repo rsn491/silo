@@ -39,9 +39,10 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
         let repo_root = self.git.get_repo_root()?;
         let dest = self.generate_checkout_path()?;
-        let dest_name = dest.file_name().ok_or_else(|| {
-            LaunchError::AgentSpawnError("invalid checkout path".into())
-        })?.to_string_lossy();
+        let dest_name = dest
+            .file_name()
+            .ok_or_else(|| LaunchError::AgentSpawnError("invalid checkout path".into()))?
+            .to_string_lossy();
         let branch_name = branch.unwrap_or_else(|| dest_name.to_string());
 
         self.git.clone_local(&repo_root, &dest)?;
