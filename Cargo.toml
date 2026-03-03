@@ -18,3 +18,5 @@ thiserror = "1"
 [dev-dependencies]
 mockall = "0.13"
 tempfile = "3.25.0"
+assert_cmd = "2"
+predicates = "2"
