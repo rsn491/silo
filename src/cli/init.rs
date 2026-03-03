@@ -76,7 +76,7 @@ impl InitCommand {
         }
 
         if let Some(agent) = agent {
-            settings.agent = Some(agent.to_string());
+            settings.agent = Some(agent);
         }
         if let Some(wt) = workspace_type {
             settings.workspace_type = Some(wt);

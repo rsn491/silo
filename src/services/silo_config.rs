@@ -1,3 +1,4 @@
+use crate::infra::agent::Agent;
 use crate::services::workspace_kind::WorkspaceKind;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -20,7 +21,7 @@ pub enum SiloConfigError {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SiloSettings {
-    pub agent: Option<String>,
+    pub agent: Option<Agent>,
     pub workspace_type: Option<WorkspaceKind>,
 }
 
@@ -125,7 +126,7 @@ mod tests {
         fs::write(&settings_path, r#"{"agent":"codex"}"#).unwrap();
 
         let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
-        assert_eq!(settings.agent.as_deref(), Some("codex"));
+        assert_eq!(settings.agent, Some(Agent::Codex));
     }
 
     #[test]
@@ -147,7 +148,7 @@ mod tests {
         let settings_path = dir.path().join("settings.json");
 
         let settings = SiloSettings {
-            agent: Some("opencode".to_string()),
+            agent: Some(Agent::OpenCode),
             workspace_type: None,
         };
 
