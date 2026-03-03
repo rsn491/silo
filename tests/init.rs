@@ -6,10 +6,7 @@ use tempfile::TempDir;
 fn test_silo_dir_is_created() {
     let tmp = TempDir::new().unwrap();
 
-    common::silo_cmd(tmp.path())
-        .arg("init")
-        .assert()
-        .success();
+    common::silo_cmd(tmp.path()).arg("init").assert().success();
 
     assert!(
         common::silo_test_dir(tmp.path()).is_dir(),

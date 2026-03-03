@@ -24,5 +24,8 @@ fn test_launch_creates_worktree() {
         .flatten()
         .any(|e| e.file_name().to_string_lossy().starts_with("repo-"));
 
-    assert!(has_worktree, "expected a worktree directory starting with 'repo-' in SILO_DIR");
+    assert!(
+        has_worktree,
+        "expected a worktree directory starting with 'repo-' in SILO_DIR"
+    );
 }
