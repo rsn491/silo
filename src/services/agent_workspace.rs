@@ -1,6 +1,7 @@
 use std::collections::HashSet;
-use std::fmt;
 use std::path::{Path, PathBuf};
+
+use thiserror::Error;
 
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
@@ -18,31 +19,10 @@ pub struct GitStatus {
     pub commits_behind: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum StatusError {
-    Git(GitError),
-}
-
-impl std::fmt::Display for StatusError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StatusError::Git(e) => write!(f, "Git error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for StatusError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            StatusError::Git(e) => Some(e),
-        }
-    }
-}
-
-impl From<GitError> for StatusError {
-    fn from(error: GitError) -> Self {
-        StatusError::Git(error)
-    }
+    #[error("Git error: {0}")]
+    Git(#[from] GitError),
 }
 
 pub struct RemovedWorkspace {
@@ -78,31 +58,10 @@ impl CleanupResult {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum CleanupError {
-    Git(GitError),
-}
-
-impl fmt::Display for CleanupError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CleanupError::Git(e) => write!(f, "Git error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for CleanupError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            CleanupError::Git(e) => Some(e),
-        }
-    }
-}
-
-impl From<GitError> for CleanupError {
-    fn from(error: GitError) -> Self {
-        CleanupError::Git(error)
-    }
+    #[error("Git error: {0}")]
+    Git(#[from] GitError),
 }
 
 /// Returns `Some(commits_ahead)` when the workspace at `path` has unpushed

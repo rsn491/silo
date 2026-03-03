@@ -7,6 +7,7 @@ use crate::infra::process::{ProcessError, ProcessOperations};
 use crate::services::agent_workspace::WorkspaceManager;
 use crate::services::global_workspace::GlobalWorkspaceManager;
 use strum::IntoEnumIterator;
+use thiserror::Error;
 
 #[derive(Debug)]
 pub struct RunningAgent {
@@ -16,33 +17,12 @@ pub struct RunningAgent {
     pub branch: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ListError {
-    Git(GitError),
-    Process(ProcessError),
-}
-
-impl std::fmt::Display for ListError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListError::Git(e) => write!(f, "Git error: {}", e),
-            ListError::Process(e) => write!(f, "Process error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for ListError {}
-
-impl From<GitError> for ListError {
-    fn from(error: GitError) -> Self {
-        ListError::Git(error)
-    }
-}
-
-impl From<ProcessError> for ListError {
-    fn from(error: ProcessError) -> Self {
-        ListError::Process(error)
-    }
+    #[error("Git error: {0}")]
+    Git(#[from] GitError),
+    #[error("Process error: {0}")]
+    Process(#[from] ProcessError),
 }
 
 pub struct AgentListService<G: GitOperations, P: ProcessOperations> {

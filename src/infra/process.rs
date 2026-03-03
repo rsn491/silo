@@ -1,22 +1,14 @@
 use std::path::PathBuf;
 use std::process::Command;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ProcessError {
+    #[error("Command failed: {0}")]
     CommandFailed(String),
+    #[error("Parse error: {0}")]
     ParseError(String),
 }
-
-impl std::fmt::Display for ProcessError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProcessError::CommandFailed(msg) => write!(f, "Command failed: {}", msg),
-            ProcessError::ParseError(msg) => write!(f, "Parse error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for ProcessError {}
 
 pub trait ProcessOperations {
     fn find_processes_by_names(&self, names: &[&str]) -> Result<Vec<(u32, String)>, ProcessError>;
