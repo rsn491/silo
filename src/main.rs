@@ -5,6 +5,7 @@ mod infra;
 mod services;
 
 use clap::{Parser, Subcommand};
+use cli::checkout::{CheckoutArgs, CheckoutCommand};
 use cli::cleanup::{CleanupArgs, CleanupCommand};
 use cli::completions::{CompletionsArgs, CompletionsCommand};
 use cli::init::{InitArgs, InitCommand};
@@ -44,6 +45,8 @@ pub enum Commands {
     Status(StatusArgs),
     /// Generate shell completion scripts.
     Completions(CompletionsArgs),
+    /// Switch into a workspace by spawning a new shell in its directory.
+    Checkout(CheckoutArgs),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -89,6 +92,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             StatusCommand::new(GlobalWorkspaceManager::with_git(Git)).run(args)?;
         }
         Commands::Completions(args) => CompletionsCommand::new().run(args)?,
+        Commands::Checkout(args) => {
+            CheckoutCommand::new(GlobalWorkspaceManager::with_git(Git)).run(args)?;
+        }
     }
 
     Ok(())
