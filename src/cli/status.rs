@@ -12,16 +12,16 @@ pub struct StatusArgs {
 }
 
 pub struct StatusCommand<G: GitOperations> {
-    workspaces: GlobalWorkspaceManager<G>,
+    workspace_manager: GlobalWorkspaceManager<G>,
 }
 
 impl<G: GitOperations> StatusCommand<G> {
     pub fn new(workspaces: GlobalWorkspaceManager<G>) -> Self {
-        Self { workspaces }
+        Self { workspace_manager: workspaces }
     }
 
     pub fn run(&self, args: StatusArgs) -> Result<(), Box<dyn std::error::Error>> {
-        let workspaces = self.workspaces.get_all()?;
+        let workspaces = self.workspace_manager.get_all()?;
         let statuses: Vec<_> = workspaces
             .into_iter()
             .filter(|w| {
