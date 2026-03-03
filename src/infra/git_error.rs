@@ -1,28 +1,15 @@
-use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum GitError {
+    #[error("not a git repository")]
     NotAGitRepo,
+    #[error("git error: {0}")]
     CommandFailed(String),
+    #[error("worktree creation failed: {0}")]
     WorktreeCreationFailed(String),
+    #[error("worktree removal failed: {0}")]
     WorktreeRemovalFailed(String),
+    #[error("clone failed: {0}")]
     CloneFailed(String),
-}
-
-impl fmt::Display for GitError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            GitError::NotAGitRepo => write!(f, "not a git repository"),
-            GitError::CommandFailed(msg) => write!(f, "git error: {}", msg),
-            GitError::WorktreeCreationFailed(msg) => write!(f, "worktree creation failed: {}", msg),
-            GitError::WorktreeRemovalFailed(msg) => write!(f, "worktree removal failed: {}", msg),
-            GitError::CloneFailed(msg) => write!(f, "clone failed: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for GitError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
 }

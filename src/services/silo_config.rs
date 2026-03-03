@@ -1,47 +1,21 @@
 use crate::services::workspace_kind::WorkspaceKind;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
 
 /// Error types for silo configuration operations
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum SiloConfigError {
-    IoError(io::Error),
+    #[error("IO error: {0}")]
+    IoError(#[from] io::Error),
+    #[error("could not determine home directory")]
     HomeDirectoryNotFound,
+    #[error("failed to parse settings.json: {0}")]
     JsonParse(String),
+    #[error("failed to write settings.json: {0}")]
     JsonWrite(String),
-}
-
-impl fmt::Display for SiloConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SiloConfigError::IoError(err) => write!(f, "IO error: {}", err),
-            SiloConfigError::HomeDirectoryNotFound => {
-                write!(f, "could not determine home directory")
-            }
-            SiloConfigError::JsonParse(msg) => write!(f, "failed to parse settings.json: {}", msg),
-            SiloConfigError::JsonWrite(msg) => write!(f, "failed to write settings.json: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for SiloConfigError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            SiloConfigError::IoError(err) => Some(err),
-            SiloConfigError::HomeDirectoryNotFound => None,
-            SiloConfigError::JsonParse(_) => None,
-            SiloConfigError::JsonWrite(_) => None,
-        }
-    }
-}
-
-impl From<io::Error> for SiloConfigError {
-    fn from(err: io::Error) -> Self {
-        SiloConfigError::IoError(err)
-    }
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
