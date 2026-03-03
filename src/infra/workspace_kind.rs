@@ -1,6 +1,8 @@
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Default, clap::ValueEnum, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Debug, Clone, PartialEq, Default, clap::ValueEnum, serde::Deserialize, serde::Serialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum WorkspaceKind {
     #[default]

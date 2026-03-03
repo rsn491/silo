@@ -155,9 +155,9 @@ impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
 
             let path = wt.path.clone();
             let branch = wt.branch.clone();
-            let s = self
-                .get_git_status(wt)
-                .map_err(|e| match e { StatusError::Git(g) => g })?;
+            let s = self.get_git_status(wt).map_err(|e| match e {
+                StatusError::Git(g) => g,
+            })?;
 
             result.push(GitWorkspaceInfo {
                 path,
