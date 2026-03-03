@@ -15,6 +15,8 @@ pub enum LaunchMode {
 pub enum LaunchError {
     #[error("failed to spawn agent: {0}")]
     AgentSpawnError(String),
+    #[error("agent exited with non-zero status: {0}")]
+    AgentExitError(std::process::ExitStatus),
     #[error(transparent)]
     Git(#[from] GitError),
 }
@@ -59,13 +61,18 @@ where
     }
 
     fn launch_in_workspace(&self, workspace_path: &std::path::Path) -> Result<(), LaunchError> {
-        let _status = self
+        let status = self
             .agent
             .command()
             .current_dir(workspace_path)
             .status()
             .map_err(|e| LaunchError::AgentSpawnError(e.to_string()))?;
-        Ok(())
+
+        if status.success() {
+            Ok(())
+        } else {
+            Err(LaunchError::AgentExitError(status))
+        }
     }
 
     pub fn launch(&self) -> Result<std::path::PathBuf, LaunchError> {
