@@ -1,3 +1,5 @@
+//! Workspace management implementation using local Git clones (checkouts).
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -13,15 +15,23 @@ use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 use crate::infra::workspace_kind::WorkspaceKind;
 
+/// Manages isolated workspaces by creating full local clones of the repository.
 pub struct GitCheckoutWorkspace<G: GitOperations> {
+    /// Git operations used to clone and inspect checkouts.
     git: G,
 }
 
 impl<G: GitOperations> GitCheckoutWorkspace<G> {
+    /// Creates a new `GitCheckoutWorkspace` with the specified Git operations.
     pub fn new(git: G) -> Self {
         Self { git }
     }
 
+    /// Generates a unique path for a new checkout within the Silo directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LaunchError`] if the Silo directory cannot be determined or if Git operations fail.
     fn generate_checkout_path(&self) -> Result<PathBuf, LaunchError> {
         let base_dir = SiloConfig::get_silo_dir().ok_or_else(|| {
             LaunchError::AgentSpawnError("checkout workspaces require ~/.silo/ to exist".into())
@@ -36,6 +46,11 @@ impl<G: GitOperations> GitCheckoutWorkspace<G> {
 }
 
 impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
+    /// Creates a new workspace by performing a local Git clone.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LaunchError`] if cloning or checking out the branch fails.
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
         let repo_root = self.git.get_repo_root()?;
         let dest = self.generate_checkout_path()?;
@@ -53,6 +68,11 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
 }
 
 impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
+    /// Returns all Git checkout workspaces for the current project.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError`] if the Silo directory cannot be determined or project name fails.
     fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
         let project_prefix = format!("{}-", self.git.get_project_name()?);
         let silo_dir = match SiloConfig::get_silo_dir() {
@@ -89,6 +109,11 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
         Ok(result)
     }
 
+    /// Removes inactive Git checkout workspaces.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CleanupError`] if project name resolution or Git operations fail.
     fn cleanup(
         &self,
         exclude_paths: &HashSet<PathBuf>,
@@ -139,6 +164,7 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
 
 /// Scans `base_dir` for subdirectories whose name starts with `project_prefix`
 /// and whose `.git` entry is a **directory** (indicating a clone, not a worktree).
+///
 /// Entries in `exclude_paths` are skipped.
 pub fn find_checkout_dirs(
     base_dir: &Path,
@@ -172,7 +198,7 @@ pub fn find_checkout_dirs(
             continue;
         }
 
-        // Key distinction: worktrees have .git as a *file*, clones have .git as a *directory*
+        // Key distinction: worktrees have .git as a *file*, clones have .git as a *directory*.
         let git_entry = path.join(".git");
         if git_entry.is_dir() {
             results.push(path);
@@ -236,12 +262,12 @@ mod tests {
         let temp = tempfile::TempDir::new().unwrap();
         let base = temp.path();
 
-        // Create a directory that looks like a checkout (`.git` is a dir)
+        // Create a directory that looks like a checkout (`.git` is a dir).
         let checkout_dir = base.join("my-project-abc12345");
         std::fs::create_dir_all(&checkout_dir).unwrap();
         std::fs::create_dir_all(checkout_dir.join(".git")).unwrap();
 
-        // Create a directory that looks like a worktree (`.git` is a file)
+        // Create a directory that looks like a worktree (`.git` is a file).
         let worktree_dir = base.join("my-project-xyz67890");
         std::fs::create_dir_all(&worktree_dir).unwrap();
         std::fs::write(
@@ -260,7 +286,7 @@ mod tests {
         let temp = tempfile::TempDir::new().unwrap();
         let base = temp.path();
 
-        // Create two checkout dirs
+        // Create two checkout dirs.
         let checkout1 = base.join("my-project-aaa11111");
         std::fs::create_dir_all(&checkout1).unwrap();
         std::fs::create_dir_all(checkout1.join(".git")).unwrap();
@@ -278,12 +304,13 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::collapsible_if)]
     fn test_cleanup_skips_checkouts_with_unpushed_commits() {
-        // Test the skipped checkout logic with find_checkout_dirs
+        // Test the skipped checkout logic with find_checkout_dirs.
         let temp = tempfile::TempDir::new().unwrap();
         let silo_dir = temp.path();
 
-        // Create two checkout dirs
+        // Create two checkout dirs.
         let checkout1 = silo_dir.join("my-project-aaa11111");
         std::fs::create_dir_all(&checkout1).unwrap();
         std::fs::create_dir_all(checkout1.join(".git")).unwrap();
@@ -292,11 +319,11 @@ mod tests {
         std::fs::create_dir_all(&checkout2).unwrap();
         std::fs::create_dir_all(checkout2.join(".git")).unwrap();
 
-        // Verify find_checkout_dirs finds both
+        // Verify find_checkout_dirs finds both.
         let candidates = find_checkout_dirs(silo_dir, "my-project-", &HashSet::new());
         assert_eq!(candidates.len(), 2);
 
-        // Now test that the cleanup would skip checkout1 with unpushed commits
+        // Now test that the cleanup would skip checkout1 with unpushed commits.
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_default_remote_branch()
@@ -312,7 +339,7 @@ mod tests {
                 }
             });
 
-        // Simulate cleanup logic manually to avoid SiloConfig::get_silo_dir() dependency
+        // Simulate cleanup logic manually to avoid SiloConfig::get_silo_dir() dependency.
         let base_branch = mock_git.get_default_remote_branch().ok();
         let mut skipped_count = 0;
         let mut would_remove_count = 0;

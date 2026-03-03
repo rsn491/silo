@@ -1,3 +1,5 @@
+//! Configuration management for Silo.
+
 use crate::infra::agent::Agent;
 use crate::services::workspace_kind::WorkspaceKind;
 use serde::{Deserialize, Serialize};
@@ -6,36 +8,51 @@ use std::io;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-/// Error types for silo configuration operations
+/// Error types for silo configuration operations.
 #[derive(Debug, Error)]
 pub enum SiloConfigError {
+    /// An IO error occurred during configuration management.
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
+    /// The user's home directory could not be determined.
     #[error("could not determine home directory")]
     HomeDirectoryNotFound,
+    /// Failed to parse the `settings.json` file.
     #[error("failed to parse settings.json: {0}")]
     JsonParse(String),
+    /// Failed to serialize or write to the `settings.json` file.
     #[error("failed to write settings.json: {0}")]
     JsonWrite(String),
 }
 
+/// Persistent settings for Silo.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SiloSettings {
+    /// The default AI agent to use.
     pub agent: Option<Agent>,
+    /// The default workspace type (worktree or checkout).
     pub workspace_type: Option<WorkspaceKind>,
 }
 
-/// Configuration management for silo directory
+/// Configuration manager for the Silo application.
 pub struct SiloConfig;
 
 impl SiloConfig {
-    /// Returns the path to ~/.silo/ directory, or None if home directory cannot be determined
+    /// Returns the path to the `~/.silo/` directory.
+    ///
+    /// Returns `None` if the home directory cannot be determined.
     pub fn get_silo_dir() -> Option<PathBuf> {
         dirs::home_dir().map(|home| home.join(".silo"))
     }
 
-    /// Initializes the ~/.silo/ directory (idempotent operation)
-    /// Returns the path to the created directory
+    /// Initializes the `~/.silo/` directory.
+    ///
+    /// This is an idempotent operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SiloConfigError::HomeDirectoryNotFound`] if the home directory is missing,
+    /// or [`SiloConfigError::IoError`] if directory creation fails.
     pub fn initialize() -> Result<PathBuf, SiloConfigError> {
         let silo_dir = Self::get_silo_dir().ok_or(SiloConfigError::HomeDirectoryNotFound)?;
 
@@ -44,21 +61,37 @@ impl SiloConfig {
         Ok(silo_dir)
     }
 
+    /// Returns the absolute path to the `settings.json` file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SiloConfigError::HomeDirectoryNotFound`] if the home directory is missing.
     pub fn get_settings_path() -> Result<PathBuf, SiloConfigError> {
         let silo_dir = Self::get_silo_dir().ok_or(SiloConfigError::HomeDirectoryNotFound)?;
         Ok(silo_dir.join("settings.json"))
     }
 
+    /// Loads settings from the default settings path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SiloConfigError`] if the home directory is missing or parsing fails.
     pub fn load_settings() -> Result<SiloSettings, SiloConfigError> {
         let settings_path = Self::get_settings_path()?;
         Self::load_settings_from_path(&settings_path)
     }
 
+    /// Saves settings to the default settings path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SiloConfigError`] if the home directory is missing or writing fails.
     pub fn save_settings(settings: &SiloSettings) -> Result<(), SiloConfigError> {
         let settings_path = Self::get_settings_path()?;
         Self::save_settings_to_path(&settings_path, settings)
     }
 
+    /// Internal method to load settings from a specific file path.
     fn load_settings_from_path(path: &Path) -> Result<SiloSettings, SiloConfigError> {
         if !path.exists() {
             return Ok(SiloSettings::default());
@@ -68,6 +101,7 @@ impl SiloConfig {
         serde_json::from_str(&contents).map_err(|e| SiloConfigError::JsonParse(e.to_string()))
     }
 
+    /// Internal method to save settings to a specific file path.
     fn save_settings_to_path(path: &Path, settings: &SiloSettings) -> Result<(), SiloConfigError> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -87,24 +121,24 @@ mod tests {
 
     #[test]
     fn test_initialize_idempotent() {
-        // This test verifies that initialize can be called multiple times
-        // In practice, this would create the directory if it doesn't exist
+        // This test verifies that initialize can be called multiple times.
+        // In practice, this would create the directory if it doesn't exist.
         // We can't easily test the actual filesystem operation in unit tests
-        // but we can verify the function is callable
+        // but we can verify the function is callable.
         let result1 = SiloConfig::initialize();
         let result2 = SiloConfig::initialize();
 
-        // Both should succeed (or both fail if home dir not available)
+        // Both should succeed (or both fail if home dir not available).
         assert_eq!(result1.is_ok(), result2.is_ok());
     }
 
     #[test]
     fn test_get_silo_dir() {
-        // Should return Some(PathBuf) on most systems
+        // Should return Some(PathBuf) on most systems.
         let silo_dir = SiloConfig::get_silo_dir();
 
-        // Can't assert exact value as it depends on environment
-        // But we can verify it's either Some or None
+        // Can't assert exact value as it depends on environment.
+        // But we can verify it's either Some or None.
         if let Some(path) = silo_dir {
             assert!(path.to_string_lossy().contains(".silo"));
         }

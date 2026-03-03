@@ -1,3 +1,5 @@
+//! Service layer containing business logic and orchestration.
+
 pub mod agent_launcher;
 pub mod agent_list;
 pub mod agent_workspace;

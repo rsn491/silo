@@ -1,3 +1,5 @@
+//! Logic for the `init` command.
+
 use clap::Parser;
 use std::io::{self, IsTerminal, Write};
 
@@ -5,24 +7,32 @@ use crate::infra::agent::Agent;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
 
+/// Arguments for the `init` command.
 #[derive(Parser, Debug)]
 pub struct InitArgs {
-    /// Default agent to use (skips interactive prompt)
+    /// Default agent to use (skips interactive prompt).
     #[arg(long)]
     pub agent: Option<Agent>,
 
-    /// Default workspace type: worktree (default) or checkout
+    /// Default workspace type: worktree (default) or checkout.
     #[arg(long, value_name = "TYPE")]
     pub workspace_type: Option<WorkspaceKind>,
 }
 
+/// Handler for the `init` command.
 pub struct InitCommand;
 
 impl InitCommand {
+    /// Creates a new `InitCommand`.
     pub fn new() -> Self {
         Self
     }
 
+    /// Executes the initialization process.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if directory creation or configuration saving fails.
     pub fn run(&self, args: InitArgs) -> Result<(), Box<dyn std::error::Error>> {
         match SiloConfig::initialize() {
             Ok(path) => {
@@ -46,7 +56,7 @@ impl InitCommand {
             return Ok(());
         }
 
-        // Load existing settings so we only update what the user specifies
+        // Load existing settings so we only update what the user specifies.
         let mut settings = SiloConfig::load_settings().unwrap_or_default();
 
         let agent = if let Some(agent) = args.agent {
@@ -89,6 +99,7 @@ impl InitCommand {
     }
 }
 
+/// Prompts the user to choose a default AI agent.
 fn prompt_for_agent() -> Result<Option<Agent>, io::Error> {
     let options = Agent::all_names().join(", ");
     loop {
@@ -114,6 +125,7 @@ fn prompt_for_agent() -> Result<Option<Agent>, io::Error> {
     }
 }
 
+/// Prompts the user to choose a default workspace type.
 fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, io::Error> {
     loop {
         print!("Choose default workspace type (worktree, checkout) [worktree]: ");
@@ -141,6 +153,7 @@ fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, io::Error> {
     }
 }
 
+/// Asks the user to confirm overwriting the existing `settings.json` file.
 fn confirm_overwrite() -> Result<bool, io::Error> {
     loop {
         print!("settings.json already exists. Overwrite? [y/N]: ");

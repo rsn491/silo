@@ -1,3 +1,5 @@
+//! Unified management of all workspace types (worktrees and checkouts).
+
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -7,12 +9,16 @@ use crate::services::agent_workspace::{CleanupError, CleanupResult, WorkspaceMan
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 
+/// Orchestrates workspace operations across both Git worktrees and local checkouts.
 pub struct GlobalWorkspaceManager<G: GitOperations> {
+    /// Manager for Git worktree-based workspaces.
     worktree_workspaces: GitWorktreeWorkspace<G>,
+    /// Manager for checkout-based workspaces.
     checkout_workspaces: GitCheckoutWorkspace<G>,
 }
 
 impl<G: GitOperations> GlobalWorkspaceManager<G> {
+    /// Creates a new `GlobalWorkspaceManager` with the specified workspace managers.
     pub fn new(worktree: GitWorktreeWorkspace<G>, checkout: GitCheckoutWorkspace<G>) -> Self {
         Self {
             worktree_workspaces: worktree,
@@ -22,6 +28,7 @@ impl<G: GitOperations> GlobalWorkspaceManager<G> {
 }
 
 impl<G: GitOperations + Clone> GlobalWorkspaceManager<G> {
+    /// Creates a new `GlobalWorkspaceManager` by initializing both workspace types with the same Git implementation.
     pub fn with_git(git: G) -> Self {
         let worktree = GitWorktreeWorkspace::new(git.clone());
         let checkout = GitCheckoutWorkspace::new(git);
@@ -30,6 +37,11 @@ impl<G: GitOperations + Clone> GlobalWorkspaceManager<G> {
 }
 
 impl<G: GitOperations> WorkspaceManager for GlobalWorkspaceManager<G> {
+    /// Performs cleanup for both worktree and checkout workspaces.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CleanupError`] if the cleanup operation fails for either manager.
     fn cleanup(
         &self,
         excluded_paths: &HashSet<PathBuf>,
@@ -50,6 +62,11 @@ impl<G: GitOperations> WorkspaceManager for GlobalWorkspaceManager<G> {
         .unwrap_or_default())
     }
 
+    /// Returns all workspaces from both worktree and checkout managers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError`] if listing workspaces fails for either manager.
     fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
         Ok([
             self.worktree_workspaces.get_all()?,
@@ -150,6 +167,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cmp_owned)]
     fn test_get_all_combines() {
         let main_path = PathBuf::from("/repo");
         let wt1_path = PathBuf::from("/wt1");

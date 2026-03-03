@@ -1,25 +1,36 @@
+//! Logic for the `status` command.
+
 use clap::Parser;
 
 use crate::infra::git::GitOperations;
 use crate::services::agent_workspace::WorkspaceManager;
 use crate::services::global_workspace::GlobalWorkspaceManager;
 
+/// Arguments for the `status` command.
 #[derive(Parser, Debug)]
 pub struct StatusArgs {
-    /// Show all workspaces, including clean ones
+    /// Show all workspaces, including clean ones.
     #[arg(long)]
     pub all: bool,
 }
 
+/// Handler for the `status` command.
 pub struct StatusCommand<G: GitOperations> {
+    /// Workspace manager for worktree and checkout status.
     workspace_manager: GlobalWorkspaceManager<G>,
 }
 
 impl<G: GitOperations> StatusCommand<G> {
+    /// Creates a new `StatusCommand`.
     pub fn new(workspace_manager: GlobalWorkspaceManager<G>) -> Self {
         Self { workspace_manager }
     }
 
+    /// Executes the status command to show workspace information.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if workspace status cannot be retrieved.
     pub fn run(&self, args: StatusArgs) -> Result<(), Box<dyn std::error::Error>> {
         let workspaces = self.workspace_manager.get_all()?;
         let statuses: Vec<_> = workspaces

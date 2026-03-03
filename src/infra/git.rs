@@ -1,44 +1,127 @@
+//! Traits and implementations for Git operations.
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::infra::git_error::GitError;
 use crate::infra::workspace_kind::WorkspaceKind;
 
+/// Information about a Git workspace (worktree or clone).
 #[derive(Debug, Clone, Default)]
 pub struct GitWorkspaceInfo {
+    /// The absolute path to the workspace directory.
     pub path: PathBuf,
+    /// The name of the current branch in this workspace, if any.
     pub branch: Option<String>,
+    /// Whether the workspace is a worktree or a full checkout.
     pub kind: WorkspaceKind,
+    /// True when the workspace has uncommitted changes.
     pub has_uncommitted_changes: bool,
+    /// Count of uncommitted files reported by `git status`.
     pub uncommitted_file_count: usize,
+    /// Commits the workspace is ahead of the base branch.
     pub commits_ahead: usize,
+    /// Commits the workspace is behind the base branch.
     pub commits_behind: usize,
 }
 
+/// Trait defining Git operations required by the service layer.
 #[cfg_attr(test, mockall::automock)]
 pub trait GitOperations {
+    /// Returns the absolute path to the root of the current Git repository.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::NotAGitRepo`] if the current directory is not in a Git repository.
     fn get_repo_root(&self) -> Result<PathBuf, GitError>;
+
+    /// Determines the project name, usually from the origin URL or directory name.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the project name cannot be determined.
     fn get_project_name(&self) -> Result<String, GitError>;
+
+    /// Creates a new Git worktree at the specified path for the given branch.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::WorktreeCreationFailed`] if the `git worktree add` command fails.
     fn create_worktree(&self, path: &Path, branch: &str) -> Result<(), GitError>;
+
+    /// Lists all worktrees associated with the current Git repository.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the `git worktree list` command fails.
     fn list_worktrees(&self) -> Result<Vec<GitWorkspaceInfo>, GitError>;
+
+    /// Forcefully removes a Git worktree at the specified path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::WorktreeRemovalFailed`] if the `git worktree remove` command fails.
     fn remove_worktree(&self, path: &Path) -> Result<(), GitError>;
+
+    /// Returns the default remote branch name (e.g., "origin/main").
+    ///
+    /// # Errors
+    ///
+    /// Returns a default value if the command fails, or [`GitError::CommandFailed`] on critical errors.
     fn get_default_remote_branch(&self) -> Result<String, GitError>;
+
+    /// Returns the output of `git status --porcelain` for the specified worktree.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the command fails.
     fn get_status_porcelain(&self, worktree_path: &Path) -> Result<String, GitError>;
+
+    /// Counts how many commits the current worktree is ahead of the base branch.
+    ///
+    /// # Errors
+    ///
+    /// Returns 0 if the command fails or if there's no remote.
     fn count_commits_ahead(
         &self,
         worktree_path: &Path,
         base_branch: &str,
     ) -> Result<usize, GitError>;
+
+    /// Counts how many commits the current worktree is behind the base branch.
+    ///
+    /// # Errors
+    ///
+    /// Returns 0 if the command fails or if there's no remote.
     fn count_commits_behind(
         &self,
         worktree_path: &Path,
         base_branch: &str,
     ) -> Result<usize, GitError>;
+
+    /// Performs a local clone of the source repository to the destination path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CloneFailed`] if the `git clone --local` command fails.
     fn clone_local(&self, source: &Path, dest: &Path) -> Result<(), GitError>;
+
+    /// Checks out a new branch in the specified repository path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the `git checkout -b` command fails.
     fn checkout_new_branch(&self, path: &Path, branch: &str) -> Result<(), GitError>;
+
+    /// Returns the name of the current branch at the specified path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Ok(None)`] if in detached HEAD state, or [`GitError::CommandFailed`] on error.
     fn get_current_branch(&self, path: &Path) -> Result<Option<String>, GitError>;
 }
 
+/// A concrete implementation of [`GitOperations`] using the `git` command-line tool.
 #[derive(Default, Clone)]
 pub struct Git;
 
@@ -136,7 +219,7 @@ impl GitOperations for Git {
                 .to_string();
             Ok(branch)
         } else {
-            // Fallback to origin/main if command fails
+            // Fallback to origin/main if command fails.
             Ok("origin/main".to_string())
         }
     }
@@ -258,9 +341,10 @@ impl GitOperations for Git {
     }
 }
 
+/// Extracts the project name from a Git repository URL.
 fn extract_project_name_from_url(url: &str) -> Option<String> {
-    // Handle SSH format: git@github.com:user/repo.git
-    // Handle HTTPS format: https://github.com/user/repo.git
+    // Handle SSH format: git@github.com:user/repo.git.
+    // Handle HTTPS format: https://github.com/user/repo.git.
     let name = url
         .trim_end_matches('/')
         .trim_end_matches(".git")
@@ -275,6 +359,7 @@ fn extract_project_name_from_url(url: &str) -> Option<String> {
     }
 }
 
+/// Parses the output of `git worktree list --porcelain`.
 fn parse_worktree_list(output: &str) -> Vec<GitWorkspaceInfo> {
     let mut worktrees = Vec::new();
     let mut current_path: Option<PathBuf> = None;
@@ -282,7 +367,7 @@ fn parse_worktree_list(output: &str) -> Vec<GitWorkspaceInfo> {
 
     for line in output.lines() {
         if line.starts_with("worktree ") {
-            // Save previous worktree if exists
+            // Save previous worktree if exists.
             if let Some(path) = current_path.take() {
                 worktrees.push(GitWorkspaceInfo {
                     path,
@@ -290,7 +375,7 @@ fn parse_worktree_list(output: &str) -> Vec<GitWorkspaceInfo> {
                     ..Default::default()
                 });
             }
-            // Start new worktree
+            // Start new worktree.
             current_path = Some(PathBuf::from(line.trim_start_matches("worktree ")));
         } else if line.starts_with("branch ") {
             let branch_ref = line.trim_start_matches("branch ");
@@ -298,7 +383,7 @@ fn parse_worktree_list(output: &str) -> Vec<GitWorkspaceInfo> {
                 .strip_prefix("refs/heads/")
                 .map(|s| s.to_string());
         } else if line.is_empty() {
-            // Empty line separates worktree entries
+            // Empty line separates worktree entries.
             if let Some(path) = current_path.take() {
                 worktrees.push(GitWorkspaceInfo {
                     path,
@@ -309,7 +394,7 @@ fn parse_worktree_list(output: &str) -> Vec<GitWorkspaceInfo> {
         }
     }
 
-    // Handle last worktree if no trailing empty line
+    // Handle last worktree if no trailing empty line.
     if let Some(path) = current_path {
         worktrees.push(GitWorkspaceInfo {
             path,

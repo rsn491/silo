@@ -1,3 +1,5 @@
+//! Logic for identifying and listing running AI agents in workspaces.
+
 use std::path::PathBuf;
 
 use crate::infra::agent::Agent;
@@ -9,28 +11,40 @@ use crate::services::global_workspace::GlobalWorkspaceManager;
 use strum::IntoEnumIterator;
 use thiserror::Error;
 
+/// Information about an AI agent that is currently running.
 #[derive(Debug)]
 pub struct RunningAgent {
+    /// The process ID of the agent.
     pub pid: u32,
+    /// The type of agent (e.g., Claude), if it could be determined.
     pub agent_type: Option<Agent>,
+    /// The absolute path to the workspace where the agent is running.
     pub path: PathBuf,
+    /// The name of the branch the agent is working on, if any.
     pub branch: Option<String>,
 }
 
+/// Errors that can occur when listing running agents.
 #[derive(Debug, Error)]
 pub enum ListError {
+    /// A Git operation failed.
     #[error("Git error: {0}")]
     Git(#[from] GitError),
+    /// A process operation failed.
     #[error("Process error: {0}")]
     Process(#[from] ProcessError),
 }
 
+/// Service for identifying running AI agents within Silo-managed workspaces.
 pub struct AgentListService<G: GitOperations, P: ProcessOperations> {
+    /// Workspace manager providing the list of known workspaces.
     workspace_manager: GlobalWorkspaceManager<G>,
+    /// Process operations used to discover running agents.
     process: P,
 }
 
 impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
+    /// Creates a new `AgentListService`.
     pub fn new(workspace_manager: GlobalWorkspaceManager<G>, process: P) -> Self {
         Self {
             workspace_manager,
@@ -38,6 +52,11 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
         }
     }
 
+    /// Returns a list of all running agents that are within known workspaces.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ListError`] if Git or process information cannot be retrieved.
     pub fn list_running_agents(&self) -> Result<Vec<RunningAgent>, ListError> {
         let workspaces = self.workspace_manager.get_all()?;
         let processes = self
@@ -54,7 +73,7 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
                 if cwd.starts_with(&workspace.path) {
                     let agent_type = extract_agent_type(&args);
 
-                    // Deduplicate: skip if we already have an agent of this type in this workspace
+                    // Deduplicate: skip if we already have an agent of this type in this workspace.
                     if agents.iter().any(|a: &RunningAgent| {
                         a.path == workspace.path && a.agent_type == agent_type
                     }) {
@@ -75,6 +94,11 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
         Ok(agents)
     }
 
+    /// Returns the paths of all workspaces that have at least one running agent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ListError`] if listing running agents fails.
     pub fn get_active_paths(&self) -> Result<Vec<PathBuf>, ListError> {
         let running_agents = self.list_running_agents()?;
 
@@ -85,6 +109,7 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
     }
 }
 
+/// Attempts to extract the agent type from a command-line string.
 fn extract_agent_type(args: &str) -> Option<Agent> {
     let parts: Vec<&str> = args.split_whitespace().collect();
     if let Some(first) = parts.first()
@@ -104,7 +129,7 @@ mod tests {
     use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
     use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 
-    // Mock ProcessOperations
+    // Mock ProcessOperations.
     struct MockProcess {
         processes: Vec<(u32, String)>,
         cwds: Vec<(u32, PathBuf)>,
@@ -286,20 +311,20 @@ mod tests {
                 (456, "/usr/bin/claude --other".to_string()),
             ],
             cwds: vec![(123, PathBuf::from("/repo/worktree1"))],
-            // PID 456 doesn't have a CWD entry, simulating a failure
+            // PID 456 doesn't have a CWD entry, simulating a failure.
         };
 
         let service = AgentListService::new(workspace_manager, mock_process);
         let agents = service.list_running_agents().unwrap();
 
-        // Should only find the agent with resolvable CWD
+        // Should only find the agent with resolvable CWD.
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].pid, 123);
     }
 
     #[test]
     fn test_list_running_agents_empty_cases() {
-        // No worktrees
+        // No worktrees.
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock
             .expect_list_worktrees()
@@ -320,7 +345,7 @@ mod tests {
         let agents = service.list_running_agents().unwrap();
         assert_eq!(agents.len(), 0);
 
-        // No processes
+        // No processes.
         let mut worktree_mock = MockGitOperations::new();
         // Only main repo entry — skipped by get_all, so no workspaces returned
         worktree_mock.expect_list_worktrees().return_once(|| {

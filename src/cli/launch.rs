@@ -1,3 +1,5 @@
+//! Logic for the `launch` command.
+
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -11,39 +13,44 @@ use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
 
+/// Arguments for the `launch` command.
 #[derive(Parser, Debug)]
 pub struct LaunchArgs {
-    /// Custom branch name (default: worktree name)
+    /// Custom branch name (default: worktree name).
     #[arg(long)]
     pub branch: Option<String>,
 
-    /// Launch the agent in a new terminal tab instead of replacing the current process
+    /// Launch the agent in a new terminal tab instead of replacing the current process.
     #[arg(long, group = "windowing")]
     pub tab: bool,
 
-    /// Launch the agent in a vertical split pane
+    /// Launch the agent in a vertical split pane.
     #[arg(long, group = "windowing")]
     pub split_pane: bool,
 
-    /// Agent command to launch (default: settings.json or claude)
+    /// Agent command to launch (default: settings.json or claude).
     #[arg(long)]
     pub agent: Option<Agent>,
 
-    /// Use git clone instead of git worktrees for workspace isolation
+    /// Use Git clone instead of Git worktrees for workspace isolation.
     #[arg(long, group = "workspace")]
     pub checkout: bool,
 
-    /// Use git worktrees for workspace isolation (overrides settings.json default)
+    /// Use Git worktrees for workspace isolation (overrides settings.json default).
     #[arg(long, group = "workspace")]
     pub worktree: bool,
 }
 
+/// A wrapper for the different workspace backend implementations.
 enum WorkspaceBackend<G: GitOperations> {
+    /// Use Git worktrees.
     Worktree(GitWorktreeWorkspace<G>),
+    /// Use local Git clones.
     Checkout(GitCheckoutWorkspace<G>),
 }
 
 impl<G: GitOperations> WorkspaceFactory for WorkspaceBackend<G> {
+    /// Delegates workspace creation to the underlying backend.
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
         match self {
             WorkspaceBackend::Worktree(w) => w.create(branch),
@@ -52,13 +59,18 @@ impl<G: GitOperations> WorkspaceFactory for WorkspaceBackend<G> {
     }
 }
 
+/// Handler for the `launch` command.
 pub struct LaunchCommand<G: GitOperations, T: Terminal> {
+    /// Git operations used for workspace creation.
     git: G,
+    /// Terminal implementation for windowed launch modes.
     terminal: Option<T>,
+    /// Launch strategy for the agent process.
     launch_mode: LaunchMode,
 }
 
 impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
+    /// Creates a new `LaunchCommand`.
     pub fn new(git: G, terminal: Option<T>, launch_mode: LaunchMode) -> Self {
         Self {
             git,
@@ -67,6 +79,11 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         }
     }
 
+    /// Executes the launch command.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if workspace creation or agent launching fails.
     pub fn run(self, args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
         let agent = resolve_agent(args.agent);
         let workspace = match resolve_workspace_type(args.checkout, args.worktree) {
@@ -109,6 +126,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
     }
 }
 
+/// Determines the workspace type based on CLI arguments and persistent settings.
 fn resolve_workspace_type(checkout: bool, worktree: bool) -> WorkspaceKind {
     if checkout {
         return WorkspaceKind::Checkout;
@@ -128,6 +146,7 @@ fn resolve_workspace_type(checkout: bool, worktree: bool) -> WorkspaceKind {
     settings.workspace_type.unwrap_or(WorkspaceKind::Worktree)
 }
 
+/// Determines which agent to launch based on CLI arguments and persistent settings.
 fn resolve_agent(agent: Option<Agent>) -> Agent {
     agent
         .or_else(|| {

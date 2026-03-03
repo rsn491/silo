@@ -1,3 +1,5 @@
+//! CLI command implementations.
+
 pub mod cleanup;
 pub mod completions;
 pub mod init;
