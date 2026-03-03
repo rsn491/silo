@@ -3,11 +3,25 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use strum::{Display, EnumIter, EnumString, IntoStaticStr};
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumString, Display, EnumIter, IntoStaticStr, ValueEnum, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    EnumString,
+    Display,
+    EnumIter,
+    IntoStaticStr,
+    ValueEnum,
+    Serialize,
+    Deserialize,
+    Default,
+)]
 pub enum Agent {
     #[strum(serialize = "claude")]
     #[clap(name = "claude")]
     #[serde(rename = "claude")]
+    #[default]
     ClaudeCode,
     #[strum(serialize = "opencode")]
     #[clap(name = "opencode")]
@@ -17,12 +31,6 @@ pub enum Agent {
     #[clap(name = "codex")]
     #[serde(rename = "codex")]
     Codex,
-}
-
-impl Default for Agent {
-    fn default() -> Self {
-        Agent::ClaudeCode
-    }
 }
 
 impl Agent {
