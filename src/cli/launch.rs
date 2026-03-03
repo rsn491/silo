@@ -121,10 +121,11 @@ fn resolve_workspace_type(checkout: bool, worktree: bool) -> WorkspaceKind {
 }
 
 fn resolve_agent(agent: Option<Agent>) -> Agent {
-    agent.or_else(|| {
-        SiloConfig::load_settings()
-            .ok()
-            .and_then(|settings| settings.agent)
-    })
-    .unwrap_or_default()
+    agent
+        .or_else(|| {
+            SiloConfig::load_settings()
+                .ok()
+                .and_then(|settings| settings.agent)
+        })
+        .unwrap_or_default()
 }
