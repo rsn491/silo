@@ -25,10 +25,7 @@ impl<G: GitOperations> StatusCommand<G> {
         let statuses: Vec<_> = workspaces
             .into_iter()
             .filter(|w| {
-                args.all
-                    || w.has_uncommitted_changes
-                    || w.commits_ahead > 0
-                    || w.commits_behind > 0
+                args.all || w.has_uncommitted_changes || w.commits_ahead > 0 || w.commits_behind > 0
             })
             .collect();
         if statuses.is_empty() {
