@@ -83,21 +83,29 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         };
         eprintln!("Launching {:?} in {}...", agent, workspace_kind);
 
-        let workspace_path = AgentLauncher::new(
+        let launch_result = AgentLauncher::new(
             workspace,
             self.terminal,
             self.launch_mode,
             agent,
             args.branch,
         )
-        .launch()?;
+        .launch();
 
-        eprintln!(
-            "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
-            workspace_path.display()
-        );
-
-        Ok(())
+        match launch_result {
+            Ok(workspace_path) => {
+                eprintln!(
+                    "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
+                    workspace_path.display()
+                );
+                Ok(())
+            }
+            Err(LaunchError::AgentExitError(status)) => {
+                eprintln!("\n\nAgent failed with exit status: {}", status);
+                Err(LaunchError::AgentExitError(status).into())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
