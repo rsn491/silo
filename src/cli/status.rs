@@ -21,7 +21,16 @@ impl<G: GitOperations> StatusCommand<G> {
     }
 
     pub fn run(&self, args: StatusArgs) -> Result<(), Box<dyn std::error::Error>> {
-        let statuses = self.workspaces.get_statuses(args.all)?;
+        let workspaces = self.workspaces.get_all()?;
+        let statuses: Vec<_> = workspaces
+            .into_iter()
+            .filter(|w| {
+                args.all
+                    || w.has_uncommitted_changes
+                    || w.commits_ahead > 0
+                    || w.commits_behind > 0
+            })
+            .collect();
         if statuses.is_empty() {
             if args.all {
                 println!("No workspaces found (excluding main worktree).");

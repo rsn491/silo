@@ -86,12 +86,6 @@ pub trait WorkspaceFactory {
 }
 
 pub trait WorkspaceManager {
-    /// Returns the git status of each workspace.
-    ///
-    /// # Arguments
-    /// * `show_all` - If true, returns git status for each workspace, including clean workspaces.
-    fn get_statuses(&self, show_all: bool) -> Result<Vec<GitStatus>, StatusError>;
-
     /// Removes all inactive workspaces and returns per-item results.
     fn cleanup(
         &self,

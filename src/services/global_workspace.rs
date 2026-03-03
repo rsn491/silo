@@ -3,9 +3,7 @@ use std::path::PathBuf;
 
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
-use crate::services::agent_workspace::{
-    CleanupError, CleanupResult, GitStatus, StatusError, WorkspaceManager,
-};
+use crate::services::agent_workspace::{CleanupError, CleanupResult, WorkspaceManager};
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 
@@ -32,14 +30,6 @@ impl<G: GitOperations + Clone> GlobalWorkspaceManager<G> {
 }
 
 impl<G: GitOperations> WorkspaceManager for GlobalWorkspaceManager<G> {
-    fn get_statuses(&self, show_all: bool) -> Result<Vec<GitStatus>, StatusError> {
-        Ok([
-            self.worktree_workspaces.get_statuses(show_all)?,
-            self.checkout_workspaces.get_statuses(show_all)?,
-        ]
-        .concat())
-    }
-
     fn cleanup(
         &self,
         excluded_paths: &HashSet<PathBuf>,
@@ -77,7 +67,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_get_statuses_combines() {
+    fn test_get_all_with_status() {
         let repo_root = PathBuf::from("/repo");
         let wt1_path = PathBuf::from("/wt1");
 
@@ -85,10 +75,12 @@ mod tests {
             GitWorkspaceInfo {
                 path: repo_root.clone(),
                 branch: Some("main".to_string()),
+                ..Default::default()
             },
             GitWorkspaceInfo {
                 path: wt1_path.clone(),
                 branch: Some("branch".to_string()),
+                ..Default::default()
             },
         ];
 
@@ -113,18 +105,15 @@ mod tests {
         checkout_mock
             .expect_get_project_name()
             .returning(|| Ok("test-project".to_string()));
-        checkout_mock
-            .expect_get_default_remote_branch()
-            .returning(|| Ok("origin/main".to_string()));
 
         let worktree = GitWorktreeWorkspace::new(worktree_mock);
         let checkout = GitCheckoutWorkspace::new(checkout_mock);
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
-        let statuses = service.get_statuses(true).unwrap();
+        let all = service.get_all().unwrap();
 
-        assert_eq!(statuses.len(), 1);
-        assert!(statuses.iter().any(|s| s.path == wt1_path));
+        assert_eq!(all.len(), 1);
+        assert!(all.iter().any(|w| w.path == wt1_path));
     }
 
     #[test]
@@ -162,15 +151,36 @@ mod tests {
 
     #[test]
     fn test_get_all_combines() {
+        let main_path = PathBuf::from("/repo");
         let wt1_path = PathBuf::from("/wt1");
 
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(move || {
-            Ok(vec![GitWorkspaceInfo {
-                path: wt1_path.clone(),
-                branch: Some("branch".to_string()),
-            }])
+            Ok(vec![
+                GitWorkspaceInfo {
+                    path: main_path.clone(),
+                    branch: Some("main".to_string()),
+                    ..Default::default()
+                },
+                GitWorkspaceInfo {
+                    path: wt1_path.clone(),
+                    branch: Some("branch".to_string()),
+                    ..Default::default()
+                },
+            ])
         });
+        worktree_mock
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        worktree_mock
+            .expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        worktree_mock
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(0));
+        worktree_mock
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
 
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock

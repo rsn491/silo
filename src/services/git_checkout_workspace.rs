@@ -5,13 +5,13 @@ use uuid::Uuid;
 
 use super::agent_launcher::LaunchError;
 use super::agent_workspace::{
-    CleanupError, CleanupResult, FailedWorkspace, GitStatus, RemovedWorkspace, SkippedWorkspace,
-    StatusError, WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
+    CleanupError, CleanupResult, FailedWorkspace, RemovedWorkspace, SkippedWorkspace,
+    WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
 };
 use super::silo_config::SiloConfig;
-use super::workspace_kind::WorkspaceKind;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
+use crate::infra::workspace_kind::WorkspaceKind;
 
 pub struct GitCheckoutWorkspace<G: GitOperations> {
     git: G,
@@ -54,67 +54,39 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
 
 impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
     fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
-        let base_dir = SiloConfig::get_silo_dir().ok_or_else(|| {
-            GitError::CommandFailed("could not determine home directory".to_string())
-        })?;
         let project_prefix = format!("{}-", self.git.get_project_name()?);
-        let checkout_dirs = find_checkout_dirs(&base_dir, &project_prefix, &HashSet::new());
+        let silo_dir = match SiloConfig::get_silo_dir() {
+            Some(d) => d,
+            None => return Ok(vec![]),
+        };
+        let checkout_dirs = find_checkout_dirs(&silo_dir, &project_prefix, &HashSet::new());
 
-        let mut result = Vec::new();
-        for checkout_dir in checkout_dirs {
-            let branch = self.git.get_current_branch(&checkout_dir)?;
-            result.push(GitWorkspaceInfo {
-                path: checkout_dir,
-                branch,
-            });
+        if checkout_dirs.is_empty() {
+            return Ok(vec![]);
         }
 
-        Ok(result)
-    }
-
-    fn get_statuses(&self, show_all: bool) -> Result<Vec<GitStatus>, StatusError> {
-        let silo_dir = SiloConfig::get_silo_dir();
-        let project_name = self.git.get_project_name()?;
-        let project_prefix = format!("{}-", project_name);
-
-        let checkout_dirs = if let Some(ref silo) = silo_dir {
-            find_checkout_dirs(silo, &project_prefix, &HashSet::new())
-        } else {
-            vec![]
-        };
-
         let base_branch = self.git.get_default_remote_branch()?;
-        let mut statuses = Vec::new();
+        let mut result = Vec::new();
 
         for path in checkout_dirs {
             let branch = self.git.get_current_branch(&path)?;
             let status_output = self.git.get_status_porcelain(&path)?;
             let file_count = status_output.lines().filter(|l| !l.is_empty()).count();
-            let has_uncommitted_changes = file_count > 0;
-
             let commits_ahead = self.git.count_commits_ahead(&path, &base_branch)?;
             let commits_behind = self.git.count_commits_behind(&path, &base_branch)?;
 
-            let status = GitStatus {
-                kind: WorkspaceKind::Checkout,
-                path: path.clone(),
+            result.push(GitWorkspaceInfo {
+                path,
                 branch,
-                has_uncommitted_changes,
+                kind: WorkspaceKind::Checkout,
+                has_uncommitted_changes: file_count > 0,
                 uncommitted_file_count: file_count,
                 commits_ahead,
                 commits_behind,
-            };
-
-            if show_all
-                || status.has_uncommitted_changes
-                || status.commits_ahead > 0
-                || status.commits_behind > 0
-            {
-                statuses.push(status);
-            }
+            });
         }
 
-        Ok(statuses)
+        Ok(result)
     }
 
     fn cleanup(
