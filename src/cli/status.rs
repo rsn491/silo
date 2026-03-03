@@ -16,8 +16,8 @@ pub struct StatusCommand<G: GitOperations> {
 }
 
 impl<G: GitOperations> StatusCommand<G> {
-    pub fn new(workspaces: GlobalWorkspaceManager<G>) -> Self {
-        Self { workspace_manager: workspaces }
+    pub fn new(workspace_manager: GlobalWorkspaceManager<G>) -> Self {
+        Self { workspace_manager }
     }
 
     pub fn run(&self, args: StatusArgs) -> Result<(), Box<dyn std::error::Error>> {
