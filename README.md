@@ -14,6 +14,8 @@ silo init
 
 ### Launch an agent
 
+Create an isolated workspace and launch an AI agent inside it:
+
 ```sh
 silo launch [--agent <agent>] [--branch <branch>] [--tab|--split-pane] [--checkout|--worktree]
 ```
@@ -35,6 +37,8 @@ silo status
 ```
 
 ### Clean up workspaces
+
+Remove inactive workspaces. By default, workspaces with uncommitted changes are skipped:
 
 ```sh
 silo cleanup [--all] [--force] [--yes]
