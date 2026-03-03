@@ -11,7 +11,9 @@ use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 
 /// Orchestrates workspace operations across both Git worktrees and local checkouts.
 pub struct GlobalWorkspaceManager<G: GitOperations> {
+    /// Manager for Git worktree-based workspaces.
     worktree_workspaces: GitWorktreeWorkspace<G>,
+    /// Manager for checkout-based workspaces.
     checkout_workspaces: GitCheckoutWorkspace<G>,
 }
 

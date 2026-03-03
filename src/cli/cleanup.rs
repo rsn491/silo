@@ -29,7 +29,9 @@ pub struct CleanupArgs {
 
 /// Handler for the `cleanup` command.
 pub struct CleanupCommand<G: GitOperations, P: ProcessOperations + Clone> {
+    /// Workspace manager for both worktrees and checkouts.
     workspaces: GlobalWorkspaceManager<G>,
+    /// Service for detecting active agent workspaces.
     agent_list: AgentListService<G, P>,
 }
 

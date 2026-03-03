@@ -17,6 +17,7 @@ use crate::infra::workspace_kind::WorkspaceKind;
 
 /// Manages isolated workspaces by creating full local clones of the repository.
 pub struct GitCheckoutWorkspace<G: GitOperations> {
+    /// Git operations used to clone and inspect checkouts.
     git: G,
 }
 

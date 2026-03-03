@@ -18,3 +18,8 @@ thiserror = "1"
 [dev-dependencies]
 mockall = "0.13"
 tempfile = "3.25.0"
+
+[lints.clippy]
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_docs_in_private_items = "warn"

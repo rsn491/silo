@@ -37,7 +37,9 @@ pub enum ListError {
 
 /// Service for identifying running AI agents within Silo-managed workspaces.
 pub struct AgentListService<G: GitOperations, P: ProcessOperations> {
+    /// Workspace manager providing the list of known workspaces.
     workspace_manager: GlobalWorkspaceManager<G>,
+    /// Process operations used to discover running agents.
     process: P,
 }
 

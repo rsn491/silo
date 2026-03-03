@@ -6,6 +6,7 @@ use crate::services::agent_list::AgentListService;
 
 /// Handler for the `ps` command.
 pub struct PsCommand<G: GitOperations + Clone, P: ProcessOperations> {
+    /// Service for enumerating running agents.
     service: AgentListService<G, P>,
 }
 

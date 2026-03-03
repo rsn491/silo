@@ -4,9 +4,12 @@ use std::fmt;
     Debug, Clone, PartialEq, Default, clap::ValueEnum, serde::Deserialize, serde::Serialize,
 )]
 #[serde(rename_all = "lowercase")]
+/// Identifies the type of workspace.
 pub enum WorkspaceKind {
     #[default]
+    /// A Git worktree attached to the main repository.
     Worktree,
+    /// A full checkout created via local clone.
     Checkout,
 }
 

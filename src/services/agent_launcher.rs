@@ -43,10 +43,15 @@ where
     W: WorkspaceFactory,
     T: Terminal,
 {
+    /// Workspace factory used to create isolated environments.
     workspace: W,
+    /// Terminal implementation for tab/split launches.
     terminal: Option<T>,
+    /// Selected launch mode for the agent.
     launch_mode: LaunchMode,
+    /// Agent definition to execute.
     agent: Agent,
+    /// Optional branch name for the new workspace.
     branch: Option<String>,
 }
 

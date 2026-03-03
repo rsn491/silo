@@ -61,8 +61,11 @@ impl<G: GitOperations> WorkspaceFactory for WorkspaceBackend<G> {
 
 /// Handler for the `launch` command.
 pub struct LaunchCommand<G: GitOperations, T: Terminal> {
+    /// Git operations used for workspace creation.
     git: G,
+    /// Terminal implementation for windowed launch modes.
     terminal: Option<T>,
+    /// Launch strategy for the agent process.
     launch_mode: LaunchMode,
 }
 

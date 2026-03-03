@@ -16,6 +16,7 @@ pub struct StatusArgs {
 
 /// Handler for the `status` command.
 pub struct StatusCommand<G: GitOperations> {
+    /// Workspace manager for worktree and checkout status.
     workspace_manager: GlobalWorkspaceManager<G>,
 }
 

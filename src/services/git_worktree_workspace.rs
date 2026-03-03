@@ -16,6 +16,7 @@ use crate::infra::workspace_kind::WorkspaceKind;
 
 /// Manages isolated workspaces using Git's `worktree` feature.
 pub struct GitWorktreeWorkspace<G: GitOperations> {
+    /// Git operations used to manage worktrees.
     git: G,
 }
 

@@ -13,10 +13,15 @@ pub struct GitWorkspaceInfo {
     pub path: PathBuf,
     /// The name of the current branch in this workspace, if any.
     pub branch: Option<String>,
+    /// Whether the workspace is a worktree or a full checkout.
     pub kind: WorkspaceKind,
+    /// True when the workspace has uncommitted changes.
     pub has_uncommitted_changes: bool,
+    /// Count of uncommitted files reported by `git status`.
     pub uncommitted_file_count: usize,
+    /// Commits the workspace is ahead of the base branch.
     pub commits_ahead: usize,
+    /// Commits the workspace is behind the base branch.
     pub commits_behind: usize,
 }
 
