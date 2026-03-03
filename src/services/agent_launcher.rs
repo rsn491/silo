@@ -16,7 +16,7 @@ pub enum LaunchError {
     #[error("failed to spawn agent: {0}")]
     AgentSpawnError(String),
     #[error("agent exited with non-zero status: {0}")]
-    AgentExitError(std::process::ExitStatus),
+    AgentExitError(std::process::ExitStatus, std::path::PathBuf),
     #[error(transparent)]
     Git(#[from] GitError),
 }
@@ -71,7 +71,10 @@ where
         if status.success() {
             Ok(())
         } else {
-            Err(LaunchError::AgentExitError(status))
+            Err(LaunchError::AgentExitError(
+                status,
+                workspace_path.to_path_buf(),
+            ))
         }
     }
 
@@ -86,18 +89,16 @@ where
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for new tab".to_string())
                 })?;
-                match terminal.open_tab(&workspace_path, &self.agent) {
-                    Ok(()) => {}
-                    Err(_e) => self.launch_in_workspace(&workspace_path)?,
+                if let Err(_e) = terminal.open_tab(&workspace_path, &self.agent) {
+                    self.launch_in_workspace(&workspace_path)?;
                 }
             }
             LaunchMode::SplitPane => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
                 })?;
-                match terminal.split_pane(&workspace_path, &self.agent) {
-                    Ok(()) => {}
-                    Err(_e) => self.launch_in_workspace(&workspace_path)?,
+                if let Err(_e) = terminal.split_pane(&workspace_path, &self.agent) {
+                    self.launch_in_workspace(&workspace_path)?;
                 }
             }
         }
