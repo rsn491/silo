@@ -9,8 +9,8 @@ use super::agent_workspace::{
     StatusError, WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
 };
 use super::silo_config::SiloConfig;
-use super::workspace_kind::WorkspaceKind;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
+use crate::infra::workspace_kind::WorkspaceKind;
 
 pub struct GitWorktreeWorkspace<G: GitOperations> {
     git: G,
@@ -82,29 +82,6 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
 }
 
 impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
-    fn get_statuses(&self, show_all: bool) -> Result<Vec<GitStatus>, StatusError> {
-        let worktrees = self.git.list_worktrees()?;
-        let mut statuses = Vec::new();
-
-        for (index, worktree) in worktrees.iter().enumerate() {
-            if index == 0 {
-                continue;
-            }
-
-            let status = self.get_git_status(worktree.clone())?;
-
-            if show_all
-                || status.has_uncommitted_changes
-                || status.commits_ahead > 0
-                || status.commits_behind > 0
-            {
-                statuses.push(status);
-            }
-        }
-
-        Ok(statuses)
-    }
-
     fn cleanup(
         &self,
         active_paths: &HashSet<PathBuf>,
@@ -168,7 +145,32 @@ impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
     }
 
     fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, crate::infra::git_error::GitError> {
-        self.git.list_worktrees()
+        let worktrees = self.git.list_worktrees()?;
+        let mut result = Vec::new();
+
+        for (index, wt) in worktrees.into_iter().enumerate() {
+            if index == 0 {
+                continue;
+            }
+
+            let path = wt.path.clone();
+            let branch = wt.branch.clone();
+            let s = self.get_git_status(wt).map_err(|e| match e {
+                StatusError::Git(g) => g,
+            })?;
+
+            result.push(GitWorkspaceInfo {
+                path,
+                branch,
+                kind: WorkspaceKind::Worktree,
+                has_uncommitted_changes: s.has_uncommitted_changes,
+                uncommitted_file_count: s.uncommitted_file_count,
+                commits_ahead: s.commits_ahead,
+                commits_behind: s.commits_behind,
+            });
+        }
+
+        Ok(result)
     }
 }
 
@@ -199,6 +201,7 @@ mod tests {
         let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
             branch: Some("feature".to_string()),
+            ..Default::default()
         };
 
         let wt1 = worktree1_path.clone();
@@ -240,6 +243,7 @@ mod tests {
         let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
             branch: Some("feature1".to_string()),
+            ..Default::default()
         };
 
         let wt1 = worktree1_path.clone();
@@ -278,6 +282,7 @@ mod tests {
         let worktree2_info = GitWorkspaceInfo {
             path: worktree2_path.clone(),
             branch: Some("feature2".to_string()),
+            ..Default::default()
         };
 
         mock_git
@@ -309,6 +314,7 @@ mod tests {
         let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
             branch: Some("feature1".to_string()),
+            ..Default::default()
         };
 
         let mut mock_git = MockGitOperations::new();
@@ -338,6 +344,7 @@ mod tests {
         let nonexistent_info = GitWorkspaceInfo {
             path: nonexistent_path.clone(),
             branch: Some("feature".to_string()),
+            ..Default::default()
         };
 
         let mut mock_git = MockGitOperations::new();
@@ -394,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_worktree_statuses_excludes_main() {
+    fn test_get_all_excludes_main() {
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
 
@@ -402,10 +409,12 @@ mod tests {
             GitWorkspaceInfo {
                 path: repo_root.clone(),
                 branch: Some("main".to_string()),
+                ..Default::default()
             },
             GitWorkspaceInfo {
                 path: worktree1_path.clone(),
                 branch: Some("feature".to_string()),
+                ..Default::default()
             },
         ];
 
@@ -435,15 +444,17 @@ mod tests {
             .returning(|_, _| Ok(0));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
-        let statuses = workspace.get_statuses(true).unwrap();
+        let all = workspace.get_all().unwrap();
 
-        // Should only return the non-main worktree
-        assert_eq!(statuses.len(), 1);
-        assert_eq!(statuses[0].path, worktree1_path);
+        // Should only return the non-main worktree with status populated
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].path, worktree1_path);
+        assert_eq!(all[0].has_uncommitted_changes, true);
+        assert_eq!(all[0].commits_ahead, 2);
     }
 
     #[test]
-    fn test_get_worktree_statuses_filters_clean() {
+    fn test_get_all_includes_clean_workspaces() {
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree2_path = PathBuf::from("/repo/worktree2");
@@ -452,68 +463,17 @@ mod tests {
             GitWorkspaceInfo {
                 path: repo_root.clone(),
                 branch: Some("main".to_string()),
+                ..Default::default()
             },
             GitWorkspaceInfo {
                 path: worktree1_path.clone(),
                 branch: Some("feature1".to_string()),
+                ..Default::default()
             },
             GitWorkspaceInfo {
                 path: worktree2_path.clone(),
                 branch: Some("feature2".to_string()),
-            },
-        ];
-
-        let wt1 = worktree1_path.clone();
-        let wt1b = worktree1_path.clone();
-        let mut mock_git = MockGitOperations::new();
-        mock_git
-            .expect_list_worktrees()
-            .return_once(move || Ok(worktrees));
-        mock_git
-            .expect_get_default_remote_branch()
-            .returning(|| Ok("origin/main".to_string()));
-        mock_git
-            .expect_get_status_porcelain()
-            .returning(move |path| {
-                if path == wt1 {
-                    Ok(" M file0.txt\n M file1.txt\n M file2.txt".to_string())
-                } else {
-                    Ok(String::new())
-                }
-            });
-        mock_git
-            .expect_count_commits_ahead()
-            .returning(move |path, _| if path == wt1b { Ok(2) } else { Ok(0) });
-        mock_git
-            .expect_count_commits_behind()
-            .returning(|_, _| Ok(0));
-
-        let workspace = GitWorktreeWorkspace::new(mock_git);
-        let statuses = workspace.get_statuses(false).unwrap();
-
-        // Should only return worktree1 which has changes
-        assert_eq!(statuses.len(), 1);
-        assert_eq!(statuses[0].path, worktree1_path);
-    }
-
-    #[test]
-    fn test_get_worktree_statuses_shows_all() {
-        let repo_root = PathBuf::from("/repo");
-        let worktree1_path = PathBuf::from("/repo/worktree1");
-        let worktree2_path = PathBuf::from("/repo/worktree2");
-
-        let worktrees = vec![
-            GitWorkspaceInfo {
-                path: repo_root.clone(),
-                branch: Some("main".to_string()),
-            },
-            GitWorkspaceInfo {
-                path: worktree1_path.clone(),
-                branch: Some("feature1".to_string()),
-            },
-            GitWorkspaceInfo {
-                path: worktree2_path.clone(),
-                branch: Some("feature2".to_string()),
+                ..Default::default()
             },
         ];
 
@@ -542,10 +502,14 @@ mod tests {
             .returning(|_, _| Ok(0));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
-        let statuses = workspace.get_statuses(true).unwrap();
+        let all = workspace.get_all().unwrap();
 
-        // Should return both worktrees (excluding main)
-        assert_eq!(statuses.len(), 2);
+        // get_all returns all non-main worktrees including clean ones
+        assert_eq!(all.len(), 2);
+        let dirty = all.iter().find(|w| w.path == worktree1_path).unwrap();
+        let clean = all.iter().find(|w| w.path == worktree2_path).unwrap();
+        assert!(dirty.has_uncommitted_changes);
+        assert!(!clean.has_uncommitted_changes);
     }
 
     #[test]
@@ -559,14 +523,17 @@ mod tests {
             GitWorkspaceInfo {
                 path: repo_root.clone(),
                 branch: Some("main".to_string()),
+                ..Default::default()
             },
             GitWorkspaceInfo {
                 path: worktree1_path.clone(),
                 branch: Some("feature1".to_string()),
+                ..Default::default()
             },
             GitWorkspaceInfo {
                 path: worktree2_path.clone(),
                 branch: Some("feature2".to_string()),
+                ..Default::default()
             },
         ];
 

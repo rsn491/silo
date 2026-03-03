@@ -133,15 +133,34 @@ mod tests {
         worktree_mock.expect_list_worktrees().return_once(|| {
             Ok(vec![
                 GitWorkspaceInfo {
+                    path: PathBuf::from("/repo"),
+                    branch: Some("main".to_string()),
+                    ..Default::default()
+                },
+                GitWorkspaceInfo {
                     path: PathBuf::from("/repo/worktree1"),
                     branch: Some("feature-1".to_string()),
+                    ..Default::default()
                 },
                 GitWorkspaceInfo {
                     path: PathBuf::from("/repo/worktree2"),
                     branch: Some("feature-2".to_string()),
+                    ..Default::default()
                 },
             ])
         });
+        worktree_mock
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        worktree_mock
+            .expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        worktree_mock
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(0));
+        worktree_mock
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock
             .expect_get_project_name()
@@ -178,11 +197,31 @@ mod tests {
     fn test_list_running_agents_outside_worktrees() {
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(|| {
-            Ok(vec![GitWorkspaceInfo {
-                path: PathBuf::from("/repo/worktree1"),
-                branch: Some("feature-1".to_string()),
-            }])
+            Ok(vec![
+                GitWorkspaceInfo {
+                    path: PathBuf::from("/repo"),
+                    branch: Some("main".to_string()),
+                    ..Default::default()
+                },
+                GitWorkspaceInfo {
+                    path: PathBuf::from("/repo/worktree1"),
+                    branch: Some("feature-1".to_string()),
+                    ..Default::default()
+                },
+            ])
         });
+        worktree_mock
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        worktree_mock
+            .expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        worktree_mock
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(0));
+        worktree_mock
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock
             .expect_get_project_name()
@@ -207,11 +246,31 @@ mod tests {
     fn test_list_running_agents_cwd_resolution_failure() {
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(|| {
-            Ok(vec![GitWorkspaceInfo {
-                path: PathBuf::from("/repo/worktree1"),
-                branch: Some("feature-1".to_string()),
-            }])
+            Ok(vec![
+                GitWorkspaceInfo {
+                    path: PathBuf::from("/repo"),
+                    branch: Some("main".to_string()),
+                    ..Default::default()
+                },
+                GitWorkspaceInfo {
+                    path: PathBuf::from("/repo/worktree1"),
+                    branch: Some("feature-1".to_string()),
+                    ..Default::default()
+                },
+            ])
         });
+        worktree_mock
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        worktree_mock
+            .expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        worktree_mock
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(0));
+        worktree_mock
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock
             .expect_get_project_name()
@@ -263,10 +322,12 @@ mod tests {
 
         // No processes
         let mut worktree_mock = MockGitOperations::new();
+        // Only main repo entry — skipped by get_all, so no workspaces returned
         worktree_mock.expect_list_worktrees().return_once(|| {
             Ok(vec![GitWorkspaceInfo {
-                path: PathBuf::from("/repo/worktree1"),
-                branch: Some("feature-1".to_string()),
+                path: PathBuf::from("/repo"),
+                branch: Some("main".to_string()),
+                ..Default::default()
             }])
         });
         let mut checkout_mock = MockGitOperations::new();

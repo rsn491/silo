@@ -2,11 +2,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::infra::git_error::GitError;
+use crate::infra::workspace_kind::WorkspaceKind;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GitWorkspaceInfo {
     pub path: PathBuf,
     pub branch: Option<String>,
+    pub kind: WorkspaceKind,
+    pub has_uncommitted_changes: bool,
+    pub uncommitted_file_count: usize,
+    pub commits_ahead: usize,
+    pub commits_behind: usize,
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -281,6 +287,7 @@ fn parse_worktree_list(output: &str) -> Vec<GitWorkspaceInfo> {
                 worktrees.push(GitWorkspaceInfo {
                     path,
                     branch: current_branch.take(),
+                    ..Default::default()
                 });
             }
             // Start new worktree
@@ -296,6 +303,7 @@ fn parse_worktree_list(output: &str) -> Vec<GitWorkspaceInfo> {
                 worktrees.push(GitWorkspaceInfo {
                     path,
                     branch: current_branch.take(),
+                    ..Default::default()
                 });
             }
         }
@@ -306,6 +314,7 @@ fn parse_worktree_list(output: &str) -> Vec<GitWorkspaceInfo> {
         worktrees.push(GitWorkspaceInfo {
             path,
             branch: current_branch,
+            ..Default::default()
         });
     }
 
@@ -356,8 +365,10 @@ branch refs/heads/feature-branch
         assert_eq!(worktrees.len(), 2);
         assert_eq!(worktrees[0].path, PathBuf::from("/path/to/main"));
         assert_eq!(worktrees[0].branch, Some("main".to_string()));
+        assert_eq!(worktrees[0].kind, WorkspaceKind::Worktree);
         assert_eq!(worktrees[1].path, PathBuf::from("/path/to/feature"));
         assert_eq!(worktrees[1].branch, Some("feature-branch".to_string()));
+        assert_eq!(worktrees[1].kind, WorkspaceKind::Worktree);
     }
 
     #[test]
