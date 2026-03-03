@@ -1,5 +1,12 @@
+//! Utilities for running AppleScript commands on macOS.
+
 use std::process::Command;
 
+/// Runs an AppleScript command using `osascript`.
+///
+/// # Errors
+///
+/// Returns an error if the `osascript` command fails to execute or returns a non-zero exit status.
 pub fn run_osascript(script: &str) -> Result<(), String> {
     let output = Command::new("osascript")
         .args(["-e", script])

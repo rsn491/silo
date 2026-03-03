@@ -1,3 +1,5 @@
+//! Silo: A CLI tool for managing isolated AI agent workspaces.
+
 mod cli;
 mod infra;
 mod services;
@@ -17,27 +19,30 @@ use services::agent_list::AgentListService;
 use services::global_workspace::GlobalWorkspaceManager;
 use services::silo_config::SiloConfig;
 
+/// The main CLI structure for Silo.
 #[derive(Parser)]
 #[command(name = "silo")]
 #[command(about = "A CLI tool for managing isolated Claude workspaces")]
 pub struct Cli {
+    /// The subcommand to execute.
     #[command(subcommand)]
     pub command: Commands,
 }
 
+/// Supported subcommands for Silo.
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Create a new git worktree and launch an agent in it
+    /// Create a new Git worktree and launch an agent in it.
     Launch(LaunchArgs),
-    /// List running agents in worktrees of the current repository
+    /// List running agents in worktrees of the current repository.
     Ps,
-    /// Initialize the .silo directory in your home directory
+    /// Initialize the `.silo` directory in your home directory.
     Init(InitArgs),
-    /// Clean up worktrees where no agents are running
+    /// Clean up worktrees where no agents are running.
     Cleanup(CleanupArgs),
-    /// Show status of worktrees (uncommitted changes and commits ahead/behind)
+    /// Show status of worktrees (uncommitted changes and commits ahead/behind).
     Status(StatusArgs),
-    /// Generate shell completion scripts
+    /// Generate shell completion scripts.
     Completions(CompletionsArgs),
 }
 

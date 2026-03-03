@@ -1,16 +1,25 @@
+//! Logic for the `ps` command.
+
 use crate::infra::git::GitOperations;
 use crate::infra::process::ProcessOperations;
 use crate::services::agent_list::AgentListService;
 
+/// Handler for the `ps` command.
 pub struct PsCommand<G: GitOperations + Clone, P: ProcessOperations> {
     service: AgentListService<G, P>,
 }
 
 impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
+    /// Creates a new `PsCommand`.
     pub fn new(service: AgentListService<G, P>) -> Self {
         Self { service }
     }
 
+    /// Executes the `ps` operation to list running agents.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if listing running agents fails.
     pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         let agents = self.service.list_running_agents()?;
 

@@ -1,24 +1,47 @@
+//! Traits and implementations for interacting with system processes.
+
 use std::path::PathBuf;
 use std::process::Command;
 use thiserror::Error;
 
+/// Represents errors that can occur during process operations.
 #[derive(Debug, Error)]
 pub enum ProcessError {
+    /// A system command (e.g., `ps`, `lsof`) failed to execute or returned an error.
     #[error("Command failed: {0}")]
     CommandFailed(String),
+    /// Failed to parse the output of a system command.
     #[error("Parse error: {0}")]
     ParseError(String),
 }
 
+/// Trait defining operations for inspecting and finding system processes.
 pub trait ProcessOperations {
+    /// Finds processes whose command-line arguments match any of the provided names.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ProcessError`] if the underlying system command fails.
     fn find_processes_by_names(&self, names: &[&str]) -> Result<Vec<(u32, String)>, ProcessError>;
+
+    /// Gets the current working directory of a process by its PID.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ProcessError`] if `lsof` fails or its output cannot be parsed.
     fn get_process_cwd(&self, pid: u32) -> Result<PathBuf, ProcessError>;
 }
 
+/// A concrete implementation of [`ProcessOperations`] using standard system tools.
 #[derive(Default, Clone)]
 pub struct SystemProcess;
 
 impl ProcessOperations for SystemProcess {
+    /// Finds processes using the `ps` command.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProcessError::CommandFailed`] if the `ps` command fails.
     fn find_processes_by_names(&self, names: &[&str]) -> Result<Vec<(u32, String)>, ProcessError> {
         let output = Command::new("ps")
             .args(["-eo", "pid,args"])
@@ -35,6 +58,12 @@ impl ProcessOperations for SystemProcess {
         Ok(parse_ps_output_with_patterns(&stdout, names, own_pid))
     }
 
+    /// Gets the process CWD using the `lsof` command.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProcessError::CommandFailed`] if the `lsof` command fails,
+    /// or [`ProcessError::ParseError`] if the output format is unexpected.
     fn get_process_cwd(&self, pid: u32) -> Result<PathBuf, ProcessError> {
         let output = Command::new("lsof")
             .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
@@ -51,6 +80,7 @@ impl ProcessOperations for SystemProcess {
     }
 }
 
+/// Parses the output of `ps -eo pid,args` and filters by the provided patterns.
 fn parse_ps_output_with_patterns(
     output: &str,
     patterns: &[&str],
@@ -59,13 +89,13 @@ fn parse_ps_output_with_patterns(
     let mut processes = Vec::new();
 
     for line in output.lines().skip(1) {
-        // Skip header line
+        // Skip header line.
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
 
-        // Split into PID and args
+        // Split into PID and args.
         let parts: Vec<&str> = line.splitn(2, char::is_whitespace).collect();
         if parts.len() < 2 {
             continue;
@@ -76,14 +106,14 @@ fn parse_ps_output_with_patterns(
             Err(_) => continue,
         };
 
-        // Skip own process
+        // Skip own process.
         if pid == own_pid {
             continue;
         }
 
         let args = parts[1].trim();
 
-        // Check if args contains any of the patterns
+        // Check if args contains any of the patterns.
         if patterns.iter().any(|pattern| args.contains(pattern)) {
             processes.push((pid, args.to_string()));
         }
@@ -92,6 +122,11 @@ fn parse_ps_output_with_patterns(
     processes
 }
 
+/// Parses the output of `lsof -Fn` to extract the CWD path.
+///
+/// # Errors
+///
+/// Returns [`ProcessError::ParseError`] if no line starts with 'n'.
 fn parse_lsof_cwd_output(output: &str) -> Result<PathBuf, ProcessError> {
     for line in output.lines() {
         if let Some(path) = line.strip_prefix('n') {

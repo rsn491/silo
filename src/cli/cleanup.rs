@@ -1,3 +1,5 @@
+//! Logic for the `cleanup` command.
+
 use clap::Parser;
 use std::collections::HashSet;
 use std::io::{self, Write};
@@ -9,27 +11,30 @@ use crate::services::agent_workspace::WorkspaceManager;
 use crate::services::global_workspace::GlobalWorkspaceManager;
 use crate::services::workspace_kind::WorkspaceKind;
 
+/// Arguments for the `cleanup` command.
 #[derive(Parser, Debug)]
 pub struct CleanupArgs {
-    /// Clean ALL worktrees in the repo, not just silo-managed ones in ~/.silo/
+    /// Clean ALL worktrees in the repo, not just silo-managed ones in `~/.silo/`.
     #[arg(long)]
     pub all: bool,
 
-    /// Force removal even if workspace has uncommitted work
+    /// Force removal even if workspace has uncommitted work.
     #[arg(long)]
     pub force: bool,
 
-    /// Skip confirmation prompt
+    /// Skip confirmation prompt.
     #[arg(long, short = 'y')]
     pub yes: bool,
 }
 
+/// Handler for the `cleanup` command.
 pub struct CleanupCommand<G: GitOperations, P: ProcessOperations + Clone> {
     workspaces: GlobalWorkspaceManager<G>,
     agent_list: AgentListService<G, P>,
 }
 
 impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
+    /// Creates a new `CleanupCommand`.
     pub fn new(workspaces: GlobalWorkspaceManager<G>, agent_list: AgentListService<G, P>) -> Self {
         Self {
             workspaces,
@@ -37,6 +42,11 @@ impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
         }
     }
 
+    /// Executes the cleanup operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the cleanup operation fails or if user input cannot be read.
     pub fn run(&self, args: CleanupArgs) -> Result<(), Box<dyn std::error::Error>> {
         if !args.yes {
             print!("This will remove all inactive worktrees. Continue? [y/N]: ");

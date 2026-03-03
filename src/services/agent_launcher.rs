@@ -1,22 +1,32 @@
+//! Logic for launching AI agents in isolated workspaces.
+
 use crate::infra::agent::Agent;
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::{Terminal, TerminalError};
 use crate::services::agent_workspace::WorkspaceFactory;
 use thiserror::Error;
 
+/// Modes for launching an agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LaunchMode {
+    /// Replace the current process with the agent.
     ExecReplace,
+    /// Launch the agent in a new terminal tab.
     NewTab,
+    /// Launch the agent in a new terminal split pane.
     SplitPane,
 }
 
+/// Errors that can occur when launching an agent.
 #[derive(Debug, Error)]
 pub enum LaunchError {
+    /// Failed to start the agent process.
     #[error("failed to spawn agent: {0}")]
     AgentSpawnError(String),
+    /// The agent process exited with a non-zero status.
     #[error("agent exited with non-zero status: {0}")]
     AgentExitError(std::process::ExitStatus),
+    /// A Git operation failed during workspace preparation.
     #[error(transparent)]
     Git(#[from] GitError),
 }
@@ -27,6 +37,7 @@ impl From<TerminalError> for LaunchError {
     }
 }
 
+/// Orchestrates the creation of a workspace and the launching of an agent within it.
 pub struct AgentLauncher<W, T>
 where
     W: WorkspaceFactory,
@@ -44,6 +55,7 @@ where
     W: WorkspaceFactory,
     T: Terminal,
 {
+    /// Creates a new `AgentLauncher`.
     pub fn new(
         workspace: W,
         terminal: Option<T>,
@@ -60,6 +72,7 @@ where
         }
     }
 
+    /// Internal method to launch the agent in the specified workspace directory.
     fn launch_in_workspace(&self, workspace_path: &std::path::Path) -> Result<(), LaunchError> {
         let status = self
             .agent
@@ -75,11 +88,16 @@ where
         }
     }
 
+    /// Executes the launch process: creates the workspace and then launches the agent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LaunchError`] if workspace creation or agent spawning fails.
     pub fn launch(&self) -> Result<std::path::PathBuf, LaunchError> {
-        // Step 1: Create workspace
+        // Step 1: Create workspace.
         let workspace_path = self.workspace.create(self.branch.clone())?;
 
-        // Step 2: Launch agent in the workspace
+        // Step 2: Launch agent in the workspace.
         match self.launch_mode {
             LaunchMode::ExecReplace => self.launch_in_workspace(&workspace_path)?,
             LaunchMode::NewTab => {

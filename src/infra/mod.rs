@@ -1,3 +1,5 @@
+//! Infrastructure layer for Git operations and workspace management.
+
 pub mod agent;
 pub mod git;
 pub mod git_error;

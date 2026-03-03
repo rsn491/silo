@@ -1,13 +1,21 @@
+//! iTerm2 terminal implementation using AppleScript.
+
 use std::path::Path;
 
 use super::{Terminal, TerminalError};
 use crate::infra::agent::Agent;
 use crate::infra::osascript::run_osascript;
 
+/// Concrete implementation of [`Terminal`] for iTerm2.
 #[derive(Debug)]
 pub struct ITerm2;
 
 impl Terminal for ITerm2 {
+    /// Opens a new tab in iTerm2 and launches the agent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TerminalError::TabOpenFailed`] if the AppleScript fails to execute.
     fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError> {
         let path_str = worktree_path.display().to_string();
         let escaped_path = path_str.replace('\'', "'\\''");
@@ -32,6 +40,11 @@ impl Terminal for ITerm2 {
         run_osascript(&script).map_err(|e| TerminalError::TabOpenFailed(e.to_string()))
     }
 
+    /// Splits the current pane in iTerm2 vertically and launches the agent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TerminalError::PaneSplitFailed`] if the AppleScript fails to execute.
     fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError> {
         let path_str = worktree_path.display().to_string();
         let escaped_path = path_str.replace('\'', "'\\''");

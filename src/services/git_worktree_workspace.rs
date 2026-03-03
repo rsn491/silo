@@ -1,3 +1,5 @@
+//! Workspace management implementation using Git worktrees.
+
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -12,15 +14,22 @@ use super::silo_config::SiloConfig;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::workspace_kind::WorkspaceKind;
 
+/// Manages isolated workspaces using Git's `worktree` feature.
 pub struct GitWorktreeWorkspace<G: GitOperations> {
     git: G,
 }
 
 impl<G: GitOperations> GitWorktreeWorkspace<G> {
+    /// Creates a new `GitWorktreeWorkspace` with the specified Git operations.
     pub fn new(git: G) -> Self {
         Self { git }
     }
 
+    /// Generates a unique path for a new worktree within the Silo directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LaunchError`] if the Silo directory cannot be determined or if Git operations fail.
     fn generate_worktree_path(&self) -> Result<PathBuf, LaunchError> {
         let base_dir = SiloConfig::get_silo_dir().ok_or_else(|| {
             LaunchError::AgentSpawnError("could not determine home directory".into())
@@ -34,6 +43,7 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
         Ok(base_dir.join(&worktree_name))
     }
 
+    /// Parses the porcelain Git status output to determine if there are uncommitted changes.
     fn parse_uncommitted_changes(status_output: &str) -> (bool, usize) {
         let file_count = status_output
             .lines()
@@ -43,6 +53,11 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
         (has_changes, file_count)
     }
 
+    /// Retrieves the Git status for a specific worktree.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StatusError`] if any Git command fails.
     pub fn get_git_status(&self, worktree: GitWorkspaceInfo) -> Result<GitStatus, StatusError> {
         let base_branch = self.git.get_default_remote_branch()?;
         let status_output = self.git.get_status_porcelain(&worktree.path)?;
@@ -67,6 +82,11 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
 }
 
 impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
+    /// Creates a new Git worktree.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LaunchError`] if worktree creation fails.
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
         let worktree_path = self.generate_worktree_path()?;
         let worktree_name = worktree_path
@@ -82,6 +102,11 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
 }
 
 impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
+    /// Removes inactive Git worktrees.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CleanupError`] if Git operations fail.
     fn cleanup(
         &self,
         active_paths: &HashSet<PathBuf>,
@@ -144,6 +169,7 @@ impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
         Ok(result)
     }
 
+    /// Returns all Git worktrees.
     fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, crate::infra::git_error::GitError> {
         let worktrees = self.git.list_worktrees()?;
         let mut result = Vec::new();
@@ -364,7 +390,7 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let result = workspace.get_git_status(nonexistent_info);
 
-        // Mock returns Ok with default values (no uncommitted changes, no divergence)
+        // Mock returns Ok with default values (no uncommitted changes, no divergence).
         assert!(result.is_ok());
         let status = result.unwrap();
         assert_eq!(status.path, nonexistent_path);
@@ -397,7 +423,7 @@ mod tests {
         let (has_changes, count) =
             GitWorktreeWorkspace::<MockGitOperations>::parse_uncommitted_changes(status_output);
         assert!(has_changes);
-        assert_eq!(count, 2); // Should only count non-empty lines
+        assert_eq!(count, 2); // Should only count non-empty lines.
     }
 
     #[test]
@@ -446,7 +472,7 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let all = workspace.get_all().unwrap();
 
-        // Should only return the non-main worktree with status populated
+        // Should only return the non-main worktree with status populated.
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].path, worktree1_path);
         assert_eq!(all[0].has_uncommitted_changes, true);
@@ -504,7 +530,7 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let all = workspace.get_all().unwrap();
 
-        // get_all returns all non-main worktrees including clean ones
+        // get_all returns all non-main worktrees including clean ones.
         assert_eq!(all.len(), 2);
         let dirty = all.iter().find(|w| w.path == worktree1_path).unwrap();
         let clean = all.iter().find(|w| w.path == worktree2_path).unwrap();
@@ -555,9 +581,9 @@ mod tests {
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let active = HashSet::new();
-        let result = workspace.cleanup(&active, true, false).unwrap(); // Use all: true to include all worktrees
+        let result = workspace.cleanup(&active, true, false).unwrap(); // Use all: true to include all worktrees.
 
-        // worktree1 should be skipped, worktree2 should be removed
+        // worktree1 should be skipped, worktree2 should be removed.
         assert_eq!(result.removed.len(), 1);
         assert_eq!(result.removed[0].path, worktree2_path);
         assert_eq!(result.skipped.len(), 1);
