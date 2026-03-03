@@ -1,11 +1,24 @@
+//! Shared helpers for integration tests.
+//!
+//! Each test binary only calls the subset of helpers it needs, so the
+//! module-level suppression below avoids spurious dead-code warnings that
+//! would otherwise fire for helpers unused in a particular binary.
+#![allow(dead_code)]
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Returns the isolated silo directory used by integration tests.
+///
+/// Tests set `SILO_DIR` to this path so they never touch `~/.silo`.
+pub fn silo_test_dir(base: &Path) -> PathBuf {
+    base.join(".tmp_silo_it")
+}
+
 /// Initialise a bare-minimum git repo with one commit at `base/repo`.
 /// Returns the path to the repo root.
-#[allow(dead_code)]
 pub fn setup_git_repo(base: &Path) -> PathBuf {
     let repo = base.join("repo");
     fs::create_dir_all(&repo).unwrap();
@@ -38,7 +51,6 @@ pub fn setup_git_repo(base: &Path) -> PathBuf {
 
 /// Create `base/bin/claude` with `script` as its body and mark it executable.
 /// Returns the `base/bin` directory so it can be prepended to `PATH`.
-#[allow(dead_code)]
 pub fn create_stub_claude(base: &Path, script: &str) -> PathBuf {
     let bin_dir = base.join("bin");
     fs::create_dir_all(&bin_dir).unwrap();
@@ -49,7 +61,6 @@ pub fn create_stub_claude(base: &Path, script: &str) -> PathBuf {
 }
 
 /// Add a git worktree at `dest` with the given `branch`, linked to `repo`.
-#[allow(dead_code)]
 pub fn add_worktree(repo: &Path, dest: &Path, branch: &str) {
     fs::create_dir_all(dest.parent().unwrap()).unwrap();
     Command::new("git")

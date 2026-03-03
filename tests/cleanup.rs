@@ -8,8 +8,8 @@ use tempfile::TempDir;
 fn test_inactive_worktree_is_removed() {
     let tmp = TempDir::new().unwrap();
     let repo = common::setup_git_repo(tmp.path());
+    let silo_dir = common::silo_test_dir(tmp.path());
 
-    let silo_dir = tmp.path().join(".silo");
     let worktree = silo_dir.join("repo-feat");
     common::add_worktree(&repo, &worktree, "feat");
 
@@ -19,7 +19,7 @@ fn test_inactive_worktree_is_removed() {
         .unwrap()
         .args(["cleanup", "-y"])
         .current_dir(&repo)
-        .env("HOME", tmp.path())
+        .env("SILO_DIR", &silo_dir)
         .assert()
         .success()
         .stdout(predicate::str::contains("Successfully removed 1"));

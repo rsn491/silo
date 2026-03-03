@@ -4,16 +4,14 @@ use tempfile::TempDir;
 #[test]
 fn test_silo_dir_is_created() {
     let tmp = TempDir::new().unwrap();
+    let silo_dir = tmp.path().join(".tmp_silo_it");
 
     Command::cargo_bin("silo")
         .unwrap()
         .arg("init")
-        .env("HOME", tmp.path())
+        .env("SILO_DIR", &silo_dir)
         .assert()
         .success();
 
-    assert!(
-        tmp.path().join(".silo").is_dir(),
-        "expected ~/.silo to be created"
-    );
+    assert!(silo_dir.is_dir(), "expected SILO_DIR to be created");
 }

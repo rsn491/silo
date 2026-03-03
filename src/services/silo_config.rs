@@ -29,8 +29,15 @@ pub struct SiloSettings {
 pub struct SiloConfig;
 
 impl SiloConfig {
-    /// Returns the path to ~/.silo/ directory, or None if home directory cannot be determined
+    /// Returns the silo directory.
+    ///
+    /// Resolution order:
+    /// 1. `SILO_DIR` environment variable (useful for testing and custom setups)
+    /// 2. `~/.silo/` derived from the home directory
     pub fn get_silo_dir() -> Option<PathBuf> {
+        if let Ok(dir) = std::env::var("SILO_DIR") {
+            return Some(PathBuf::from(dir));
+        }
         dirs::home_dir().map(|home| home.join(".silo"))
     }
 

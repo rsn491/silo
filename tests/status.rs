@@ -8,8 +8,8 @@ use tempfile::TempDir;
 fn test_worktree_with_changes_is_shown() {
     let tmp = TempDir::new().unwrap();
     let repo = common::setup_git_repo(tmp.path());
+    let silo_dir = common::silo_test_dir(tmp.path());
 
-    let silo_dir = tmp.path().join(".silo");
     let worktree = silo_dir.join("repo-feat");
     common::add_worktree(&repo, &worktree, "feat");
 
@@ -21,7 +21,7 @@ fn test_worktree_with_changes_is_shown() {
         .unwrap()
         .arg("status")
         .current_dir(&repo)
-        .env("HOME", tmp.path())
+        .env("SILO_DIR", &silo_dir)
         .assert()
         .success()
         .stdout(predicate::str::contains("feat"))
