@@ -17,6 +17,18 @@ pub fn silo_test_dir(base: &Path) -> PathBuf {
     base.join(".tmp_silo_it")
 }
 
+/// Returns a `silo` [`assert_cmd::Command`] with `SILO_DIR` pre-set to
+/// [`silo_test_dir`]`(base)`.
+///
+/// Use this instead of `Command::cargo_bin("silo")` so that every invocation
+/// is guaranteed to write into the isolated test directory and never touches
+/// the real `~/.silo`.
+pub fn silo_cmd(base: &Path) -> assert_cmd::Command {
+    let mut cmd = assert_cmd::Command::cargo_bin("silo").unwrap();
+    cmd.env("SILO_DIR", silo_test_dir(base));
+    cmd
+}
+
 /// Initialise a bare-minimum git repo with one commit at `base/repo`.
 /// Returns the path to the repo root.
 pub fn setup_git_repo(base: &Path) -> PathBuf {

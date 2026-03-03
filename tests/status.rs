@@ -1,6 +1,5 @@
 mod common;
 
-use assert_cmd::Command;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
@@ -17,11 +16,9 @@ fn test_worktree_with_changes_is_shown() {
     // reports one changed file.
     std::fs::write(worktree.join("new-file.txt"), "hello\n").unwrap();
 
-    Command::cargo_bin("silo")
-        .unwrap()
+    common::silo_cmd(tmp.path())
         .arg("status")
         .current_dir(&repo)
-        .env("SILO_DIR", &silo_dir)
         .assert()
         .success()
         .stdout(predicate::str::contains("feat"))

@@ -1,6 +1,5 @@
 mod common;
 
-use assert_cmd::Command;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
@@ -15,11 +14,9 @@ fn test_inactive_worktree_is_removed() {
 
     assert!(worktree.is_dir(), "worktree should exist before cleanup");
 
-    Command::cargo_bin("silo")
-        .unwrap()
+    common::silo_cmd(tmp.path())
         .args(["cleanup", "-y"])
         .current_dir(&repo)
-        .env("SILO_DIR", &silo_dir)
         .assert()
         .success()
         .stdout(predicate::str::contains("Successfully removed 1"));

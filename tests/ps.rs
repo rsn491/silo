@@ -1,6 +1,5 @@
 mod common;
 
-use assert_cmd::Command;
 use predicates::prelude::*;
 use std::time::Duration;
 use tempfile::TempDir;
@@ -41,11 +40,9 @@ fn test_running_agent_is_listed() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     let new_path = format!("{}:{}", bin_dir.display(), original_path);
 
-    Command::cargo_bin("silo")
-        .unwrap()
+    common::silo_cmd(tmp.path())
         .arg("ps")
         .current_dir(&repo)
-        .env("SILO_DIR", &silo_dir)
         .env("PATH", &new_path)
         .assert()
         .success()
