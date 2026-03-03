@@ -83,9 +83,6 @@ pub trait WorkspaceFactory {
     /// # Arguments
     /// * `branch` - Optional branch name for the workspace. If None, a default branch name will be generated.
     fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError>;
-
-    /// Removes a workspace at the given path.
-    fn remove(&self, path: &Path) -> Result<(), LaunchError>;
 }
 
 pub trait WorkspaceManager {

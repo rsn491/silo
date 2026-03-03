@@ -16,7 +16,7 @@ pub enum LaunchError {
     #[error("failed to spawn agent: {0}")]
     AgentSpawnError(String),
     #[error("agent exited with non-zero status: {0}")]
-    AgentExitError(std::process::ExitStatus, std::path::PathBuf),
+    AgentExitError(std::process::ExitStatus),
     #[error(transparent)]
     Git(#[from] GitError),
 }
@@ -71,10 +71,7 @@ where
         if status.success() {
             Ok(())
         } else {
-            Err(LaunchError::AgentExitError(
-                status,
-                workspace_path.to_path_buf(),
-            ))
+            Err(LaunchError::AgentExitError(status))
         }
     }
 
@@ -83,34 +80,26 @@ where
         let workspace_path = self.workspace.create(self.branch.clone())?;
 
         // Step 2: Launch agent in the workspace
-        let launch_result = match self.launch_mode {
-            LaunchMode::ExecReplace => self.launch_in_workspace(&workspace_path),
+        match self.launch_mode {
+            LaunchMode::ExecReplace => self.launch_in_workspace(&workspace_path)?,
             LaunchMode::NewTab => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for new tab".to_string())
                 })?;
-                if let Err(_e) = terminal.open_tab(&workspace_path, &self.agent) {
-                    self.launch_in_workspace(&workspace_path)
-                } else {
-                    Ok(())
+                match terminal.open_tab(&workspace_path, &self.agent) {
+                    Ok(()) => {}
+                    Err(_e) => self.launch_in_workspace(&workspace_path)?,
                 }
             }
             LaunchMode::SplitPane => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
                 })?;
-                if let Err(_e) = terminal.split_pane(&workspace_path, &self.agent) {
-                    self.launch_in_workspace(&workspace_path)
-                } else {
-                    Ok(())
+                match terminal.split_pane(&workspace_path, &self.agent) {
+                    Ok(()) => {}
+                    Err(_e) => self.launch_in_workspace(&workspace_path)?,
                 }
             }
-        };
-
-        if let Err(e) = launch_result {
-            // Clean up workspace on failure
-            let _ = self.workspace.remove(&workspace_path);
-            return Err(e);
         }
 
         Ok(workspace_path)

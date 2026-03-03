@@ -50,13 +50,6 @@ impl<G: GitOperations> WorkspaceFactory for WorkspaceBackend<G> {
             WorkspaceBackend::Checkout(w) => w.create(branch),
         }
     }
-
-    fn remove(&self, path: &std::path::Path) -> Result<(), LaunchError> {
-        match self {
-            WorkspaceBackend::Worktree(w) => w.remove(path),
-            WorkspaceBackend::Checkout(w) => w.remove(path),
-        }
-    }
 }
 
 pub struct LaunchCommand<G: GitOperations, T: Terminal> {
