@@ -121,30 +121,10 @@ fn resolve_workspace_type(checkout: bool, worktree: bool) -> WorkspaceKind {
 }
 
 fn resolve_agent(agent: Option<Agent>) -> Agent {
-    if let Some(agent) = agent {
-        return agent;
-    }
-
-    let settings = match SiloConfig::load_settings() {
-        Ok(settings) => settings,
-        Err(err) => {
-            eprintln!("Warning: failed to load settings.json: {}", err);
-            return Agent::default();
-        }
-    };
-
-    let Some(agent_str) = settings.agent else {
-        return Agent::default();
-    };
-
-    match Agent::try_from_str(&agent_str) {
-        Some(agent) => agent,
-        None => {
-            eprintln!(
-                "Warning: invalid agent '{}' in settings.json; falling back to default",
-                agent_str
-            );
-            Agent::default()
-        }
-    }
+    agent.or_else(|| {
+        SiloConfig::load_settings()
+            .ok()
+            .and_then(|settings| settings.agent)
+    })
+    .unwrap_or_default()
 }
