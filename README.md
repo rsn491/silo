@@ -17,13 +17,7 @@ silo init
 Create an isolated workspace and launch an AI agent inside it:
 
 ```sh
-silo launch                            # Launch Claude Code (default)
-silo launch --agent opencode           # Launch OpenCode
-silo launch --agent codex              # Launch Codex
-silo launch --branch my-feature        # Use a specific branch name
-silo launch --tab                      # Open in a new iTerm2 tab
-silo launch --split-pane               # Open in a split iTerm2 pane
-silo launch --checkout                 # Use git clone instead of worktree
+silo launch [--agent <agent>] [--branch <branch>] [--tab|--split-pane] [--checkout|--worktree]
 ```
 
 ### List running agents
@@ -47,10 +41,7 @@ silo status
 Remove inactive workspaces. By default, workspaces with uncommitted changes are skipped:
 
 ```sh
-silo cleanup                           # Remove inactive workspaces (prompts for confirmation)
-silo cleanup --all                     # Remove all workspaces
-silo cleanup --force                   # Remove even workspaces with uncommitted changes
-silo cleanup -y                        # Skip confirmation prompt
+silo cleanup [--all] [--force] [--yes]
 ```
 
 ### Shell completions
