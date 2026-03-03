@@ -79,6 +79,12 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
 
         Ok(worktree_path)
     }
+
+    fn remove(&self, path: &std::path::Path) -> Result<(), LaunchError> {
+        self.git
+            .remove_worktree(path)
+            .map_err(|e| LaunchError::AgentSpawnError(format!("failed to remove worktree: {}", e)))
+    }
 }
 
 impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {

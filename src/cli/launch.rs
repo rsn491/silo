@@ -50,6 +50,13 @@ impl<G: GitOperations> WorkspaceFactory for WorkspaceBackend<G> {
             WorkspaceBackend::Checkout(w) => w.create(branch),
         }
     }
+
+    fn remove(&self, path: &std::path::Path) -> Result<(), LaunchError> {
+        match self {
+            WorkspaceBackend::Worktree(w) => w.remove(path),
+            WorkspaceBackend::Checkout(w) => w.remove(path),
+        }
+    }
 }
 
 pub struct LaunchCommand<G: GitOperations, T: Terminal> {
@@ -83,33 +90,21 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         };
         eprintln!("Launching {:?} in {}...", agent, workspace_kind);
 
-        let launch_result = AgentLauncher::new(
+        let workspace_path = AgentLauncher::new(
             workspace,
             self.terminal,
             self.launch_mode,
             agent,
             args.branch,
         )
-        .launch();
+        .launch()?;
 
-        match launch_result {
-            Ok(workspace_path) => {
-                eprintln!(
-                    "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
-                    workspace_path.display()
-                );
-                Ok(())
-            }
-            Err(LaunchError::AgentExitError(status, workspace_path)) => {
-                eprintln!(
-                    "\n\nAgent exited with non-zero status: {}. To resume, cd to the workspace:\n  cd {}",
-                    status,
-                    workspace_path.display()
-                );
-                Err(LaunchError::AgentExitError(status, workspace_path).into())
-            }
-            Err(e) => Err(e.into()),
-        }
+        eprintln!(
+            "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
+            workspace_path.display()
+        );
+
+        Ok(())
     }
 }
 

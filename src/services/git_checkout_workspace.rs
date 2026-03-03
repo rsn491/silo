@@ -50,6 +50,12 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
 
         Ok(dest)
     }
+
+    fn remove(&self, path: &Path) -> Result<(), LaunchError> {
+        std::fs::remove_dir_all(path).map_err(|e| {
+            LaunchError::AgentSpawnError(format!("failed to remove checkout directory: {}", e))
+        })
+    }
 }
 
 impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {

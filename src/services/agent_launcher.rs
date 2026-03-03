@@ -83,14 +83,16 @@ where
         let workspace_path = self.workspace.create(self.branch.clone())?;
 
         // Step 2: Launch agent in the workspace
-        match self.launch_mode {
-            LaunchMode::ExecReplace => self.launch_in_workspace(&workspace_path)?,
+        let launch_result = match self.launch_mode {
+            LaunchMode::ExecReplace => self.launch_in_workspace(&workspace_path),
             LaunchMode::NewTab => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for new tab".to_string())
                 })?;
                 if let Err(_e) = terminal.open_tab(&workspace_path, &self.agent) {
-                    self.launch_in_workspace(&workspace_path)?;
+                    self.launch_in_workspace(&workspace_path)
+                } else {
+                    Ok(())
                 }
             }
             LaunchMode::SplitPane => {
@@ -98,9 +100,17 @@ where
                     LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
                 })?;
                 if let Err(_e) = terminal.split_pane(&workspace_path, &self.agent) {
-                    self.launch_in_workspace(&workspace_path)?;
+                    self.launch_in_workspace(&workspace_path)
+                } else {
+                    Ok(())
                 }
             }
+        };
+
+        if let Err(e) = launch_result {
+            // Clean up workspace on failure
+            let _ = self.workspace.remove(&workspace_path);
+            return Err(e);
         }
 
         Ok(workspace_path)
