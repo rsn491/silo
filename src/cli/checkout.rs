@@ -87,11 +87,7 @@ fn select_interactively(
     let items: Vec<String> = workspaces
         .iter()
         .map(|w| {
-            let name = w
-                .path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("?");
+            let name = w.path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
             let branch = w.branch.as_deref().unwrap_or("(detached)");
             format!("[{:<8}]  {:<32}  ({})", w.kind, name, branch)
         })
@@ -100,6 +96,7 @@ fn select_interactively(
     let selection = Select::new()
         .with_prompt("Select a workspace")
         .items(&items)
+        .default(0)
         .interact_opt()?;
 
     match selection {
@@ -129,10 +126,8 @@ fn spawn_shell_in(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         .current_dir(path)
         .status()?;
 
-    if let Some(code) = status.code() {
-        if code != 0 {
-            std::process::exit(code);
-        }
+    if let Some(code) = status.code() && code != 0 {
+        std::process::exit(code);
     }
 
     Ok(())
