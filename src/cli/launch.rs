@@ -3,6 +3,7 @@
 use clap::Parser;
 use std::path::PathBuf;
 
+use crate::cli::exit_check;
 use crate::infra::agent::Agent;
 use crate::infra::git::GitOperations;
 use crate::infra::terminal::Terminal;
@@ -100,6 +101,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         };
         eprintln!("Launching {:?} in {}...", agent, workspace_kind);
 
+        let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
         let launch_result = AgentLauncher::new(
             workspace,
             self.terminal,
@@ -115,6 +117,11 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                     "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
                     workspace_path.display()
                 );
+                if is_exec_replace {
+                    if let Err(e) = exit_check::check_and_handle_exit_work(&workspace_path) {
+                        eprintln!("Warning: exit work check failed: {}", e);
+                    }
+                }
                 Ok(())
             }
             Err(LaunchError::AgentExitError(status)) => {

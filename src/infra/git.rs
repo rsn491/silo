@@ -119,6 +119,21 @@ pub trait GitOperations {
     ///
     /// Returns [`Ok(None)`] if in detached HEAD state, or [`GitError::CommandFailed`] on error.
     fn get_current_branch(&self, path: &Path) -> Result<Option<String>, GitError>;
+
+    /// Stages all changes and creates a commit with the given message.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommitFailed`] if staging or committing fails.
+    fn commit_all(&self, path: &Path, message: &str) -> Result<(), GitError>;
+
+    /// Pushes the current branch to its remote.
+    /// If no upstream is set, attempts `git push --set-upstream origin <branch>`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::PushFailed`] if the push fails.
+    fn push(&self, path: &Path) -> Result<(), GitError>;
 }
 
 /// A concrete implementation of [`GitOperations`] using the `git` command-line tool.
@@ -338,6 +353,60 @@ impl GitOperations for Git {
         } else {
             Ok(Some(branch))
         }
+    }
+
+    fn commit_all(&self, path: &Path, message: &str) -> Result<(), GitError> {
+        let add_output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["add", "-A"])
+            .output()
+            .map_err(|e| GitError::CommitFailed(e.to_string()))?;
+        if !add_output.status.success() {
+            let stderr = String::from_utf8_lossy(&add_output.stderr);
+            return Err(GitError::CommitFailed(stderr.to_string()));
+        }
+
+        let commit_output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["commit", "-m", message])
+            .output()
+            .map_err(|e| GitError::CommitFailed(e.to_string()))?;
+        if !commit_output.status.success() {
+            let stderr = String::from_utf8_lossy(&commit_output.stderr);
+            return Err(GitError::CommitFailed(stderr.to_string()));
+        }
+        Ok(())
+    }
+
+    fn push(&self, path: &Path) -> Result<(), GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["push"])
+            .output()
+            .map_err(|e| GitError::PushFailed(e.to_string()))?;
+
+        if output.status.success() {
+            return Ok(());
+        }
+
+        // Fallback: if no upstream is set, push with --set-upstream.
+        let branch = self
+            .get_current_branch(path)?
+            .ok_or_else(|| GitError::PushFailed("cannot push from detached HEAD".to_string()))?;
+        let output2 = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["push", "--set-upstream", "origin", &branch])
+            .output()
+            .map_err(|e| GitError::PushFailed(e.to_string()))?;
+        if !output2.status.success() {
+            let stderr = String::from_utf8_lossy(&output2.stderr);
+            return Err(GitError::PushFailed(stderr.to_string()));
+        }
+        Ok(())
     }
 }
 
