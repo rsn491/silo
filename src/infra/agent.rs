@@ -37,6 +37,11 @@ pub enum Agent {
     #[clap(name = "codex")]
     #[serde(rename = "codex")]
     Codex,
+    /// The Droid agent from factory.ai.
+    #[strum(serialize = "droid")]
+    #[clap(name = "droid")]
+    #[serde(rename = "droid")]
+    Droid,
 }
 
 impl Agent {
@@ -46,6 +51,7 @@ impl Agent {
             Agent::ClaudeCode => "claude",
             Agent::OpenCode => "opencode",
             Agent::Codex => "codex",
+            Agent::Droid => "droid",
         };
         Command::new(cmd)
     }
@@ -56,6 +62,7 @@ impl Agent {
             Agent::ClaudeCode => "claude",
             Agent::OpenCode => "opencode",
             Agent::Codex => "codex",
+            Agent::Droid => "droid",
         }
     }
 
@@ -94,7 +101,10 @@ mod tests {
 
     #[test]
     fn test_all_names_are_canonical() {
-        assert_eq!(Agent::all_names(), vec!["claude", "opencode", "codex"]);
+        assert_eq!(
+            Agent::all_names(),
+            vec!["claude", "opencode", "codex", "droid"]
+        );
     }
 
     #[test]
@@ -102,6 +112,7 @@ mod tests {
         assert_eq!(Agent::try_from_str("claude"), Some(Agent::ClaudeCode));
         assert_eq!(Agent::try_from_str("opencode"), Some(Agent::OpenCode));
         assert_eq!(Agent::try_from_str("codex"), Some(Agent::Codex));
+        assert_eq!(Agent::try_from_str("droid"), Some(Agent::Droid));
     }
 
     #[test]
@@ -113,7 +124,7 @@ mod tests {
     fn test_all_process_names_are_canonical() {
         assert_eq!(
             Agent::all_process_names(),
-            vec!["claude", "opencode", "codex"]
+            vec!["claude", "opencode", "codex", "droid"]
         );
     }
 
@@ -128,5 +139,6 @@ mod tests {
             Some(Agent::OpenCode)
         );
         assert_eq!(Agent::try_from_process_name("codex"), Some(Agent::Codex));
+        assert_eq!(Agent::try_from_process_name("droid"), Some(Agent::Droid));
     }
 }

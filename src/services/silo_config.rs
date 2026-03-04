@@ -182,14 +182,14 @@ mod tests {
         let settings_path = dir.path().join("settings.json");
 
         let settings = SiloSettings {
-            agent: Some(Agent::OpenCode),
+            agent: Some(Agent::Droid),
             workspace_type: None,
         };
 
         SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
         let contents = fs::read_to_string(&settings_path).unwrap();
         assert!(contents.contains("\"agent\""));
-        assert!(contents.contains("opencode"));
+        assert!(contents.contains("droid"));
     }
 
     #[test]
