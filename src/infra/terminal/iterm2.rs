@@ -19,9 +19,8 @@ impl Terminal for ITerm2 {
     fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError> {
         let path_str = worktree_path.display().to_string();
         let escaped_path = path_str.replace('\'', "'\\''");
-        let cmd = agent.command();
-        let program = cmd.get_program().to_string_lossy().to_string();
-        let escaped_program = program.replace('\'', "'\\''");
+        let command_name = agent.command_name();
+        let escaped_program = command_name.replace('\'', "'\\''");
         let script = format!(
             r#"tell application "iTerm2"
                 activate
@@ -48,9 +47,8 @@ impl Terminal for ITerm2 {
     fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError> {
         let path_str = worktree_path.display().to_string();
         let escaped_path = path_str.replace('\'', "'\\''");
-        let cmd = agent.command();
-        let program = cmd.get_program().to_string_lossy().to_string();
-        let escaped_program = program.replace('\'', "'\\''");
+        let command_name = agent.command_name();
+        let escaped_program = command_name.replace('\'', "'\\''");
         let script = format!(
             r#"tell application "iTerm2"
                 activate

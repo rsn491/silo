@@ -61,7 +61,7 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
         let workspaces = self.workspace_manager.get_all()?;
         let processes = self
             .process
-            .find_processes_by_names(&Agent::all_process_names())?;
+            .find_processes_by_names(&Agent::all_command_names())?;
         let mut agents = Vec::new();
         for (pid, args) in processes {
             let cwd = match self.process.get_process_cwd(pid) {
@@ -114,12 +114,12 @@ fn extract_agent_type(args: &str) -> Option<Agent> {
     let parts: Vec<&str> = args.split_whitespace().collect();
     if let Some(first) = parts.first()
         && let Some(name) = first.split('/').next_back()
-        && let Some(agent) = Agent::try_from_process_name(name)
+        && let Some(agent) = Agent::try_from_command_name(name)
     {
         return Some(agent);
     }
 
-    Agent::iter().find(|agent| args.contains(agent.process_name()))
+    Agent::iter().find(|agent| args.contains(agent.command_name()))
 }
 
 #[cfg(test)]

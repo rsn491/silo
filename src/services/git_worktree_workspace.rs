@@ -476,7 +476,7 @@ mod tests {
         // Should only return the non-main worktree with status populated.
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].path, worktree1_path);
-        assert_eq!(all[0].has_uncommitted_changes, true);
+        assert!(all[0].has_uncommitted_changes);
         assert_eq!(all[0].commits_ahead, 2);
     }
 
