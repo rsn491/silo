@@ -1,6 +1,6 @@
 # silo
 
-A CLI tool for managing isolated Git workspaces for multi-agent development. Silo lets multiple AI agents (Claude Code, OpenCode, Codex) work simultaneously on the same repository without interfering with each other, by creating separate Git worktrees or clones for each agent.
+A CLI tool for managing isolated Git workspaces for multi-agent development. Silo lets multiple AI agents (Claude Code, OpenCode, Codex, Gemini) work simultaneously on the same repository without interfering with each other, by creating separate Git worktrees or clones for each agent.
 
 ## Usage
 
@@ -63,6 +63,7 @@ Silo requires the following to be installed:
   - [Claude Code](https://claude.ai/code)
   - [OpenCode](https://opencode.ai)
   - [Codex](https://openai.com/index/openai-codex/)
+  - [Gemini CLI](https://geminicli.com)
 
 ## Development
 

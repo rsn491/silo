@@ -2,6 +2,7 @@
 
 mod claude_code;
 mod codex;
+mod gemini;
 mod open_code;
 
 use clap::ValueEnum;
@@ -11,6 +12,7 @@ use thiserror::Error;
 
 use claude_code::ClaudeCodeAgent;
 use codex::CodexAgent;
+use gemini::GeminiAgent;
 use open_code::OpenCodeAgent;
 
 /// Errors that can occur when prompting an agent in headless mode.
@@ -70,6 +72,11 @@ pub enum Agent {
     #[clap(name = "codex")]
     #[serde(rename = "codex")]
     Codex,
+    /// Google's Gemini CLI agent.
+    #[strum(serialize = "gemini")]
+    #[clap(name = "gemini")]
+    #[serde(rename = "gemini")]
+    Gemini,
 }
 
 impl Agent {
@@ -79,6 +86,7 @@ impl Agent {
             Agent::ClaudeCode => &ClaudeCodeAgent,
             Agent::OpenCode => &OpenCodeAgent,
             Agent::Codex => &CodexAgent,
+            Agent::Gemini => &GeminiAgent,
         }
     }
 
@@ -94,6 +102,7 @@ impl Agent {
     /// - Claude Code: `--print`
     /// - OpenCode: `-p`
     /// - Codex: `-q`
+    /// - Gemini: `-p`
     ///
     /// # Errors
     ///
@@ -153,7 +162,10 @@ mod tests {
 
     #[test]
     fn test_all_names_are_canonical() {
-        assert_eq!(Agent::all_names(), vec!["claude", "opencode", "codex"]);
+        assert_eq!(
+            Agent::all_names(),
+            vec!["claude", "opencode", "codex", "gemini"]
+        );
     }
 
     #[test]
@@ -161,6 +173,7 @@ mod tests {
         assert_eq!(Agent::try_from_str("claude"), Some(Agent::ClaudeCode));
         assert_eq!(Agent::try_from_str("opencode"), Some(Agent::OpenCode));
         assert_eq!(Agent::try_from_str("codex"), Some(Agent::Codex));
+        assert_eq!(Agent::try_from_str("gemini"), Some(Agent::Gemini));
     }
 
     #[test]
@@ -172,7 +185,7 @@ mod tests {
     fn test_all_command_names_are_canonical() {
         assert_eq!(
             Agent::all_command_names(),
-            vec!["claude", "opencode", "codex"]
+            vec!["claude", "opencode", "codex", "gemini"]
         );
     }
 
@@ -187,6 +200,7 @@ mod tests {
             Some(Agent::OpenCode)
         );
         assert_eq!(Agent::try_from_command_name("codex"), Some(Agent::Codex));
+        assert_eq!(Agent::try_from_command_name("gemini"), Some(Agent::Gemini));
     }
 
     #[test]
