@@ -164,8 +164,16 @@ fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::
                 Ok(()) => eprintln!("Changes committed."),
                 Err(e) => {
                     eprintln!("Failed to commit: {}", e);
+                    eprintln!("Skipping push step due to failed commit.");
                     return Ok(());
                 }
+            }
+
+            // Verify the commit actually landed before proceeding.
+            let post_status = git.get_status_porcelain(workspace_path)?;
+            if !post_status.trim().is_empty() {
+                eprintln!("Working tree still has changes after commit; skipping push step.");
+                return Ok(());
             }
         }
     }
