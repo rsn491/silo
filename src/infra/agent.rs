@@ -37,6 +37,11 @@ pub enum Agent {
     #[clap(name = "codex")]
     #[serde(rename = "codex")]
     Codex,
+    /// The Pi agent.
+    #[strum(serialize = "pi")]
+    #[clap(name = "pi")]
+    #[serde(rename = "pi")]
+    Pi,
 }
 
 impl Agent {
@@ -51,6 +56,7 @@ impl Agent {
             Agent::ClaudeCode => "claude",
             Agent::OpenCode => "opencode",
             Agent::Codex => "codex",
+            Agent::Pi => "pi",
         }
     }
 
@@ -89,7 +95,10 @@ mod tests {
 
     #[test]
     fn test_all_names_are_canonical() {
-        assert_eq!(Agent::all_names(), vec!["claude", "opencode", "codex"]);
+        assert_eq!(
+            Agent::all_names(),
+            vec!["claude", "opencode", "codex", "pi"]
+        );
     }
 
     #[test]
@@ -97,6 +106,7 @@ mod tests {
         assert_eq!(Agent::try_from_str("claude"), Some(Agent::ClaudeCode));
         assert_eq!(Agent::try_from_str("opencode"), Some(Agent::OpenCode));
         assert_eq!(Agent::try_from_str("codex"), Some(Agent::Codex));
+        assert_eq!(Agent::try_from_str("pi"), Some(Agent::Pi));
     }
 
     #[test]
@@ -108,7 +118,7 @@ mod tests {
     fn test_all_command_names_are_canonical() {
         assert_eq!(
             Agent::all_command_names(),
-            vec!["claude", "opencode", "codex"]
+            vec!["claude", "opencode", "codex", "pi"]
         );
     }
 
@@ -123,5 +133,6 @@ mod tests {
             Some(Agent::OpenCode)
         );
         assert_eq!(Agent::try_from_command_name("codex"), Some(Agent::Codex));
+        assert_eq!(Agent::try_from_command_name("pi"), Some(Agent::Pi));
     }
 }
