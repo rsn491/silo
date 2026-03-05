@@ -185,20 +185,16 @@ mod tests {
   123 /usr/bin/claude --some-args
   456 /usr/bin/opencode --other-args
   789 /usr/bin/other-process
-  101 /path/to/claude code
-  202 /usr/bin/droid --interactive";
+  101 /path/to/claude code";
 
-        let processes =
-            parse_ps_output_with_patterns(output, &["claude", "opencode", "droid"], 999);
-        assert_eq!(processes.len(), 4);
+        let processes = parse_ps_output_with_patterns(output, &["claude", "opencode"], 999);
+        assert_eq!(processes.len(), 3);
         assert_eq!(processes[0].0, 123);
         assert!(processes[0].1.contains("claude"));
         assert_eq!(processes[1].0, 456);
         assert!(processes[1].1.contains("opencode"));
         assert_eq!(processes[2].0, 101);
         assert!(processes[2].1.contains("claude"));
-        assert_eq!(processes[3].0, 202);
-        assert!(processes[3].1.contains("droid"));
     }
 
     #[test]
