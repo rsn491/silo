@@ -126,7 +126,9 @@ fn spawn_shell_in(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         .current_dir(path)
         .status()?;
 
-    if let Some(code) = status.code() && code != 0 {
+    if let Some(code) = status.code()
+        && code != 0
+    {
         std::process::exit(code);
     }
 
