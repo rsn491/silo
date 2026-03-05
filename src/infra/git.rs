@@ -120,6 +120,13 @@ pub trait GitOperations {
     /// Returns [`Ok(None)`] if in detached HEAD state, or [`GitError::CommandFailed`] on error.
     fn get_current_branch(&self, path: &Path) -> Result<Option<String>, GitError>;
 
+    /// Stages all changes in the working tree (`git add -A`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommitFailed`] if staging fails.
+    fn stage_all(&self, path: &Path) -> Result<(), GitError>;
+
     /// Stages all changes and creates a commit with the given message.
     ///
     /// # Errors
@@ -355,17 +362,22 @@ impl GitOperations for Git {
         }
     }
 
-    fn commit_all(&self, path: &Path, message: &str) -> Result<(), GitError> {
-        let add_output = Command::new("git")
+    fn stage_all(&self, path: &Path) -> Result<(), GitError> {
+        let output = Command::new("git")
             .args(["-C"])
             .arg(path)
             .args(["add", "-A"])
             .output()
             .map_err(|e| GitError::CommitFailed(e.to_string()))?;
-        if !add_output.status.success() {
-            let stderr = String::from_utf8_lossy(&add_output.stderr);
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(GitError::CommitFailed(stderr.to_string()));
         }
+        Ok(())
+    }
+
+    fn commit_all(&self, path: &Path, message: &str) -> Result<(), GitError> {
+        self.stage_all(path)?;
 
         let commit_output = Command::new("git")
             .args(["-C"])
