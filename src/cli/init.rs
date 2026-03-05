@@ -1,7 +1,8 @@
 //! Logic for the `init` command.
 
 use clap::Parser;
-use std::io::{self, IsTerminal, Write};
+use dialoguer::{Confirm, Select, theme::ColorfulTheme};
+use std::io::{self, IsTerminal};
 
 use crate::infra::agent::Agent;
 use crate::services::silo_config::SiloConfig;
@@ -100,75 +101,44 @@ impl InitCommand {
 }
 
 /// Prompts the user to choose a default AI agent.
-fn prompt_for_agent() -> Result<Option<Agent>, io::Error> {
-    let options = Agent::all_names().join(", ");
-    loop {
-        print!("Choose default agent ({}): ", options);
-        io::stdout().flush()?;
+fn prompt_for_agent() -> Result<Option<Agent>, Box<dyn std::error::Error>> {
+    let names = Agent::all_names();
+    let mut items: Vec<&str> = names.clone();
+    items.push("Skip");
 
-        let mut input = String::new();
-        let bytes = io::stdin().read_line(&mut input)?;
-        if bytes == 0 {
-            return Ok(None);
-        }
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Choose default agent")
+        .items(&items)
+        .default(0)
+        .interact_opt()?;
 
-        let value = input.trim();
-        if value.is_empty() {
-            continue;
-        }
-
-        if let Some(agent) = Agent::try_from_str(value) {
-            return Ok(Some(agent));
-        }
-
-        println!("Invalid agent '{}'. Valid options: {}", value, options);
+    match selection {
+        Some(i) if i < names.len() => Ok(Agent::try_from_str(names[i]).map(Some).unwrap_or(None)),
+        _ => Ok(None),
     }
 }
 
 /// Prompts the user to choose a default workspace type.
-fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, io::Error> {
-    loop {
-        print!("Choose default workspace type (worktree, checkout) [worktree]: ");
-        io::stdout().flush()?;
+fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, Box<dyn std::error::Error>> {
+    let items = &["worktree (default)", "checkout", "Skip"];
 
-        let mut input = String::new();
-        let bytes = io::stdin().read_line(&mut input)?;
-        if bytes == 0 {
-            return Ok(None);
-        }
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Choose default workspace type")
+        .items(items)
+        .default(0)
+        .interact_opt()?;
 
-        let value = input.trim();
-        if value.is_empty() {
-            return Ok(None);
-        }
-
-        match value {
-            "worktree" => return Ok(Some(WorkspaceKind::Worktree)),
-            "checkout" => return Ok(Some(WorkspaceKind::Checkout)),
-            _ => println!(
-                "Invalid workspace type '{}'. Valid options: worktree, checkout",
-                value
-            ),
-        }
+    match selection {
+        Some(0) => Ok(Some(WorkspaceKind::Worktree)),
+        Some(1) => Ok(Some(WorkspaceKind::Checkout)),
+        _ => Ok(None),
     }
 }
 
 /// Asks the user to confirm overwriting the existing `settings.json` file.
-fn confirm_overwrite() -> Result<bool, io::Error> {
-    loop {
-        print!("settings.json already exists. Overwrite? [y/N]: ");
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        let bytes = io::stdin().read_line(&mut input)?;
-        if bytes == 0 {
-            return Ok(false);
-        }
-
-        match input.trim().to_lowercase().as_str() {
-            "y" | "yes" => return Ok(true),
-            "" | "n" | "no" => return Ok(false),
-            _ => println!("Please answer 'y' or 'n'."),
-        }
-    }
+fn confirm_overwrite() -> Result<bool, Box<dyn std::error::Error>> {
+    Ok(Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("settings.json already exists. Overwrite?")
+        .default(false)
+        .interact()?)
 }
