@@ -119,10 +119,8 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                     "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
                     workspace_path.display()
                 );
-                if is_exec_replace {
-                    if let Err(e) = check_and_handle_exit_work(&workspace_path) {
-                        eprintln!("Warning: exit work check failed: {}", e);
-                    }
+                if is_exec_replace && let Err(e) = check_and_handle_exit_work(&workspace_path) {
+                    eprintln!("Warning: exit work check failed: {}", e);
                 }
                 Ok(())
             }
@@ -142,7 +140,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 ///
 /// Returns an error if a `dialoguer` interaction fails.
 fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let git = Git::default();
+    let git = Git;
 
     // --- Step 1: Check for uncommitted changes ---
     let status = git.get_status_porcelain(workspace_path)?;
@@ -174,9 +172,7 @@ fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::
 
     // --- Step 2: Check for unpushed commits ---
     // Use @{u} to compare against the configured upstream; treat errors as 0 (no upstream set).
-    let unpushed = git
-        .count_commits_ahead(workspace_path, "@{u}")
-        .unwrap_or(0);
+    let unpushed = git.count_commits_ahead(workspace_path, "@{u}").unwrap_or(0);
     if unpushed > 0 {
         eprintln!("\nYou have {} unpushed commit(s).", unpushed);
 
