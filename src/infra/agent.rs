@@ -4,6 +4,18 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use strum::{Display, EnumIter, EnumString, IntoStaticStr};
+use thiserror::Error;
+
+/// Errors that can occur when prompting an agent in headless mode.
+#[derive(Debug, Error)]
+pub enum PromptError {
+    /// The agent process could not be spawned.
+    #[error("failed to spawn agent: {0}")]
+    Io(#[from] std::io::Error),
+    /// The agent exited with a non-zero status.
+    #[error("agent prompt failed: {0}")]
+    Failed(String),
+}
 
 /// Represents the supported AI agents that can be launched.
 #[derive(
@@ -80,6 +92,34 @@ impl Agent {
     pub fn try_from_command_name(s: &str) -> Option<Self> {
         use strum::IntoEnumIterator;
         Agent::iter().find(|agent| agent.command_name() == s)
+    }
+
+    /// Runs the agent in headless (non-interactive) mode with the given prompt and returns the
+    /// captured stdout output.
+    ///
+    /// Each agent uses its own flag convention for headless/print mode:
+    /// - Claude Code: `--print`
+    /// - OpenCode: `-p`
+    /// - Codex: `-q`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
+    /// if the agent exits with a non-zero status.
+    pub fn prompt(&self, input: &str) -> Result<String, PromptError> {
+        let output = match self {
+            Agent::ClaudeCode => Command::new("claude").args(["--print", input]).output()?,
+            Agent::OpenCode => Command::new("opencode").args(["-p", input]).output()?,
+            Agent::Codex => Command::new("codex").args(["-q", input]).output()?,
+        };
+
+        if !output.status.success() {
+            return Err(PromptError::Failed(
+                String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            ));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 }
 

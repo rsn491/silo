@@ -11,6 +11,7 @@ use crate::infra::git::{Git, GitOperations};
 use crate::infra::terminal::Terminal;
 use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
 use crate::services::agent_workspace::WorkspaceFactory;
+use crate::services::git_branch_service::{BranchRenameOutcome, GitBranchService};
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
@@ -104,6 +105,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         eprintln!("Launching {:?} in {}...", agent, workspace_kind);
 
         let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
+        let agent_for_exit = agent.clone();
         let launch_result = AgentLauncher::new(
             workspace,
             self.terminal,
@@ -124,7 +126,8 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                         .ok()
                         .and_then(|s| s.exit_work)
                         .unwrap_or(true);
-                    if exit_work_enabled && let Err(e) = check_and_handle_exit_work(&workspace_path)
+                    if exit_work_enabled
+                        && let Err(e) = check_and_handle_exit_work(&workspace_path, &agent_for_exit)
                     {
                         eprintln!("Warning: exit work check failed: {}", e);
                     }
@@ -141,15 +144,33 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 }
 
 /// Checks for uncommitted or unpushed work after an agent exits and interactively
-/// offers to commit and/or push.
+/// offers to commit, rename the branch, and/or push.
 ///
 /// # Errors
 ///
 /// Returns an error if a `dialoguer` interaction fails.
-fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn check_and_handle_exit_work(
+    workspace_path: &Path,
+    agent: &Agent,
+) -> Result<(), Box<dyn std::error::Error>> {
     let git = Git;
 
-    // --- Step 1: Check for uncommitted changes ---
+    // --- Step 1: Rename auto-generated branch ---
+    eprintln!("\nRenaming branch...");
+    match GitBranchService::new(agent.clone()).try_rename(workspace_path, &git) {
+        BranchRenameOutcome::Skipped => {}
+        BranchRenameOutcome::Renamed(name) => {
+            eprintln!("Branch renamed to '{}'.", name);
+        }
+        BranchRenameOutcome::RenameFailed { suggested, error } => {
+            eprintln!("Failed to rename branch to '{}': {}", suggested, error);
+        }
+        BranchRenameOutcome::SuggestionFailed(e) => {
+            eprintln!("Warning: could not get branch name suggestion: {}", e);
+        }
+    }
+
+    // --- Step 2: Check for uncommitted changes ---
     let mut just_committed = false;
     let status = git.get_status_porcelain(workspace_path)?;
     if !status.trim().is_empty() {
@@ -191,7 +212,7 @@ fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::
         }
     }
 
-    // --- Step 2: Check for unpushed commits ---
+    // --- Step 3: Check for unpushed commits ---
     // Use @{u} to compare against the configured upstream; fall back to 1 if we just committed
     // but no upstream is configured (new branch with no remote tracking branch yet).
     let unpushed = git
