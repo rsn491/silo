@@ -4,7 +4,7 @@ use clap::Parser;
 use std::path::Path;
 use std::path::PathBuf;
 
-use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
+use dialoguer::{Input, Select, theme::ColorfulTheme};
 
 use crate::infra::agent::Agent;
 use crate::infra::git::{Git, GitOperations};
@@ -143,6 +143,7 @@ fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::
     let git = Git;
 
     // --- Step 1: Check for uncommitted changes ---
+    let mut just_committed = false;
     let status = git.get_status_porcelain(workspace_path)?;
     if !status.trim().is_empty() {
         eprintln!("\nUncommitted changes detected:");
@@ -150,10 +151,12 @@ fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::
             eprintln!("  {}", line);
         }
 
-        let should_commit = Confirm::with_theme(&ColorfulTheme::default())
+        let should_commit = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Commit these changes?")
-            .default(true)
-            .interact()?;
+            .items(["Yes", "No"])
+            .default(0)
+            .interact()?
+            == 0;
 
         if should_commit {
             let message: String = Input::with_theme(&ColorfulTheme::default())
@@ -161,7 +164,10 @@ fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::
                 .interact_text()?;
 
             match git.commit_all(workspace_path, &message) {
-                Ok(()) => eprintln!("Changes committed."),
+                Ok(()) => {
+                    eprintln!("Changes committed.");
+                    just_committed = true;
+                }
                 Err(e) => {
                     eprintln!("Failed to commit: {}", e);
                     eprintln!("Skipping push step due to failed commit.");
@@ -179,9 +185,13 @@ fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::
     }
 
     // --- Step 2: Check for unpushed commits ---
-    // Use @{u} to compare against the configured upstream; treat errors as 0 (no upstream set).
-    let unpushed = git.count_commits_ahead(workspace_path, "@{u}").unwrap_or(0);
-    if unpushed > 0 {
+    // Use @{u} to compare against the configured upstream; fall back to 1 if we just committed
+    // but no upstream is configured (new branch with no remote tracking branch yet).
+    let unpushed = git
+        .count_commits_ahead(workspace_path, "@{u}")
+        .unwrap_or(if just_committed { 1 } else { 0 });
+    if unpushed > 0 || just_committed {
+        let unpushed = unpushed.max(if just_committed { 1 } else { 0 });
         eprintln!("\nYou have {} unpushed commit(s).", unpushed);
 
         let options = &["Push", "Continue without pushing"];

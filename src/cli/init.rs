@@ -1,7 +1,7 @@
 //! Logic for the `init` command.
 
 use clap::Parser;
-use dialoguer::{Confirm, Select, theme::ColorfulTheme};
+use dialoguer::{Select, theme::ColorfulTheme};
 use std::io::{self, IsTerminal};
 
 use crate::infra::agent::Agent;
@@ -137,8 +137,10 @@ fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, Box<dyn std::err
 
 /// Asks the user to confirm overwriting the existing `settings.json` file.
 fn confirm_overwrite() -> Result<bool, Box<dyn std::error::Error>> {
-    Ok(Confirm::with_theme(&ColorfulTheme::default())
+    Ok(Select::with_theme(&ColorfulTheme::default())
         .with_prompt("settings.json already exists. Overwrite?")
-        .default(false)
-        .interact()?)
+        .items(["Yes", "No"])
+        .default(1)
+        .interact()?
+        == 0)
 }
