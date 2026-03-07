@@ -16,15 +16,17 @@ pub struct GitSuggestions {
 }
 
 /// Generates descriptive git suggestions by prompting an AI agent in headless mode.
-pub struct GitSuggestionsService {
+pub struct GitSuggestionsService<G: GitOperations> {
     /// Agent used to generate suggestions.
     agent: Agent,
+    /// Git operations used to retrieve the changes summary.
+    git: G,
 }
 
-impl GitSuggestionsService {
+impl<G: GitOperations> GitSuggestionsService<G> {
     /// Creates a new `GitSuggestionsService`.
-    pub fn new(agent: Agent) -> Self {
-        Self { agent }
+    pub fn new(agent: Agent, git: G) -> Self {
+        Self { agent, git }
     }
 
     /// Prompts the agent in headless mode with a summary of git changes and returns both a
@@ -33,12 +35,9 @@ impl GitSuggestionsService {
     /// Returns `Ok` with empty `Option` fields if there are no changes or the agent output cannot
     /// be parsed. Returns `Err` if the agent call itself fails or the changes summary cannot be
     /// retrieved.
-    pub fn suggest<G: GitOperations>(
-        &self,
-        workspace_path: &Path,
-        git: &G,
-    ) -> Result<GitSuggestions, String> {
-        let changes = git
+    pub fn suggest(&self, workspace_path: &Path) -> Result<GitSuggestions, String> {
+        let changes = self
+            .git
             .get_changes_summary(workspace_path)
             .map_err(|e| e.to_string())?;
 

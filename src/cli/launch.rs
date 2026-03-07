@@ -158,16 +158,18 @@ fn check_and_handle_exit_work(
 
     // --- Get AI suggestions once (branch name + commit message) ---
     eprintln!("\nGenerating suggestions...");
-    let suggestions = match GitSuggestionsService::new(agent.clone()).suggest(workspace_path, &git)
-    {
-        Ok(s) => Some(s),
-        Err(e) => {
-            eprintln!("Warning: could not get suggestions: {}", e);
-            None
-        }
-    };
+    let suggestions =
+        match GitSuggestionsService::new(agent.clone(), git.clone()).suggest(workspace_path) {
+            Ok(s) => Some(s),
+            Err(e) => {
+                eprintln!("Warning: could not get suggestions: {}", e);
+                None
+            }
+        };
     let branch_suggestion = suggestions.as_ref().and_then(|s| s.branch_name.as_deref());
-    let commit_suggestion = suggestions.as_ref().and_then(|s| s.commit_message.as_deref());
+    let commit_suggestion = suggestions
+        .as_ref()
+        .and_then(|s| s.commit_message.as_deref());
 
     // --- Step 1: Rename auto-generated branch ---
     match GitBranchService::new().try_rename(workspace_path, &git, branch_suggestion) {
