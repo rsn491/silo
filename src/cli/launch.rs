@@ -13,6 +13,7 @@ use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
 use crate::services::agent_workspace::WorkspaceFactory;
 use crate::services::git_branch_service::{BranchRenameOutcome, GitBranchService};
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
+use crate::services::git_suggestions_service::GitSuggestionsService;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
@@ -155,18 +156,27 @@ fn check_and_handle_exit_work(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let git = Git;
 
+    // --- Get AI suggestions once (branch name + commit message) ---
+    eprintln!("\nGenerating suggestions...");
+    let suggestions = match GitSuggestionsService::new(agent.clone()).suggest(workspace_path, &git)
+    {
+        Ok(s) => Some(s),
+        Err(e) => {
+            eprintln!("Warning: could not get suggestions: {}", e);
+            None
+        }
+    };
+    let branch_suggestion = suggestions.as_ref().and_then(|s| s.branch_name.as_deref());
+    let commit_suggestion = suggestions.as_ref().and_then(|s| s.commit_message.as_deref());
+
     // --- Step 1: Rename auto-generated branch ---
-    eprintln!("\nRenaming branch...");
-    match GitBranchService::new(agent.clone()).try_rename(workspace_path, &git) {
+    match GitBranchService::new().try_rename(workspace_path, &git, branch_suggestion) {
         BranchRenameOutcome::Skipped => {}
         BranchRenameOutcome::Renamed(name) => {
             eprintln!("Branch renamed to '{}'.", name);
         }
         BranchRenameOutcome::RenameFailed { suggested, error } => {
             eprintln!("Failed to rename branch to '{}': {}", suggested, error);
-        }
-        BranchRenameOutcome::SuggestionFailed(e) => {
-            eprintln!("Warning: could not get branch name suggestion: {}", e);
         }
     }
 
@@ -187,9 +197,12 @@ fn check_and_handle_exit_work(
             == 0;
 
         if should_commit {
-            let message: String = Input::with_theme(&ColorfulTheme::default())
-                .with_prompt("Commit message")
-                .interact_text()?;
+            let theme = ColorfulTheme::default();
+            let mut commit_input = Input::with_theme(&theme).with_prompt("Commit message");
+            if let Some(msg) = commit_suggestion {
+                commit_input = commit_input.with_initial_text(msg);
+            }
+            let message: String = commit_input.interact_text()?;
 
             match git.commit_all(workspace_path, &message) {
                 Ok(()) => {

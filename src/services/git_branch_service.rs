@@ -2,13 +2,11 @@
 
 use std::path::Path;
 
-use crate::infra::agent::Agent;
 use crate::infra::git::GitOperations;
-use crate::services::git_suggestions_service::GitSuggestionsService;
 
 /// Outcome of attempting to rename an auto-generated branch.
 pub enum BranchRenameOutcome {
-    /// The branch was not auto-generated, had no changes, or was otherwise skipped.
+    /// The branch was not auto-generated or no suggestion was provided.
     Skipped,
     /// The branch was successfully renamed to the given name.
     Renamed(String),
@@ -19,20 +17,15 @@ pub enum BranchRenameOutcome {
         /// The error message from the failed rename.
         error: String,
     },
-    /// The agent could not produce a suggestion; contains the error message.
-    SuggestionFailed(String),
 }
 
 /// Handles renaming of auto-generated git branches using AI-generated suggestions.
-pub struct GitBranchService {
-    /// Agent used to generate branch name suggestions.
-    agent: Agent,
-}
+pub struct GitBranchService;
 
 impl GitBranchService {
     /// Creates a new `GitBranchService`.
-    pub fn new(agent: Agent) -> Self {
-        Self { agent }
+    pub fn new() -> Self {
+        Self
     }
 
     /// Returns `true` if `branch` looks like an auto-generated silo branch.
@@ -48,14 +41,13 @@ impl GitBranchService {
         }
     }
 
-    /// Renames the branch at `workspace_path` to an AI-generated name if it is still auto-generated.
-    ///
-    /// Returns [`BranchRenameOutcome::Skipped`] if the branch has already been renamed, if no
-    /// changes are found, or if the current branch cannot be determined.
+    /// Renames the branch at `workspace_path` to `branch_suggestion` if the current branch is
+    /// still auto-generated. If `branch_suggestion` is `None`, the rename is skipped.
     pub fn try_rename<G: GitOperations>(
         &self,
         workspace_path: &Path,
         git: &G,
+        branch_suggestion: Option<&str>,
     ) -> BranchRenameOutcome {
         let Ok(Some(current_branch)) = git.get_current_branch(workspace_path) else {
             return BranchRenameOutcome::Skipped;
@@ -63,19 +55,14 @@ impl GitBranchService {
         if !Self::is_auto_generated_branch(&current_branch) {
             return BranchRenameOutcome::Skipped;
         }
-        let changes = match git.get_changes_summary(workspace_path) {
-            Ok(c) if !c.trim().is_empty() => c,
-            _ => return BranchRenameOutcome::Skipped,
+        let Some(suggested) = branch_suggestion else {
+            return BranchRenameOutcome::Skipped;
         };
-        match GitSuggestionsService::new(self.agent.clone()).suggest_branch_name(&changes) {
-            Err(e) => BranchRenameOutcome::SuggestionFailed(e),
-            Ok(None) => BranchRenameOutcome::Skipped,
-            Ok(Some(suggested)) => match git.rename_branch(workspace_path, &suggested) {
-                Ok(()) => BranchRenameOutcome::Renamed(suggested),
-                Err(e) => BranchRenameOutcome::RenameFailed {
-                    suggested,
-                    error: e.to_string(),
-                },
+        match git.rename_branch(workspace_path, suggested) {
+            Ok(()) => BranchRenameOutcome::Renamed(suggested.to_string()),
+            Err(e) => BranchRenameOutcome::RenameFailed {
+                suggested: suggested.to_string(),
+                error: e.to_string(),
             },
         }
     }
