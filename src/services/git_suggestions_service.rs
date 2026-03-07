@@ -2,6 +2,8 @@
 
 use std::path::Path;
 
+use serde::Deserialize;
+
 use crate::infra::agent::Agent;
 use crate::infra::git::GitOperations;
 
@@ -48,26 +50,35 @@ impl GitSuggestionsService {
         }
 
         let prompt = format!(
-            "Based on the following git changes, output ONLY these two lines and nothing else:\n\
-             BRANCH: <concise kebab-case branch name, 2-5 words, lowercase letters and hyphens only, no prefixes like feature/ or fix/>\n\
-             COMMIT: <concise commit message, imperative mood, single line>\n\n\
+            "Based on the following git changes, output ONLY a JSON object and nothing else:\n\
+             {{\"branch\": \"<concise kebab-case branch name, 2-5 words, lowercase letters and hyphens only, no prefixes like feature/ or fix/>\", \
+             \"commit\": \"<concise commit message, imperative mood, single line>\"}}\n\n\
              Git changes:\n{}\n",
             changes
         );
 
         let raw = self.agent.prompt(&prompt).map_err(|e| e.to_string())?;
 
-        let branch_name = raw
-            .lines()
-            .find(|l| l.trim_start().starts_with("BRANCH:"))
-            .and_then(|l| l.splitn(2, ':').nth(1))
+        #[derive(Deserialize)]
+        struct Output {
+            branch: Option<String>,
+            commit: Option<String>,
+        }
+
+        // Extract the first JSON object from the output, tolerating any surrounding text.
+        let json_str = extract_json_object(&raw).unwrap_or(raw.trim());
+        let parsed: Output = serde_json::from_str(json_str).unwrap_or(Output {
+            branch: None,
+            commit: None,
+        });
+
+        let branch_name = parsed
+            .branch
             .map(|s| sanitize_branch_name(s.trim()))
             .filter(|s| !s.is_empty());
 
-        let commit_message = raw
-            .lines()
-            .find(|l| l.trim_start().starts_with("COMMIT:"))
-            .and_then(|l| l.splitn(2, ':').nth(1))
+        let commit_message = parsed
+            .commit
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
 
@@ -75,6 +86,17 @@ impl GitSuggestionsService {
             branch_name,
             commit_message,
         })
+    }
+}
+
+/// Extracts the first `{...}` JSON object from `s`, returning a substring slice.
+fn extract_json_object(s: &str) -> Option<&str> {
+    let start = s.find('{')?;
+    let end = s.rfind('}')?;
+    if end >= start {
+        Some(&s[start..=end])
+    } else {
+        None
     }
 }
 
