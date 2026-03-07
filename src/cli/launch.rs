@@ -121,8 +121,14 @@ impl<G: GitOperations + Clone + 'static, T: Terminal> LaunchCommand<G, T> {
                     WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
                 }
             };
-            AgentLauncher::new(workspace, self.terminal, self.launch_mode, agent, args.branch)
-                .launch()
+            AgentLauncher::new(
+                workspace,
+                self.terminal,
+                self.launch_mode,
+                agent,
+                args.branch,
+            )
+            .launch()
         };
 
         match launch_result {
