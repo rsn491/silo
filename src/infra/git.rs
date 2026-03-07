@@ -152,6 +152,13 @@ pub trait GitOperations {
     /// Returns [`GitError::CommandFailed`] if a git command fails.
     fn get_changes_summary(&self, path: &Path) -> Result<String, GitError>;
 
+    /// Returns the subject line of the most recent commit at `path`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if `git log` fails.
+    fn get_latest_commit_message(&self, path: &Path) -> Result<String, GitError>;
+
     /// Renames the current branch at the specified path.
     ///
     /// # Errors
@@ -478,6 +485,22 @@ impl GitOperations for Git {
         }
 
         Ok(parts.join("\n\n"))
+    }
+
+    fn get_latest_commit_message(&self, path: &Path) -> Result<String, GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["log", "-1", "--format=%s"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.to_string()));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
     fn rename_branch(&self, path: &Path, new_name: &str) -> Result<(), GitError> {

@@ -13,7 +13,7 @@ use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
 use crate::services::agent_workspace::WorkspaceFactory;
 use crate::services::git_branch_service::{BranchRenameOutcome, GitBranchService};
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
-use crate::services::git_suggestions_service::GitSuggestionsService;
+use crate::services::git_suggestions_service::{GitSuggestionsService, sanitize_branch_name};
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
@@ -156,17 +156,46 @@ fn check_and_handle_exit_work(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let git = Git;
 
-    // --- Get AI suggestions once (branch name + commit message) ---
-    eprintln!("\nGenerating suggestions...");
-    let suggestions =
+    // --- Check for already-committed (unpushed) work ---
+    // Do this first so we can derive the branch name from the commit message when available,
+    // avoiding an unnecessary AI call.
+    let already_committed = git.count_commits_ahead(workspace_path, "@{u}").unwrap_or(0);
+
+    // --- Derive branch name suggestion ---
+    // If there are existing commits, use the first 50 chars of the latest commit message
+    // (sanitized to kebab-case) instead of asking the AI.
+    let branch_from_commit: Option<String> = if already_committed > 0 {
+        git.get_latest_commit_message(workspace_path)
+            .ok()
+            .filter(|m| !m.trim().is_empty())
+            .map(|m| sanitize_branch_name(&m.chars().take(50).collect::<String>()))
+            .filter(|s| !s.is_empty())
+    } else {
+        None
+    };
+
+    // --- Check for uncommitted changes ---
+    let status = git.get_status_porcelain(workspace_path)?;
+    let has_uncommitted = !status.trim().is_empty();
+
+    // --- Get AI suggestions (only when needed) ---
+    // Skip entirely if we already have a branch name from a commit and nothing is uncommitted.
+    let suggestions = if branch_from_commit.is_none() || has_uncommitted {
+        eprintln!("\nGenerating suggestions...");
         match GitSuggestionsService::new(agent.clone(), git.clone()).suggest(workspace_path) {
             Ok(s) => Some(s),
             Err(e) => {
                 eprintln!("Warning: could not get suggestions: {}", e);
                 None
             }
-        };
-    let branch_suggestion = suggestions.as_ref().and_then(|s| s.branch_name.as_deref());
+        }
+    } else {
+        None
+    };
+
+    let branch_suggestion = branch_from_commit
+        .as_deref()
+        .or_else(|| suggestions.as_ref().and_then(|s| s.branch_name.as_deref()));
     let commit_suggestion = suggestions
         .as_ref()
         .and_then(|s| s.commit_message.as_deref());
@@ -182,10 +211,9 @@ fn check_and_handle_exit_work(
         }
     }
 
-    // --- Step 2: Check for uncommitted changes ---
+    // --- Step 2: Commit uncommitted changes ---
     let mut just_committed = false;
-    let status = git.get_status_porcelain(workspace_path)?;
-    if !status.trim().is_empty() {
+    if has_uncommitted {
         eprintln!("\nUncommitted changes detected:");
         for line in status.lines() {
             eprintln!("  {}", line);
@@ -227,14 +255,10 @@ fn check_and_handle_exit_work(
         }
     }
 
-    // --- Step 3: Check for unpushed commits ---
-    // Use @{u} to compare against the configured upstream; fall back to 1 if we just committed
-    // but no upstream is configured (new branch with no remote tracking branch yet).
-    let unpushed = git
-        .count_commits_ahead(workspace_path, "@{u}")
-        .unwrap_or(if just_committed { 1 } else { 0 });
-    if unpushed > 0 || just_committed {
-        let unpushed = unpushed.max(if just_committed { 1 } else { 0 });
+    // --- Step 3: Push unpushed commits ---
+    // Re-use the count from the top; add 1 if we just committed (no upstream yet on new branch).
+    let unpushed = already_committed + usize::from(just_committed);
+    if unpushed > 0 {
         eprintln!("\nYou have {} unpushed commit(s).", unpushed);
 
         let options = &["Push", "Continue without pushing"];

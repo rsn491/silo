@@ -87,7 +87,7 @@ impl<G: GitOperations> GitSuggestionsService<G> {
 }
 
 /// Converts `s` to a sanitized kebab-case string safe for use as a git branch name.
-fn sanitize_branch_name(s: &str) -> String {
+pub fn sanitize_branch_name(s: &str) -> String {
     s.to_lowercase()
         .chars()
         .map(|c| {
