@@ -14,6 +14,7 @@ use crate::services::agent_workspace::WorkspaceFactory;
 use crate::services::git_branch_service::{BranchRenameOutcome, GitBranchService};
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
+use crate::services::reusing_workspace::ReusingWorkspaceFactory;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
 
@@ -43,6 +44,12 @@ pub struct LaunchArgs {
     /// Use Git worktrees for workspace isolation (overrides settings.json default).
     #[arg(long, group = "workspace")]
     pub worktree: bool,
+
+    /// Reuse an existing inactive workspace (no running agent, work committed and
+    /// pushed) instead of always creating a new one. Falls back to creating a new
+    /// workspace when no eligible workspace is found.
+    #[arg(long)]
+    pub reuse: bool,
 }
 
 /// A wrapper for the different workspace backend implementations.
@@ -76,13 +83,11 @@ pub struct LaunchCommand<G: GitOperations, T: Terminal> {
 impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
     /// Creates a new `LaunchCommand`.
     pub fn new(git: G, terminal: Option<T>, launch_mode: LaunchMode) -> Self {
-        Self {
-            git,
-            terminal,
-            launch_mode,
-        }
+        Self { git, terminal, launch_mode }
     }
+}
 
+impl<G: GitOperations + Clone + 'static, T: Terminal> LaunchCommand<G, T> {
     /// Executes the launch command.
     ///
     /// # Errors
@@ -90,30 +95,35 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
     /// Returns an error if workspace creation or agent launching fails.
     pub fn run(self, args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
         let agent = resolve_agent(args.agent);
-        let workspace = match resolve_workspace_type(args.checkout, args.worktree) {
-            WorkspaceKind::Checkout => {
-                WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(self.git))
-            }
-            WorkspaceKind::Worktree => {
-                WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
-            }
+        let kind = resolve_workspace_type(args.checkout, args.worktree);
+        let workspace_kind_name = match kind {
+            WorkspaceKind::Worktree => "worktree",
+            WorkspaceKind::Checkout => "checkout",
         };
-        let workspace_kind = match &workspace {
-            WorkspaceBackend::Worktree(_) => "worktree",
-            WorkspaceBackend::Checkout(_) => "checkout",
-        };
-        eprintln!("Launching {:?} in {}...", agent, workspace_kind);
+        eprintln!("Launching {:?} in {}...", agent, workspace_kind_name);
 
         let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
         let agent_for_exit = agent.clone();
-        let launch_result = AgentLauncher::new(
-            workspace,
-            self.terminal,
-            self.launch_mode,
-            agent,
-            args.branch,
-        )
-        .launch();
+        let launch_result = if args.reuse {
+            let inner: Box<dyn WorkspaceFactory> = match kind {
+                WorkspaceKind::Checkout => Box::new(GitCheckoutWorkspace::new(self.git.clone())),
+                WorkspaceKind::Worktree => Box::new(GitWorktreeWorkspace::new(self.git.clone())),
+            };
+            let workspace = ReusingWorkspaceFactory::new(self.git, inner);
+            AgentLauncher::new(workspace, self.terminal, self.launch_mode, agent, args.branch)
+                .launch()
+        } else {
+            let workspace = match kind {
+                WorkspaceKind::Checkout => {
+                    WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(self.git))
+                }
+                WorkspaceKind::Worktree => {
+                    WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
+                }
+            };
+            AgentLauncher::new(workspace, self.terminal, self.launch_mode, agent, args.branch)
+                .launch()
+        };
 
         match launch_result {
             Ok(workspace_path) => {
@@ -127,7 +137,8 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                         .and_then(|s| s.exit_work)
                         .unwrap_or(true);
                     if exit_work_enabled
-                        && let Err(e) = check_and_handle_exit_work(&workspace_path, &agent_for_exit)
+                        && let Err(e) =
+                            check_and_handle_exit_work(&workspace_path, &agent_for_exit)
                     {
                         eprintln!("Warning: exit work check failed: {}", e);
                     }

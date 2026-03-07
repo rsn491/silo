@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (LaunchMode::ExecReplace, None)
             };
 
-            LaunchCommand::new(Git, terminal, launch_mode).run(args)?;
+            LaunchCommand::new(Git, terminal, launch_mode, SystemProcess).run(args)?;
         }
         Commands::Ps => {
             PsCommand::new(AgentListService::new(
