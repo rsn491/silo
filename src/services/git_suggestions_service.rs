@@ -64,9 +64,7 @@ impl<G: GitOperations> GitSuggestionsService<G> {
             commit: Option<String>,
         }
 
-        // Extract the first JSON object from the output, tolerating any surrounding text.
-        let json_str = extract_json_object(&raw).unwrap_or(raw.trim());
-        let parsed: Output = serde_json::from_str(json_str).unwrap_or(Output {
+        let parsed: Output = serde_json::from_str(raw.trim()).unwrap_or(Output {
             branch: None,
             commit: None,
         });
@@ -85,17 +83,6 @@ impl<G: GitOperations> GitSuggestionsService<G> {
             branch_name,
             commit_message,
         })
-    }
-}
-
-/// Extracts the first `{...}` JSON object from `s`, returning a substring slice.
-fn extract_json_object(s: &str) -> Option<&str> {
-    let start = s.find('{')?;
-    let end = s.rfind('}')?;
-    if end >= start {
-        Some(&s[start..=end])
-    } else {
-        None
     }
 }
 
