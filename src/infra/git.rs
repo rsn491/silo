@@ -141,6 +141,23 @@ pub trait GitOperations {
     ///
     /// Returns [`GitError::PushFailed`] if the push fails.
     fn push(&self, path: &Path) -> Result<(), GitError>;
+
+    /// Returns a human-readable summary of the current git changes in the workspace.
+    ///
+    /// Includes uncommitted file list, diff stat against HEAD, and recent commits. Used to
+    /// provide context when generating a descriptive branch name.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if a git command fails.
+    fn get_changes_summary(&self, path: &Path) -> Result<String, GitError>;
+
+    /// Renames the current branch at the specified path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if `git branch -m` fails.
+    fn rename_branch(&self, path: &Path, new_name: &str) -> Result<(), GitError>;
 }
 
 /// A concrete implementation of [`GitOperations`] using the `git` command-line tool.
@@ -418,6 +435,64 @@ impl GitOperations for Git {
             let stderr = String::from_utf8_lossy(&output2.stderr);
             return Err(GitError::PushFailed(stderr.to_string()));
         }
+        Ok(())
+    }
+
+    fn get_changes_summary(&self, path: &Path) -> Result<String, GitError> {
+        let mut parts: Vec<String> = Vec::new();
+
+        // Uncommitted file list.
+        let status = self.get_status_porcelain(path)?;
+        if !status.trim().is_empty() {
+            parts.push(format!("Uncommitted changes:\n{}", status.trim()));
+        }
+
+        // Diff stat against HEAD (covers both staged and unstaged changes).
+        let diff_stat = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["diff", "--stat", "HEAD"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+        if diff_stat.status.success() {
+            let stat = String::from_utf8_lossy(&diff_stat.stdout)
+                .trim()
+                .to_string();
+            if !stat.is_empty() {
+                parts.push(format!("Diff stat:\n{}", stat));
+            }
+        }
+
+        // Recent commits for additional context.
+        let log = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["log", "--oneline", "-5"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+        if log.status.success() {
+            let log_text = String::from_utf8_lossy(&log.stdout).trim().to_string();
+            if !log_text.is_empty() {
+                parts.push(format!("Recent commits:\n{}", log_text));
+            }
+        }
+
+        Ok(parts.join("\n\n"))
+    }
+
+    fn rename_branch(&self, path: &Path, new_name: &str) -> Result<(), GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["branch", "-m", new_name])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.to_string()));
+        }
+
         Ok(())
     }
 }
