@@ -20,4 +20,10 @@ pub enum GitError {
     /// Failed to clone a repository.
     #[error("clone failed: {0}")]
     CloneFailed(String),
+    /// Failed to stage and commit changes.
+    #[error("commit failed: {0}")]
+    CommitFailed(String),
+    /// Failed to push to the remote.
+    #[error("push failed: {0}")]
+    PushFailed(String),
 }

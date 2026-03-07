@@ -1,10 +1,13 @@
 //! Logic for the `launch` command.
 
 use clap::Parser;
+use std::path::Path;
 use std::path::PathBuf;
 
+use dialoguer::{Input, Select, theme::ColorfulTheme};
+
 use crate::infra::agent::Agent;
-use crate::infra::git::GitOperations;
+use crate::infra::git::{Git, GitOperations};
 use crate::infra::terminal::Terminal;
 use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
 use crate::services::agent_workspace::WorkspaceFactory;
@@ -100,6 +103,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         };
         eprintln!("Launching {:?} in {}...", agent, workspace_kind);
 
+        let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
         let launch_result = AgentLauncher::new(
             workspace,
             self.terminal,
@@ -115,6 +119,9 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                     "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
                     workspace_path.display()
                 );
+                if is_exec_replace && let Err(e) = check_and_handle_exit_work(&workspace_path) {
+                    eprintln!("Warning: exit work check failed: {}", e);
+                }
                 Ok(())
             }
             Err(LaunchError::AgentExitError(status)) => {
@@ -124,6 +131,85 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
             Err(e) => Err(e.into()),
         }
     }
+}
+
+/// Checks for uncommitted or unpushed work after an agent exits and interactively
+/// offers to commit and/or push.
+///
+/// # Errors
+///
+/// Returns an error if a `dialoguer` interaction fails.
+fn check_and_handle_exit_work(workspace_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let git = Git;
+
+    // --- Step 1: Check for uncommitted changes ---
+    let mut just_committed = false;
+    let status = git.get_status_porcelain(workspace_path)?;
+    if !status.trim().is_empty() {
+        eprintln!("\nUncommitted changes detected:");
+        for line in status.lines() {
+            eprintln!("  {}", line);
+        }
+
+        let should_commit = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Commit these changes?")
+            .items(["Yes", "No"])
+            .default(0)
+            .interact()?
+            == 0;
+
+        if should_commit {
+            let message: String = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Commit message")
+                .interact_text()?;
+
+            match git.commit_all(workspace_path, &message) {
+                Ok(()) => {
+                    eprintln!("Changes committed.");
+                    just_committed = true;
+                }
+                Err(e) => {
+                    eprintln!("Failed to commit: {}", e);
+                    eprintln!("Skipping push step due to failed commit.");
+                    return Ok(());
+                }
+            }
+
+            // Verify the commit actually landed before proceeding.
+            let post_status = git.get_status_porcelain(workspace_path)?;
+            if !post_status.trim().is_empty() {
+                eprintln!("Working tree still has changes after commit; skipping push step.");
+                return Ok(());
+            }
+        }
+    }
+
+    // --- Step 2: Check for unpushed commits ---
+    // Use @{u} to compare against the configured upstream; fall back to 1 if we just committed
+    // but no upstream is configured (new branch with no remote tracking branch yet).
+    let unpushed = git
+        .count_commits_ahead(workspace_path, "@{u}")
+        .unwrap_or(if just_committed { 1 } else { 0 });
+    if unpushed > 0 || just_committed {
+        let unpushed = unpushed.max(if just_committed { 1 } else { 0 });
+        eprintln!("\nYou have {} unpushed commit(s).", unpushed);
+
+        let options = &["Push", "Continue without pushing"];
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("What would you like to do?")
+            .items(options)
+            .default(0)
+            .interact()?;
+
+        if selection == 0 {
+            match git.push(workspace_path) {
+                Ok(()) => eprintln!("Changes pushed."),
+                Err(e) => eprintln!("Push failed: {}", e),
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Determines the workspace type based on CLI arguments and persistent settings.

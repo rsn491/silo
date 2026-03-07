@@ -1,8 +1,8 @@
 //! Logic for the `cleanup` command.
 
 use clap::Parser;
+use dialoguer::{Select, theme::ColorfulTheme};
 use std::collections::HashSet;
-use std::io::{self, Write};
 
 use crate::infra::git::GitOperations;
 use crate::infra::process::ProcessOperations;
@@ -51,13 +51,14 @@ impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
     /// Returns an error if the cleanup operation fails or if user input cannot be read.
     pub fn run(&self, args: CleanupArgs) -> Result<(), Box<dyn std::error::Error>> {
         if !args.yes {
-            print!("This will remove all inactive worktrees. Continue? [y/N]: ");
-            io::stdout().flush()?;
+            let confirmed = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("This will remove all inactive worktrees. Continue?")
+                .items(["Yes", "No"])
+                .default(1)
+                .interact()?
+                == 0;
 
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-
-            if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+            if !confirmed {
                 println!("Cleanup cancelled.");
                 return Ok(());
             }
