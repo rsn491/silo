@@ -119,8 +119,15 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                     "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
                     workspace_path.display()
                 );
-                if is_exec_replace && let Err(e) = check_and_handle_exit_work(&workspace_path) {
-                    eprintln!("Warning: exit work check failed: {}", e);
+                if is_exec_replace {
+                    let exit_work_enabled = SiloConfig::load_settings()
+                        .ok()
+                        .and_then(|s| s.exit_work)
+                        .unwrap_or(true);
+                    if exit_work_enabled && let Err(e) = check_and_handle_exit_work(&workspace_path)
+                    {
+                        eprintln!("Warning: exit work check failed: {}", e);
+                    }
                 }
                 Ok(())
             }
