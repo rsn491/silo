@@ -32,6 +32,8 @@ pub struct SiloSettings {
     pub agent: Option<Agent>,
     /// The default workspace type (worktree or checkout).
     pub workspace_type: Option<WorkspaceKind>,
+    /// Whether to run commit+push prompts after agent exits. Defaults to true when absent.
+    pub exit_work: Option<bool>,
 }
 
 /// Configuration manager for the Silo application.
@@ -184,6 +186,7 @@ mod tests {
         let settings = SiloSettings {
             agent: Some(Agent::OpenCode),
             workspace_type: None,
+            exit_work: None,
         };
 
         SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
@@ -200,6 +203,7 @@ mod tests {
         let settings = SiloSettings {
             agent: None,
             workspace_type: Some(WorkspaceKind::Checkout),
+            exit_work: None,
         };
         SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
 
@@ -215,5 +219,31 @@ mod tests {
 
         let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
         assert!(settings.workspace_type.is_none());
+    }
+
+    #[test]
+    fn test_exit_work_round_trip() {
+        let dir = tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+
+        let settings = SiloSettings {
+            agent: None,
+            workspace_type: None,
+            exit_work: Some(false),
+        };
+        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
+
+        let loaded = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        assert_eq!(loaded.exit_work, Some(false));
+    }
+
+    #[test]
+    fn test_exit_work_default_is_absent() {
+        let dir = tempdir().unwrap();
+        let settings_path = dir.path().join("settings.json");
+        fs::write(&settings_path, r#"{"agent":"claude"}"#).unwrap();
+
+        let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        assert!(settings.exit_work.is_none());
     }
 }

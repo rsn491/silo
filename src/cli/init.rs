@@ -18,6 +18,10 @@ pub struct InitArgs {
     /// Default workspace type: worktree (default) or checkout.
     #[arg(long, value_name = "TYPE")]
     pub workspace_type: Option<WorkspaceKind>,
+
+    /// Enable commit+push prompts after agent exits (default: true).
+    #[arg(long, value_name = "BOOL")]
+    pub exit_work: Option<bool>,
 }
 
 /// Handler for the `init` command.
@@ -50,10 +54,15 @@ impl InitCommand {
         let is_tty = io::stdin().is_terminal();
         let settings_path = SiloConfig::get_settings_path()?;
 
-        if !is_tty && args.agent.is_none() && args.workspace_type.is_none() {
+        if !is_tty
+            && args.agent.is_none()
+            && args.workspace_type.is_none()
+            && args.exit_work.is_none()
+        {
             println!("Non-interactive init detected; skipping settings.json.");
             println!("Use `silo init --agent <name>` to set the default agent.");
             println!("Use `silo init --workspace-type <type>` to set the default workspace type.");
+            println!("Use `silo init --exit-work <bool>` to configure exit prompts.");
             return Ok(());
         }
 
@@ -76,7 +85,15 @@ impl InitCommand {
             None
         };
 
-        if agent.is_none() && workspace_type.is_none() {
+        let exit_work = if let Some(ew) = args.exit_work {
+            Some(ew)
+        } else if is_tty {
+            prompt_for_exit_work()?
+        } else {
+            None
+        };
+
+        if agent.is_none() && workspace_type.is_none() && exit_work.is_none() {
             println!("No settings selected; skipping settings.json.");
             return Ok(());
         }
@@ -91,6 +108,9 @@ impl InitCommand {
         }
         if let Some(wt) = workspace_type {
             settings.workspace_type = Some(wt);
+        }
+        if let Some(ew) = exit_work {
+            settings.exit_work = Some(ew);
         }
 
         SiloConfig::save_settings(&settings)?;
@@ -131,6 +151,23 @@ fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, Box<dyn std::err
     match selection {
         Some(0) => Ok(Some(WorkspaceKind::Worktree)),
         Some(1) => Ok(Some(WorkspaceKind::Checkout)),
+        _ => Ok(None),
+    }
+}
+
+/// Prompts the user to enable or disable commit+push prompts on agent exit.
+fn prompt_for_exit_work() -> Result<Option<bool>, Box<dyn std::error::Error>> {
+    let items = &["Yes (default)", "No", "Skip"];
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Enable commit+push prompts on agent exit?")
+        .items(items)
+        .default(0)
+        .interact_opt()?;
+
+    match selection {
+        Some(0) => Ok(Some(true)),
+        Some(1) => Ok(Some(false)),
         _ => Ok(None),
     }
 }
