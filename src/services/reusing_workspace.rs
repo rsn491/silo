@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use uuid::Uuid;
+
 use crate::infra::git::GitOperations;
 use crate::services::agent_launcher::LaunchError;
 use crate::services::agent_workspace::{WorkspaceFactory, WorkspaceManager};
@@ -62,6 +64,16 @@ where
 
             if let Some(ws) = inactive {
                 eprintln!("Reusing inactive workspace: {}", ws.path.display());
+                let branch_name = branch.clone().unwrap_or_else(|| {
+                    let project = self
+                        .git
+                        .get_project_name()
+                        .unwrap_or_else(|_| "workspace".to_string());
+                    format!("{}-{}", project, &Uuid::new_v4().to_string()[..8])
+                });
+                self.git
+                    .checkout_new_branch(&ws.path, &branch_name)
+                    .map_err(LaunchError::Git)?;
                 return Ok(ws.path);
             }
 
@@ -114,13 +126,20 @@ mod tests {
     #[derive(Clone)]
     struct FakeGit {
         specs: Arc<Vec<WsSpec>>,
+        /// Tracks `(path, branch)` calls to `checkout_new_branch`.
+        checkouts: Arc<Mutex<Vec<(PathBuf, String)>>>,
     }
 
     impl FakeGit {
         fn new(specs: Vec<WsSpec>) -> Self {
             Self {
                 specs: Arc::new(specs),
+                checkouts: Arc::new(Mutex::new(Vec::new())),
             }
+        }
+
+        fn checkouts(&self) -> Vec<(PathBuf, String)> {
+            self.checkouts.lock().unwrap().clone()
         }
     }
 
@@ -182,8 +201,12 @@ mod tests {
         fn clone_local(&self, _: &Path, _: &Path) -> Result<(), GitError> {
             unimplemented!()
         }
-        fn checkout_new_branch(&self, _: &Path, _: &str) -> Result<(), GitError> {
-            unimplemented!()
+        fn checkout_new_branch(&self, path: &Path, branch: &str) -> Result<(), GitError> {
+            self.checkouts
+                .lock()
+                .unwrap()
+                .push((path.to_path_buf(), branch.to_string()));
+            Ok(())
         }
         fn get_current_branch(&self, _: &Path) -> Result<Option<String>, GitError> {
             unimplemented!()
@@ -235,8 +258,10 @@ mod tests {
 
     // --- builder ---
 
-    fn factory(specs: Vec<WsSpec>, spy: SpyFactory) -> ReusingWorkspaceFactory<FakeGit> {
-        ReusingWorkspaceFactory::new(FakeGit::new(specs), Box::new(spy))
+    fn factory(specs: Vec<WsSpec>, spy: SpyFactory) -> (ReusingWorkspaceFactory<FakeGit>, FakeGit) {
+        let git = FakeGit::new(specs);
+        let f = ReusingWorkspaceFactory::new(git.clone(), Box::new(spy));
+        (f, git)
     }
 
     // --- tests ---
@@ -246,13 +271,37 @@ mod tests {
         let ws = spec(false, 0);
         let path = ws.path.clone();
         let spy = SpyFactory::new("/new");
-        let f = factory(vec![ws], spy.clone());
+        let (f, git) = factory(vec![ws], spy.clone());
 
         assert_eq!(f.create(None, true).unwrap(), path);
         assert!(
             !spy.was_called(),
             "inner factory must not be called when a workspace is reused"
         );
+        let checkouts = git.checkouts();
+        assert_eq!(checkouts.len(), 1, "a new branch must be checked out");
+        assert_eq!(checkouts[0].0, path);
+        assert!(
+            checkouts[0].1.starts_with("proj-"),
+            "branch name should start with project name"
+        );
+    }
+
+    #[test]
+    fn reuses_inactive_workspace_with_explicit_branch() {
+        let ws = spec(false, 0);
+        let path = ws.path.clone();
+        let spy = SpyFactory::new("/new");
+        let (f, git) = factory(vec![ws], spy.clone());
+
+        assert_eq!(
+            f.create(Some("my-feature".to_string()), true).unwrap(),
+            path
+        );
+        assert!(!spy.was_called());
+        let checkouts = git.checkouts();
+        assert_eq!(checkouts.len(), 1);
+        assert_eq!(checkouts[0].1, "my-feature");
     }
 
     #[test]
@@ -261,7 +310,7 @@ mod tests {
         // Simulate an active agent by placing a lock file.
         WorkspaceLock::new(&ws.path).try_acquire().unwrap();
         let spy = SpyFactory::new("/new");
-        let f = factory(vec![ws], spy.clone());
+        let (f, _git) = factory(vec![ws], spy.clone());
 
         assert_eq!(f.create(None, true).unwrap(), PathBuf::from("/new"));
         assert!(spy.was_called());
@@ -271,7 +320,7 @@ mod tests {
     fn skips_workspace_with_uncommitted_changes() {
         let ws = spec(true, 0);
         let spy = SpyFactory::new("/new");
-        let f = factory(vec![ws], spy.clone());
+        let (f, _git) = factory(vec![ws], spy.clone());
 
         assert_eq!(f.create(None, true).unwrap(), PathBuf::from("/new"));
         assert!(spy.was_called());
@@ -281,7 +330,7 @@ mod tests {
     fn skips_workspace_with_unpushed_commits() {
         let ws = spec(false, 3);
         let spy = SpyFactory::new("/new");
-        let f = factory(vec![ws], spy.clone());
+        let (f, _git) = factory(vec![ws], spy.clone());
 
         assert_eq!(f.create(None, true).unwrap(), PathBuf::from("/new"));
         assert!(spy.was_called());
@@ -290,7 +339,7 @@ mod tests {
     #[test]
     fn no_workspaces_falls_back_to_inner() {
         let spy = SpyFactory::new("/new");
-        let f = factory(vec![], spy.clone());
+        let (f, _git) = factory(vec![], spy.clone());
 
         assert_eq!(f.create(None, true).unwrap(), PathBuf::from("/new"));
         assert!(spy.was_called());
@@ -306,7 +355,7 @@ mod tests {
         let clean_path = clean.path.clone();
 
         let spy = SpyFactory::new("/new");
-        let f = factory(vec![ahead, dirty, clean, also_clean], spy.clone());
+        let (f, _git) = factory(vec![ahead, dirty, clean, also_clean], spy.clone());
 
         assert_eq!(f.create(None, true).unwrap(), clean_path);
         assert!(!spy.was_called());
@@ -323,7 +372,7 @@ mod tests {
         lock.release();
 
         let spy = SpyFactory::new("/new");
-        let f = factory(vec![ws], spy.clone());
+        let (f, _git) = factory(vec![ws], spy.clone());
 
         assert_eq!(f.create(None, true).unwrap(), path);
         assert!(!spy.was_called());
