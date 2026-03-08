@@ -5,11 +5,11 @@ use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{
+    DefaultTerminal,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    DefaultTerminal,
 };
 
 use crate::infra::agent::{Agent, AgentMode};
@@ -69,6 +69,10 @@ impl App {
 }
 
 /// Runs the interactive UI and returns the selected configuration.
+///
+/// # Errors
+///
+/// Returns an `io::Error` if the terminal interaction fails.
 pub fn run(default_agent: Agent) -> io::Result<Option<InteractiveResult>> {
     let mut terminal = ratatui::init();
     let mut app = App::new(default_agent);
@@ -88,52 +92,55 @@ pub fn run(default_agent: Agent) -> io::Result<Option<InteractiveResult>> {
     }
 }
 
+/// Main loop for the interactive application.
 fn run_app(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<bool> {
     loop {
         terminal.draw(|f| ui(f, app))?;
 
+        #[allow(clippy::collapsible_if)]
         if event::poll(Duration::from_millis(100))? {
-            match event::read()? {
-                Event::Key(key) => {
-                    if key.kind == KeyEventKind::Press {
-                        match key.code {
-                            KeyCode::Esc => {
-                                app.cancelled = true;
-                                return Ok(false);
-                            }
-                            KeyCode::Enter => {
-                                return Ok(true);
-                            }
-                            KeyCode::Tab => {
-                                app.toggle_mode();
-                            }
-                            // Handle Cmd+. (often represented as Alt+. or Ctrl+. depending on terminal)
-                            KeyCode::Char('.') if key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::ALT) => {
-                                app.next_agent();
-                            }
-                            // Fallback: allow Ctrl+A to cycle agent
-                            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                                app.next_agent();
-                            }
-                            KeyCode::Char(' ') => {
-                                app.prompt.push(' ');
-                            }
-                            KeyCode::Char(c) => {
-                                app.prompt.push(c);
-                            }
-                            KeyCode::Backspace => {
-                                app.prompt.pop();
-                            }
-                            _ => {}
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    match key.code {
+                        KeyCode::Esc => {
+                            app.cancelled = true;
+                            return Ok(false);
                         }
+                        KeyCode::Enter => {
+                            return Ok(true);
+                        }
+                        KeyCode::Tab => {
+                            app.toggle_mode();
+                        }
+                        // Handle Cmd+. (often represented as Alt+. or Ctrl+. depending on terminal)
+                        KeyCode::Char('.')
+                            if key.modifiers.contains(KeyModifiers::CONTROL)
+                                || key.modifiers.contains(KeyModifiers::ALT) =>
+                        {
+                            app.next_agent();
+                        }
+                        // Fallback: allow Ctrl+A to cycle agent
+                        KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            app.next_agent();
+                        }
+                        KeyCode::Char(' ') => {
+                            app.prompt.push(' ');
+                        }
+                        KeyCode::Char(c) => {
+                            app.prompt.push(c);
+                        }
+                        KeyCode::Backspace => {
+                            app.prompt.pop();
+                        }
+                        _ => {}
                     }
                 }
-                _ => {}
             }
         }
     }
 }
 
+/// Renders the user interface.
 fn ui(f: &mut ratatui::Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -149,18 +156,36 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
     let mode_str = format!(" Mode: {} ", app.mode);
 
     let status_line = Line::from(vec![
-        Span::styled(agent_str, Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            agent_str,
+            Style::default()
+                .bg(Color::Blue)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" "),
-        Span::styled(mode_str, Style::default().bg(Color::Magenta).fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            mode_str,
+            Style::default()
+                .bg(Color::Magenta)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
     ]);
 
-    let status_para = Paragraph::new(status_line)
-        .block(Block::default().borders(Borders::ALL).title(" Configuration "));
+    let status_para = Paragraph::new(status_line).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Configuration "),
+    );
     f.render_widget(status_para, chunks[0]);
 
     // Prompt area
-    let prompt_para = Paragraph::new(app.prompt.as_str())
-        .block(Block::default().borders(Borders::ALL).title(" Initial Prompt "));
+    let prompt_para = Paragraph::new(app.prompt.as_str()).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Initial Prompt "),
+    );
     f.render_widget(prompt_para, chunks[1]);
 
     // Help bar
