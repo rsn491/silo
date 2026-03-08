@@ -2,7 +2,6 @@
 
 use clap::Parser;
 use std::path::Path;
-use std::path::PathBuf;
 
 use dialoguer::{Input, Select, theme::ColorfulTheme};
 
@@ -10,7 +9,6 @@ use crate::infra::agent::Agent;
 use crate::infra::git::{Git, GitOperations};
 use crate::infra::terminal::Terminal;
 use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
-use crate::services::agent_workspace::WorkspaceFactory;
 use crate::services::git_branch_service::{BranchRenameOutcome, GitBranchService};
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
@@ -43,6 +41,12 @@ pub struct LaunchArgs {
     /// Use Git worktrees for workspace isolation (overrides settings.json default).
     #[arg(long, group = "workspace")]
     pub worktree: bool,
+
+    /// Reuse an existing inactive workspace (no running agent, work committed and
+    /// pushed) instead of always creating a new one. Falls back to creating a new
+    /// workspace when no eligible workspace is found.
+    #[arg(long)]
+    pub reuse: bool,
 }
 
 /// A wrapper for the different workspace backend implementations.
@@ -53,12 +57,15 @@ enum WorkspaceBackend<G: GitOperations> {
     Checkout(GitCheckoutWorkspace<G>),
 }
 
-impl<G: GitOperations> WorkspaceFactory for WorkspaceBackend<G> {
-    /// Delegates workspace creation to the underlying backend.
-    fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
+impl<G: GitOperations> crate::services::agent_workspace::WorkspaceFactory for WorkspaceBackend<G> {
+    fn create(
+        &self,
+        branch: Option<String>,
+        reuse: bool,
+    ) -> Result<std::path::PathBuf, LaunchError> {
         match self {
-            WorkspaceBackend::Worktree(w) => w.create(branch),
-            WorkspaceBackend::Checkout(w) => w.create(branch),
+            WorkspaceBackend::Worktree(w) => w.create(branch, reuse),
+            WorkspaceBackend::Checkout(w) => w.create(branch, reuse),
         }
     }
 }
@@ -82,7 +89,9 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
             launch_mode,
         }
     }
+}
 
+impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
     /// Executes the launch command.
     ///
     /// # Errors
@@ -90,7 +99,12 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
     /// Returns an error if workspace creation or agent launching fails.
     pub fn run(self, args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
         let agent = resolve_agent(args.agent);
-        let workspace = match resolve_workspace_type(args.checkout, args.worktree) {
+        let kind = resolve_workspace_type(args.checkout, args.worktree);
+        eprintln!("Launching {:?} in {}...", agent, kind);
+
+        let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
+        let agent_for_exit = agent.clone();
+        let workspace = match kind {
             WorkspaceKind::Checkout => {
                 WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(self.git))
             }
@@ -98,20 +112,13 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                 WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
             }
         };
-        let workspace_kind = match &workspace {
-            WorkspaceBackend::Worktree(_) => "worktree",
-            WorkspaceBackend::Checkout(_) => "checkout",
-        };
-        eprintln!("Launching {:?} in {}...", agent, workspace_kind);
-
-        let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
-        let agent_for_exit = agent.clone();
         let launch_result = AgentLauncher::new(
             workspace,
             self.terminal,
             self.launch_mode,
             agent,
             args.branch,
+            args.reuse,
         )
         .launch();
 

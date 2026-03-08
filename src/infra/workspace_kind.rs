@@ -1,23 +1,16 @@
-use std::fmt;
+use strum::Display;
 
 #[derive(
-    Debug, Clone, PartialEq, Default, clap::ValueEnum, serde::Deserialize, serde::Serialize,
+    Debug, Clone, PartialEq, Default, Display, clap::ValueEnum, serde::Deserialize, serde::Serialize,
 )]
 #[serde(rename_all = "lowercase")]
 /// Identifies the type of workspace.
 pub enum WorkspaceKind {
     #[default]
     /// A Git worktree attached to the main repository.
+    #[strum(to_string = "worktree")]
     Worktree,
     /// A full checkout created via local clone.
+    #[strum(to_string = "checkout")]
     Checkout,
-}
-
-impl fmt::Display for WorkspaceKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            WorkspaceKind::Worktree => write!(f, "worktree"),
-            WorkspaceKind::Checkout => write!(f, "checkout"),
-        }
-    }
 }

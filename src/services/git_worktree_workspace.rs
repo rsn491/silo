@@ -9,6 +9,7 @@ use super::agent_launcher::LaunchError;
 use super::agent_workspace::{
     CleanupError, CleanupResult, FailedWorkspace, GitStatus, RemovedWorkspace, SkippedWorkspace,
     StatusError, WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
+    reuse_inactive_workspace,
 };
 use super::silo_config::SiloConfig;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
@@ -88,7 +89,14 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
     /// # Errors
     ///
     /// Returns [`LaunchError`] if worktree creation fails.
-    fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
+    fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError> {
+        if reuse {
+            let all = self.get_all().map_err(LaunchError::Git)?;
+            if let Some(path) = reuse_inactive_workspace(&self.git, all, branch.clone())? {
+                return Ok(path);
+            }
+        }
+
         let worktree_path = self.generate_worktree_path()?;
         let worktree_name = worktree_path
             .file_name()
@@ -215,7 +223,7 @@ mod tests {
         mock_git.expect_create_worktree().returning(|_, _| Ok(()));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
-        let result = workspace.create(None);
+        let result = workspace.create(None, false);
 
         assert!(result.is_ok());
         let path = result.unwrap();

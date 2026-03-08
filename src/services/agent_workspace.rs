@@ -9,6 +9,8 @@ use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 use crate::services::agent_launcher::LaunchError;
 use crate::services::workspace_kind::WorkspaceKind;
+use crate::services::workspace_lock::WorkspaceLock;
+use uuid::Uuid;
 
 /// Detailed Git status for a workspace.
 #[derive(Debug, Clone, PartialEq)]
@@ -110,6 +112,35 @@ pub fn commits_ahead_of_remote<G: GitOperations>(
     if ahead > 0 { Some(ahead) } else { None }
 }
 
+/// Attempts to reuse an inactive workspace by checking out a new branch.
+///
+/// Returns `Ok(Some(path))` when a reusable workspace is found and updated,
+/// `Ok(None)` when no suitable workspace exists, or a `LaunchError` when
+/// Git operations fail.
+pub fn reuse_inactive_workspace<G: GitOperations>(
+    git: &G,
+    workspaces: Vec<GitWorkspaceInfo>,
+    branch: Option<String>,
+) -> Result<Option<PathBuf>, LaunchError> {
+    let inactive = workspaces.into_iter().find(|ws| {
+        !WorkspaceLock::is_locked(&ws.path) && !ws.has_uncommitted_changes && ws.commits_ahead == 0
+    });
+
+    if let Some(ws) = inactive {
+        let branch_name = branch.unwrap_or_else(|| {
+            let project = git
+                .get_project_name()
+                .unwrap_or_else(|_| "workspace".to_string());
+            format!("{}-{}", project, &Uuid::new_v4().to_string()[..8])
+        });
+        git.checkout_new_branch(&ws.path, &branch_name)
+            .map_err(LaunchError::Git)?;
+        return Ok(Some(ws.path));
+    }
+
+    Ok(None)
+}
+
 /// Trait for creating new workspaces.
 pub trait WorkspaceFactory {
     /// Creates a new workspace and returns its path.
@@ -121,7 +152,7 @@ pub trait WorkspaceFactory {
     /// # Errors
     ///
     /// Returns [`LaunchError`] if workspace creation fails.
-    fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError>;
+    fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError>;
 }
 
 /// Trait for managing and inspecting existing workspaces.

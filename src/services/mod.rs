@@ -10,3 +10,4 @@ pub mod git_worktree_workspace;
 pub mod global_workspace;
 pub mod silo_config;
 pub mod workspace_kind;
+pub mod workspace_lock;

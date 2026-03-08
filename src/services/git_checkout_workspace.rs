@@ -8,7 +8,7 @@ use uuid::Uuid;
 use super::agent_launcher::LaunchError;
 use super::agent_workspace::{
     CleanupError, CleanupResult, FailedWorkspace, RemovedWorkspace, SkippedWorkspace,
-    WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
+    WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote, reuse_inactive_workspace,
 };
 use super::silo_config::SiloConfig;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
@@ -51,7 +51,14 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
     /// # Errors
     ///
     /// Returns [`LaunchError`] if cloning or checking out the branch fails.
-    fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
+    fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError> {
+        if reuse {
+            let all = self.get_all().map_err(LaunchError::Git)?;
+            if let Some(path) = reuse_inactive_workspace(&self.git, all, branch.clone())? {
+                return Ok(path);
+            }
+        }
+
         let repo_root = self.git.get_repo_root()?;
         let dest = self.generate_checkout_path()?;
         let dest_name = dest
@@ -228,7 +235,7 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let workspace = GitCheckoutWorkspace::new(mock_git);
-        let result = workspace.create(None);
+        let result = workspace.create(None, false);
 
         assert!(result.is_ok());
         let path = result.unwrap();
@@ -250,7 +257,7 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         let workspace = GitCheckoutWorkspace::new(mock_git);
-        let result = workspace.create(Some("my-feature".to_string()));
+        let result = workspace.create(Some("my-feature".to_string()), false);
 
         assert!(result.is_ok());
         let path = result.unwrap();
