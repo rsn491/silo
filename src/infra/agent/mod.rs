@@ -27,7 +27,7 @@ pub enum PromptError {
 }
 
 /// Behavior that every agent variant must implement.
-pub trait AgentBehavior {
+pub trait AgentCommand {
     /// Returns the executable name used to invoke this agent.
     fn command_name(&self) -> &'static str;
 
@@ -75,8 +75,8 @@ pub enum Agent {
 }
 
 impl Agent {
-    /// Returns the per-variant struct that implements [`AgentBehavior`].
-    fn behavior(&self) -> &dyn AgentBehavior {
+    /// Returns the per-variant struct that implements [`AgentCommand`].
+    fn behavior(&self) -> &dyn AgentCommand {
         match self {
             Agent::ClaudeCode => &ClaudeCodeAgent,
             Agent::OpenCode => &OpenCodeAgent,
@@ -139,7 +139,7 @@ impl Agent {
     }
 }
 
-impl AgentBehavior for Agent {
+impl AgentCommand for Agent {
     fn command_name(&self) -> &'static str {
         self.behavior().command_name()
     }

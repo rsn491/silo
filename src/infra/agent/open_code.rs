@@ -2,12 +2,12 @@
 
 use std::process::Command;
 
-use super::{AgentBehavior, PromptError};
+use super::{AgentCommand, PromptError};
 
-/// Concrete implementation of [`AgentBehavior`] for OpenCode.
+/// Concrete implementation of [`AgentCommand`] for OpenCode.
 pub(super) struct OpenCodeAgent;
 
-impl AgentBehavior for OpenCodeAgent {
+impl AgentCommand for OpenCodeAgent {
     fn command_name(&self) -> &'static str {
         "opencode"
     }

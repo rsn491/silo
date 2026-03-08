@@ -2,12 +2,12 @@
 
 use std::process::Command;
 
-use super::{AgentBehavior, PromptError};
+use super::{AgentCommand, PromptError};
 
-/// Concrete implementation of [`AgentBehavior`] for Claude Code.
+/// Concrete implementation of [`AgentCommand`] for Claude Code.
 pub(super) struct ClaudeCodeAgent;
 
-impl AgentBehavior for ClaudeCodeAgent {
+impl AgentCommand for ClaudeCodeAgent {
     fn command_name(&self) -> &'static str {
         "claude"
     }
