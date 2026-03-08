@@ -1,6 +1,6 @@
 use std::fs;
-use std::process::{Command, Stdio};
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
 use tempfile::TempDir;
@@ -52,7 +52,14 @@ fn test_launch_and_ps() {
         .args(["launch", "--agent", "claude"])
         .current_dir(&repo_dir)
         .env("HOME", &home_dir)
-        .env("PATH", format!("{}:{}", bin_dir.to_str().unwrap(), std::env::var("PATH").unwrap()))
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                bin_dir.to_str().unwrap(),
+                std::env::var("PATH").unwrap()
+            ),
+        )
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -90,4 +97,5 @@ fn test_launch_and_ps() {
 
     // Cleanup: kill the child process if it's still running
     let _ = child.kill();
+    let _ = child.wait();
 }
