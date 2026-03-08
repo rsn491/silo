@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use super::{AgentCommand, PromptError};
+use super::{AgentCommand, AgentMode, PromptError};
 
 /// Concrete implementation of [`AgentCommand`] for Claude Code.
 pub(super) struct ClaudeCodeAgent;
@@ -12,8 +12,17 @@ impl AgentCommand for ClaudeCodeAgent {
         "claude"
     }
 
-    fn prompt(&self, message: &str) -> Result<String, PromptError> {
-        let output = Command::new("claude").args(["--print", message]).output()?;
+    fn prompt(&self, message: &str, mode: Option<AgentMode>) -> Result<String, PromptError> {
+        let mut args = vec!["--print"];
+        if let Some(mode) = mode {
+            args.push(match mode {
+                AgentMode::Plan => "--plan",
+                AgentMode::Code => "--code",
+            });
+        }
+        args.push(message);
+
+        let output = Command::new("claude").args(args).output()?;
         if !output.status.success() {
             return Err(PromptError::Failed(
                 String::from_utf8_lossy(&output.stderr).trim().to_string(),

@@ -8,6 +8,7 @@ use clap::{Parser, Subcommand};
 use cli::cleanup::{CleanupArgs, CleanupCommand};
 use cli::completions::{CompletionsArgs, CompletionsCommand};
 use cli::init::{InitArgs, InitCommand};
+use cli::interactive;
 use cli::launch::{LaunchArgs, LaunchCommand};
 use cli::ps::PsCommand;
 use cli::status::{StatusArgs, StatusCommand};
@@ -44,6 +45,8 @@ pub enum Commands {
     Status(StatusArgs),
     /// Generate shell completion scripts.
     Completions(CompletionsArgs),
+    /// Start interactive mode to launch an agent.
+    Interactive,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -89,6 +92,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             StatusCommand::new(GlobalWorkspaceManager::with_git(Git)).run(args)?;
         }
         Commands::Completions(args) => CompletionsCommand::new().run(args)?,
+        Commands::Interactive => {
+            let default_agent = SiloConfig::load_settings()
+                .ok()
+                .and_then(|s| s.agent)
+                .unwrap_or_default();
+
+            if let Some(result) = interactive::run(default_agent)? {
+                let args = LaunchArgs {
+                    branch: None,
+                    tab: false,
+                    split_pane: false,
+                    agent: Some(result.agent),
+                    checkout: false,
+                    worktree: false,
+                    prompt: Some(result.prompt),
+                    mode: Some(result.mode),
+                };
+                LaunchCommand::new(Git, None::<terminal::TerminalImpl>, LaunchMode::ExecReplace)
+                    .run(args)?;
+            }
+        }
     }
 
     Ok(())

@@ -32,7 +32,7 @@ impl GitSuggestionsService {
             changes
         );
 
-        let raw = self.agent.prompt(&prompt).map_err(|e| e.to_string())?;
+        let raw = self.agent.prompt(&prompt, None).map_err(|e| e.to_string())?;
 
         // Take only the first non-empty line and sanitize to kebab-case.
         let sanitized: String = raw

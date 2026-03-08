@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use dialoguer::{Input, Select, theme::ColorfulTheme};
 
-use crate::infra::agent::Agent;
+use crate::infra::agent::{Agent, AgentMode};
 use crate::infra::git::{Git, GitOperations};
 use crate::infra::terminal::Terminal;
 use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
@@ -43,6 +43,14 @@ pub struct LaunchArgs {
     /// Use Git worktrees for workspace isolation (overrides settings.json default).
     #[arg(long, group = "workspace")]
     pub worktree: bool,
+
+    /// Initial prompt for the agent.
+    #[arg(long)]
+    pub prompt: Option<String>,
+
+    /// Mode for the agent (plan or code).
+    #[arg(long)]
+    pub mode: Option<AgentMode>,
 }
 
 /// A wrapper for the different workspace backend implementations.
@@ -106,14 +114,19 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 
         let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
         let agent_for_exit = agent.clone();
-        let launch_result = AgentLauncher::new(
+        let mut launcher = AgentLauncher::new(
             workspace,
             self.terminal,
             self.launch_mode,
             agent,
             args.branch,
-        )
-        .launch();
+        );
+
+        if let Some(prompt) = args.prompt {
+            launcher = launcher.with_prompt(prompt, args.mode.unwrap_or_default());
+        }
+
+        let launch_result = launcher.launch();
 
         match launch_result {
             Ok(workspace_path) => {

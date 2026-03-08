@@ -1,6 +1,6 @@
 //! Logic for launching AI agents in isolated workspaces.
 
-use crate::infra::agent::Agent;
+use crate::infra::agent::{Agent, AgentMode};
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::{Terminal, TerminalError};
 use crate::services::agent_workspace::WorkspaceFactory;
@@ -53,6 +53,10 @@ where
     agent: Agent,
     /// Optional branch name for the new workspace.
     branch: Option<String>,
+    /// Optional initial prompt for the agent.
+    prompt: Option<String>,
+    /// Optional mode for the agent.
+    mode: Option<AgentMode>,
 }
 
 impl<W, T> AgentLauncher<W, T>
@@ -74,15 +78,34 @@ where
             launch_mode,
             agent,
             branch,
+            prompt: None,
+            mode: None,
         }
+    }
+
+    /// Sets the initial prompt and mode for the agent.
+    pub fn with_prompt(mut self, prompt: String, mode: AgentMode) -> Self {
+        self.prompt = Some(prompt);
+        self.mode = Some(mode);
+        self
     }
 
     /// Internal method to launch the agent in the specified workspace directory.
     fn launch_in_workspace(&self, workspace_path: &std::path::Path) -> Result<(), LaunchError> {
-        let status = self
-            .agent
-            .process()
-            .current_dir(workspace_path)
+        let mut command = self.agent.process();
+        command.current_dir(workspace_path);
+
+        if let Some(prompt) = &self.prompt {
+            if let Some(mode) = self.mode {
+                command.arg(match mode {
+                    AgentMode::Plan => "--plan",
+                    AgentMode::Code => "--code",
+                });
+            }
+            command.arg(prompt);
+        }
+
+        let status = command
             .status()
             .map_err(|e| LaunchError::AgentSpawnError(e.to_string()))?;
 

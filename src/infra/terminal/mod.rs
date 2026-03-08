@@ -10,6 +10,9 @@ pub use terminal_error::TerminalError;
 
 pub use iterm2::ITerm2;
 
+/// Implementation of the `Terminal` trait for detected terminal emulators.
+pub type TerminalImpl = ITerm2;
+
 /// Supported terminal emulators.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TerminalKind {

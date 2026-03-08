@@ -2,7 +2,10 @@
 
 mod claude_code;
 mod codex;
+mod mode;
 mod open_code;
+
+pub use mode::AgentMode;
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
@@ -35,7 +38,7 @@ pub trait AgentCommand {
     ///
     /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
     /// if the agent exits with a non-zero status.
-    fn prompt(&self, message: &str) -> Result<String, PromptError>;
+    fn prompt(&self, message: &str, mode: Option<AgentMode>) -> Result<String, PromptError>;
 }
 
 /// Represents the supported AI agents that can be launched.
@@ -99,8 +102,8 @@ impl Agent {
     ///
     /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
     /// if the agent exits with a non-zero status.
-    pub fn prompt(&self, message: &str) -> Result<String, PromptError> {
-        self.command().prompt(message)
+    pub fn prompt(&self, message: &str, mode: Option<AgentMode>) -> Result<String, PromptError> {
+        self.command().prompt(message, mode)
     }
 
     /// Returns a [`Command`] configured to launch this agent.
@@ -142,8 +145,8 @@ impl AgentCommand for Agent {
         self.command().command_name()
     }
 
-    fn prompt(&self, message: &str) -> Result<String, PromptError> {
-        self.command().prompt(message)
+    fn prompt(&self, message: &str, mode: Option<AgentMode>) -> Result<String, PromptError> {
+        self.command().prompt(message, mode)
     }
 }
 
