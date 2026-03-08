@@ -2,7 +2,6 @@
 
 use clap::Parser;
 use std::path::Path;
-use std::path::PathBuf;
 
 use dialoguer::{Input, Select, theme::ColorfulTheme};
 
@@ -52,23 +51,6 @@ pub struct LaunchArgs {
     pub reuse: bool,
 }
 
-/// A wrapper for the different workspace backend implementations.
-enum WorkspaceBackend<G: GitOperations> {
-    /// Use Git worktrees.
-    Worktree(GitWorktreeWorkspace<G>),
-    /// Use local Git clones.
-    Checkout(GitCheckoutWorkspace<G>),
-}
-
-impl<G: GitOperations> WorkspaceFactory for WorkspaceBackend<G> {
-    /// Delegates workspace creation to the underlying backend.
-    fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
-        match self {
-            WorkspaceBackend::Worktree(w) => w.create(branch),
-            WorkspaceBackend::Checkout(w) => w.create(branch),
-        }
-    }
-}
 
 /// Handler for the `launch` command.
 pub struct LaunchCommand<G: GitOperations, T: Terminal> {
@@ -100,46 +82,24 @@ impl<G: GitOperations + Clone + 'static, T: Terminal> LaunchCommand<G, T> {
     pub fn run(self, args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
         let agent = resolve_agent(args.agent);
         let kind = resolve_workspace_type(args.checkout, args.worktree);
-        let workspace_kind_name = match kind {
-            WorkspaceKind::Worktree => "worktree",
-            WorkspaceKind::Checkout => "checkout",
-        };
-        eprintln!("Launching {:?} in {}...", agent, workspace_kind_name);
+        eprintln!("Launching {:?} in {}...", agent, kind);
 
         let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
         let agent_for_exit = agent.clone();
-        let launch_result = if args.reuse {
-            let inner: Box<dyn WorkspaceFactory> = match kind {
-                WorkspaceKind::Checkout => Box::new(GitCheckoutWorkspace::new(self.git.clone())),
-                WorkspaceKind::Worktree => Box::new(GitWorktreeWorkspace::new(self.git.clone())),
-            };
-            let workspace = ReusingWorkspaceFactory::new(self.git, inner);
-            AgentLauncher::new(
-                workspace,
-                self.terminal,
-                self.launch_mode,
-                agent,
-                args.branch,
-            )
-            .launch()
-        } else {
-            let workspace = match kind {
-                WorkspaceKind::Checkout => {
-                    WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(self.git))
-                }
-                WorkspaceKind::Worktree => {
-                    WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
-                }
-            };
-            AgentLauncher::new(
-                workspace,
-                self.terminal,
-                self.launch_mode,
-                agent,
-                args.branch,
-            )
-            .launch()
+        let inner: Box<dyn WorkspaceFactory> = match kind {
+            WorkspaceKind::Checkout => Box::new(GitCheckoutWorkspace::new(self.git.clone())),
+            WorkspaceKind::Worktree => Box::new(GitWorktreeWorkspace::new(self.git.clone())),
         };
+        let workspace = ReusingWorkspaceFactory::new(self.git, inner);
+        let launch_result = AgentLauncher::new(
+            workspace,
+            self.terminal,
+            self.launch_mode,
+            agent,
+            args.branch,
+            args.reuse,
+        )
+        .launch();
 
         match launch_result {
             Ok(workspace_path) => {

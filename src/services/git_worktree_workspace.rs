@@ -88,7 +88,7 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
     /// # Errors
     ///
     /// Returns [`LaunchError`] if worktree creation fails.
-    fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
+    fn create(&self, branch: Option<String>, _reuse: bool) -> Result<PathBuf, LaunchError> {
         let worktree_path = self.generate_worktree_path()?;
         let worktree_name = worktree_path
             .file_name()
@@ -215,7 +215,7 @@ mod tests {
         mock_git.expect_create_worktree().returning(|_, _| Ok(()));
 
         let workspace = GitWorktreeWorkspace::new(mock_git);
-        let result = workspace.create(None);
+        let result = workspace.create(None, false);
 
         assert!(result.is_ok());
         let path = result.unwrap();

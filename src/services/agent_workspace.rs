@@ -121,7 +121,7 @@ pub trait WorkspaceFactory {
     /// # Errors
     ///
     /// Returns [`LaunchError`] if workspace creation fails.
-    fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError>;
+    fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError>;
 }
 
 /// Trait for managing and inspecting existing workspaces.

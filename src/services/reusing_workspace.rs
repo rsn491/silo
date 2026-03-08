@@ -49,23 +49,26 @@ where
     ///
     /// Returns [`LaunchError`] if workspace listing or fallback workspace
     /// creation fails.
-    fn create(&self, branch: Option<String>) -> Result<PathBuf, LaunchError> {
-        let workspace_manager = GlobalWorkspaceManager::with_git(self.git.clone());
-        let all = workspace_manager.get_all().map_err(LaunchError::Git)?;
+    fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError> {
+        if reuse {
+            let workspace_manager = GlobalWorkspaceManager::with_git(self.git.clone());
+            let all = workspace_manager.get_all().map_err(LaunchError::Git)?;
 
-        let inactive = all.into_iter().find(|ws| {
-            !WorkspaceLock::is_locked(&ws.path)
-                && !ws.has_uncommitted_changes
-                && ws.commits_ahead == 0
-        });
+            let inactive = all.into_iter().find(|ws| {
+                !WorkspaceLock::is_locked(&ws.path)
+                    && !ws.has_uncommitted_changes
+                    && ws.commits_ahead == 0
+            });
 
-        if let Some(ws) = inactive {
-            eprintln!("Reusing inactive workspace: {}", ws.path.display());
-            return Ok(ws.path);
+            if let Some(ws) = inactive {
+                eprintln!("Reusing inactive workspace: {}", ws.path.display());
+                return Ok(ws.path);
+            }
+
+            eprintln!("No inactive workspace found, creating new workspace...");
         }
 
-        eprintln!("No inactive workspace found, creating new workspace...");
-        self.inner.create(branch)
+        self.inner.create(branch, reuse)
     }
 }
 
@@ -224,7 +227,7 @@ mod tests {
     }
 
     impl WorkspaceFactory for SpyFactory {
-        fn create(&self, _branch: Option<String>) -> Result<PathBuf, LaunchError> {
+        fn create(&self, _branch: Option<String>, _reuse: bool) -> Result<PathBuf, LaunchError> {
             *self.called.lock().unwrap() = true;
             Ok(self.path.clone())
         }
@@ -245,7 +248,7 @@ mod tests {
         let spy = SpyFactory::new("/new");
         let f = factory(vec![ws], spy.clone());
 
-        assert_eq!(f.create(None).unwrap(), path);
+        assert_eq!(f.create(None, true).unwrap(), path);
         assert!(
             !spy.was_called(),
             "inner factory must not be called when a workspace is reused"
@@ -260,7 +263,7 @@ mod tests {
         let spy = SpyFactory::new("/new");
         let f = factory(vec![ws], spy.clone());
 
-        assert_eq!(f.create(None).unwrap(), PathBuf::from("/new"));
+        assert_eq!(f.create(None, true).unwrap(), PathBuf::from("/new"));
         assert!(spy.was_called());
     }
 
@@ -270,7 +273,7 @@ mod tests {
         let spy = SpyFactory::new("/new");
         let f = factory(vec![ws], spy.clone());
 
-        assert_eq!(f.create(None).unwrap(), PathBuf::from("/new"));
+        assert_eq!(f.create(None, true).unwrap(), PathBuf::from("/new"));
         assert!(spy.was_called());
     }
 
@@ -280,7 +283,7 @@ mod tests {
         let spy = SpyFactory::new("/new");
         let f = factory(vec![ws], spy.clone());
 
-        assert_eq!(f.create(None).unwrap(), PathBuf::from("/new"));
+        assert_eq!(f.create(None, true).unwrap(), PathBuf::from("/new"));
         assert!(spy.was_called());
     }
 
@@ -289,7 +292,7 @@ mod tests {
         let spy = SpyFactory::new("/new");
         let f = factory(vec![], spy.clone());
 
-        assert_eq!(f.create(None).unwrap(), PathBuf::from("/new"));
+        assert_eq!(f.create(None, true).unwrap(), PathBuf::from("/new"));
         assert!(spy.was_called());
     }
 
@@ -305,7 +308,7 @@ mod tests {
         let spy = SpyFactory::new("/new");
         let f = factory(vec![ahead, dirty, clean, also_clean], spy.clone());
 
-        assert_eq!(f.create(None).unwrap(), clean_path);
+        assert_eq!(f.create(None, true).unwrap(), clean_path);
         assert!(!spy.was_called());
     }
 
@@ -322,7 +325,7 @@ mod tests {
         let spy = SpyFactory::new("/new");
         let f = factory(vec![ws], spy.clone());
 
-        assert_eq!(f.create(None).unwrap(), path);
+        assert_eq!(f.create(None, true).unwrap(), path);
         assert!(!spy.was_called());
     }
 }

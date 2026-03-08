@@ -54,6 +54,8 @@ where
     agent: Agent,
     /// Optional branch name for the new workspace.
     branch: Option<String>,
+    /// Whether to reuse an existing inactive workspace.
+    reuse: bool,
 }
 
 impl<W, T> AgentLauncher<W, T>
@@ -68,6 +70,7 @@ where
         launch_mode: LaunchMode,
         agent: Agent,
         branch: Option<String>,
+        reuse: bool,
     ) -> Self {
         Self {
             workspace,
@@ -75,6 +78,7 @@ where
             launch_mode,
             agent,
             branch,
+            reuse,
         }
     }
 
@@ -111,7 +115,7 @@ where
     /// agent spawning fails.
     pub fn launch(&self) -> Result<std::path::PathBuf, LaunchError> {
         // Step 1: Create (or locate) workspace.
-        let workspace_path = self.workspace.create(self.branch.clone())?;
+        let workspace_path = self.workspace.create(self.branch.clone(), self.reuse)?;
 
         // Step 2: Acquire lock — fails if workspace is already in use.
         let lock = WorkspaceLock::new(&workspace_path);
