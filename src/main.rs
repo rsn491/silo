@@ -26,17 +26,19 @@ use services::silo_config::SiloConfig;
 #[derive(Parser)]
 #[command(name = "silo")]
 #[command(about = "A CLI tool for managing isolated Claude workspaces")]
+#[command(arg_required_else_help = true)]
 pub struct Cli {
+    /// Open the interactive TUI to configure and launch an agent.
+    #[arg(short = 'i', long = "interactive", conflicts_with = "command")]
+    pub interactive: bool,
     /// The subcommand to execute.
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 /// Supported subcommands for Silo.
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Open the interactive TUI to configure and launch an agent.
-    Interactive,
     /// Create a new Git worktree and launch an agent in it.
     Launch(LaunchArgs),
     /// List running agents in worktrees of the current repository.
@@ -61,11 +63,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let cli = Cli::parse();
+    if cli.interactive {
+        InteractiveCommand::new().run()?;
+        return Ok(());
+    }
+
     match cli.command {
-        Commands::Interactive => {
-            InteractiveCommand::new().run()?;
-        }
-        Commands::Launch(args) => {
+        Some(Commands::Launch(args)) => {
             let tab = args.tab;
             let split_pane = args.split_pane;
             let (launch_mode, terminal) = if tab || split_pane {
@@ -81,28 +85,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             LaunchCommand::new(Git, terminal, launch_mode).run(args)?;
         }
-        Commands::Ps(args) => {
+        Some(Commands::Ps(args)) => {
             PsCommand::new(AgentListService::new(
                 GlobalWorkspaceManager::with_git(Git),
                 SystemProcess,
             ))
             .run(args)?;
         }
-        Commands::Init(args) => InitCommand::new().run(args)?,
-        Commands::Cleanup(args) => {
+        Some(Commands::Init(args)) => InitCommand::new().run(args)?,
+        Some(Commands::Cleanup(args)) => {
             CleanupCommand::new(
                 GlobalWorkspaceManager::with_git(Git),
                 AgentListService::new(GlobalWorkspaceManager::with_git(Git), SystemProcess),
             )
             .run(args)?;
         }
-        Commands::Status => {
+        Some(Commands::Status) => {
             StatusCommand::new(GlobalWorkspaceManager::with_git(Git)).run()?;
         }
-        Commands::Completions(args) => CompletionsCommand::new().run(args)?,
-        Commands::Checkout(args) => {
+        Some(Commands::Completions(args)) => CompletionsCommand::new().run(args)?,
+        Some(Commands::Checkout(args)) => {
             CheckoutCommand::new(GlobalWorkspaceManager::with_git(Git)).run(args)?;
         }
+        None => {}
     }
 
     Ok(())

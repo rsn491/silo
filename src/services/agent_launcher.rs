@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::infra::agent::{Agent, AgentMode, PromptError, PromptMode};
+use crate::infra::agent::{Agent, AgentMode, PromptError, RunningMode};
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::{Terminal, TerminalError};
 use crate::services::workspace_lock::WorkspaceLock;
@@ -105,7 +105,7 @@ where
         mode: Option<AgentMode>,
     ) -> Result<(), LaunchError> {
         self.agent
-            .prompt(prompt, mode, PromptMode::Foreground, Some(workspace_path))
+            .run(prompt, mode, RunningMode::Foreground, Some(workspace_path))
             .map(|_| ())
             .map_err(LaunchError::from)
     }

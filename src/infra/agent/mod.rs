@@ -43,14 +43,14 @@ impl AgentMode {
     }
 }
 
-/// Errors that can occur when prompting an agent.
+/// Errors that can occur when running an agent.
 #[derive(Debug, Error)]
 pub enum PromptError {
     /// The agent process could not be spawned.
     #[error("failed to spawn agent: {0}")]
     Io(#[from] std::io::Error),
     /// The agent exited with a non-zero status (headless mode).
-    #[error("agent prompt failed: {0}")]
+    #[error("agent run failed: {0}")]
     Failed(String),
     /// The agent exited with a non-zero status (foreground mode).
     #[error("agent exited with status: {0}")]
@@ -59,11 +59,11 @@ pub enum PromptError {
 
 /// Whether the agent is invoked interactively (foreground) or non-interactively (headless).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PromptMode {
+pub enum RunningMode {
     /// Run the agent interactively with inherited stdio; output is not captured.
     Foreground,
     /// Run the agent non-interactively and capture its stdout output.
-    Headless,
+    Background,
 }
 
 /// Behavior that every agent variant must implement.
@@ -80,10 +80,10 @@ pub trait AgentCommand {
         &[]
     }
 
-    /// Sends a prompt to the agent in the specified execution mode.
+    /// Runs the agent in the specified execution mode.
     ///
-    /// - [`PromptMode::Headless`]: runs the agent non-interactively and returns captured stdout.
-    /// - [`PromptMode::Foreground`]: runs the agent interactively with inherited stdio; returns
+    /// - [`RunningMode::Background`]: runs the agent non-interactively and returns captured stdout.
+    /// - [`RunningMode::Foreground`]: runs the agent interactively with inherited stdio; returns
     ///   an empty string on success.
     ///
     /// `message` is optional for foreground mode (the agent launches without an initial prompt
@@ -97,11 +97,11 @@ pub trait AgentCommand {
     /// Returns [`PromptError::Io`] if the process cannot be spawned,
     /// [`PromptError::Failed`] if a headless agent exits with a non-zero status, or
     /// [`PromptError::ExitStatus`] if a foreground agent exits with a non-zero status.
-    fn prompt(
+    fn run(
         &self,
         message: Option<&str>,
         mode: Option<AgentMode>,
-        exec_mode: PromptMode,
+        exec_mode: RunningMode,
         working_dir: Option<&std::path::Path>,
     ) -> Result<String, PromptError>;
 }
@@ -161,21 +161,21 @@ impl Agent {
         self.command().command_name()
     }
 
-    /// Sends a prompt to the agent in the specified execution mode.
+    /// Runs the agent in the specified execution mode.
     ///
-    /// See [`AgentCommand::prompt`] for full documentation.
+    /// See [`AgentCommand::run`] for full documentation.
     ///
     /// # Errors
     ///
     /// Returns [`PromptError`] if the process cannot be spawned or exits with a non-zero status.
-    pub fn prompt(
+    pub fn run(
         &self,
         message: Option<&str>,
         mode: Option<AgentMode>,
-        exec_mode: PromptMode,
+        exec_mode: RunningMode,
         working_dir: Option<&std::path::Path>,
     ) -> Result<String, PromptError> {
-        self.command().prompt(message, mode, exec_mode, working_dir)
+        self.command().run(message, mode, exec_mode, working_dir)
     }
 
     /// Returns the CLI arguments for the given launch mode.
@@ -229,14 +229,14 @@ impl AgentCommand for Agent {
         self.command().command_name()
     }
 
-    fn prompt(
+    fn run(
         &self,
         message: Option<&str>,
         mode: Option<AgentMode>,
-        exec_mode: PromptMode,
+        exec_mode: RunningMode,
         working_dir: Option<&std::path::Path>,
     ) -> Result<String, PromptError> {
-        self.command().prompt(message, mode, exec_mode, working_dir)
+        self.command().run(message, mode, exec_mode, working_dir)
     }
 }
 

@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use super::{AgentCommand, AgentMode, PromptError, PromptMode};
+use super::{AgentCommand, AgentMode, PromptError, RunningMode};
 
 /// Concrete implementation of [`AgentCommand`] for Google's Gemini CLI.
 pub(super) struct GeminiAgent;
@@ -12,16 +12,16 @@ impl AgentCommand for GeminiAgent {
         "gemini"
     }
 
-    fn prompt(
+    fn run(
         &self,
         message: Option<&str>,
         _mode: Option<AgentMode>,
-        exec_mode: PromptMode,
+        exec_mode: RunningMode,
         working_dir: Option<&std::path::Path>,
     ) -> Result<String, PromptError> {
         let mut cmd = Command::new("gemini");
         match exec_mode {
-            PromptMode::Headless => {
+            RunningMode::Background => {
                 if let Some(msg) = message {
                     cmd.args(["-p", msg]);
                 }
@@ -36,7 +36,7 @@ impl AgentCommand for GeminiAgent {
                 }
                 Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
             }
-            PromptMode::Foreground => {
+            RunningMode::Foreground => {
                 if let Some(msg) = message {
                     cmd.args(["-p", msg]);
                 }

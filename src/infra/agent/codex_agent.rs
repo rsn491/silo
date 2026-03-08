@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use super::{AgentCommand, AgentMode, PromptError, PromptMode};
+use super::{AgentCommand, AgentMode, PromptError, RunningMode};
 
 /// Concrete implementation of [`AgentCommand`] for Codex.
 pub(super) struct CodexAgent;
@@ -19,17 +19,17 @@ impl AgentCommand for CodexAgent {
         }
     }
 
-    fn prompt(
+    fn run(
         &self,
         message: Option<&str>,
         mode: Option<AgentMode>,
-        exec_mode: PromptMode,
+        exec_mode: RunningMode,
         working_dir: Option<&std::path::Path>,
     ) -> Result<String, PromptError> {
         let mut cmd = Command::new("codex");
         cmd.args(self.mode_args(mode.unwrap_or(AgentMode::Code)));
         match exec_mode {
-            PromptMode::Headless => {
+            RunningMode::Background => {
                 if let Some(msg) = message {
                     cmd.args(["-q", msg]);
                 }
@@ -44,7 +44,7 @@ impl AgentCommand for CodexAgent {
                 }
                 Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
             }
-            PromptMode::Foreground => {
+            RunningMode::Foreground => {
                 if let Some(msg) = message {
                     cmd.arg(msg);
                 }

@@ -1,6 +1,6 @@
 //! Service for generating descriptive git branch names via an AI agent.
 
-use crate::infra::agent::{Agent, PromptMode};
+use crate::infra::agent::{Agent, RunningMode};
 
 /// Generates descriptive git branch name suggestions by prompting an AI agent in headless mode.
 pub struct GitSuggestionsService {
@@ -63,7 +63,7 @@ impl GitSuggestionsService {
     fn prompt_and_sanitize(&self, prompt: &str) -> Result<Option<String>, String> {
         let raw = self
             .agent
-            .prompt(Some(prompt), None, PromptMode::Headless, None)
+            .run(Some(prompt), None, RunningMode::Background, None)
             .map_err(|e| e.to_string())?;
         Ok(sanitize_branch_name(&raw))
     }
@@ -86,7 +86,7 @@ impl GitSuggestionsService {
 
         let raw = self
             .agent
-            .prompt(Some(&prompt), None, PromptMode::Headless, None)
+            .run(Some(&prompt), None, RunningMode::Background, None)
             .map_err(|e| e.to_string())?;
 
         let trimmed = raw
