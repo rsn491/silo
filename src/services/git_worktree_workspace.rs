@@ -108,10 +108,8 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
                 self.git
                     .checkout_new_branch(&ws.path, &branch_name)
                     .map_err(LaunchError::Git)?;
-                eprintln!("Reusing inactive workspace: {}", ws.path.display());
                 return Ok(ws.path);
             }
-            eprintln!("No inactive workspace found, creating new workspace...");
         }
 
         let worktree_path = self.generate_worktree_path()?;

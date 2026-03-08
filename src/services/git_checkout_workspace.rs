@@ -71,10 +71,8 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
                 self.git
                     .checkout_new_branch(&ws.path, &branch_name)
                     .map_err(LaunchError::Git)?;
-                eprintln!("Reusing inactive workspace: {}", ws.path.display());
                 return Ok(ws.path);
             }
-            eprintln!("No inactive workspace found, creating new workspace...");
         }
 
         let repo_root = self.git.get_repo_root()?;
