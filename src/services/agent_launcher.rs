@@ -81,7 +81,7 @@ where
     fn launch_in_workspace(&self, workspace_path: &std::path::Path) -> Result<(), LaunchError> {
         let status = self
             .agent
-            .command()
+            .process()
             .current_dir(workspace_path)
             .status()
             .map_err(|e| LaunchError::AgentSpawnError(e.to_string()))?;

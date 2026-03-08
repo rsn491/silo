@@ -4,8 +4,6 @@ mod claude_code;
 mod codex;
 mod open_code;
 
-use std::process::Command;
-
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, EnumString, IntoStaticStr};
@@ -76,7 +74,7 @@ pub enum Agent {
 
 impl Agent {
     /// Returns the per-variant struct that implements [`AgentCommand`].
-    fn behavior(&self) -> &dyn AgentCommand {
+    fn command(&self) -> &dyn AgentCommand {
         match self {
             Agent::ClaudeCode => &ClaudeCodeAgent,
             Agent::OpenCode => &OpenCodeAgent,
@@ -86,7 +84,7 @@ impl Agent {
 
     /// Returns the executable name of the agent's command.
     pub fn command_name(&self) -> &'static str {
-        self.behavior().command_name()
+        self.command().command_name()
     }
 
     /// Runs the agent in headless (non-interactive) mode with the given prompt and returns the
@@ -102,12 +100,12 @@ impl Agent {
     /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
     /// if the agent exits with a non-zero status.
     pub fn prompt(&self, message: &str) -> Result<String, PromptError> {
-        self.behavior().prompt(message)
+        self.command().prompt(message)
     }
 
     /// Returns a [`Command`] configured to launch this agent.
-    pub fn command(&self) -> Command {
-        Command::new(self.command_name())
+    pub fn process(&self) -> std::process::Command {
+        std::process::Command::new(self.command_name())
     }
 
     /// Returns a list of command names for all supported agents.
@@ -141,11 +139,11 @@ impl Agent {
 
 impl AgentCommand for Agent {
     fn command_name(&self) -> &'static str {
-        self.behavior().command_name()
+        self.command().command_name()
     }
 
     fn prompt(&self, message: &str) -> Result<String, PromptError> {
-        self.behavior().prompt(message)
+        self.command().prompt(message)
     }
 }
 
