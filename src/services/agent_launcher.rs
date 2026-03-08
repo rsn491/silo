@@ -115,7 +115,8 @@ where
 
         // Step 2: Acquire lock — fails if workspace is already in use.
         let lock = WorkspaceLock::new(&workspace_path);
-        lock.try_acquire().map_err(|e| LaunchError::AgentSpawnError(e.to_string()))?;
+        lock.try_acquire()
+            .map_err(|e| LaunchError::AgentSpawnError(e.to_string()))?;
 
         // Step 3: Launch agent in the workspace.
         match self.launch_mode {
@@ -142,9 +143,7 @@ where
             }
             LaunchMode::SplitPane => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
-                    LaunchError::AgentSpawnError(
-                        "no terminal provided for split pane".to_string(),
-                    )
+                    LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
                 })?;
                 match terminal.split_pane(&workspace_path, &self.agent) {
                     Ok(()) => {}

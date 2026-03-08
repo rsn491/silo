@@ -83,7 +83,11 @@ pub struct LaunchCommand<G: GitOperations, T: Terminal> {
 impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
     /// Creates a new `LaunchCommand`.
     pub fn new(git: G, terminal: Option<T>, launch_mode: LaunchMode) -> Self {
-        Self { git, terminal, launch_mode }
+        Self {
+            git,
+            terminal,
+            launch_mode,
+        }
     }
 }
 
@@ -110,8 +114,14 @@ impl<G: GitOperations + Clone + 'static, T: Terminal> LaunchCommand<G, T> {
                 WorkspaceKind::Worktree => Box::new(GitWorktreeWorkspace::new(self.git.clone())),
             };
             let workspace = ReusingWorkspaceFactory::new(self.git, inner);
-            AgentLauncher::new(workspace, self.terminal, self.launch_mode, agent, args.branch)
-                .launch()
+            AgentLauncher::new(
+                workspace,
+                self.terminal,
+                self.launch_mode,
+                agent,
+                args.branch,
+            )
+            .launch()
         } else {
             let workspace = match kind {
                 WorkspaceKind::Checkout => {
@@ -143,8 +153,7 @@ impl<G: GitOperations + Clone + 'static, T: Terminal> LaunchCommand<G, T> {
                         .and_then(|s| s.exit_work)
                         .unwrap_or(true);
                     if exit_work_enabled
-                        && let Err(e) =
-                            check_and_handle_exit_work(&workspace_path, &agent_for_exit)
+                        && let Err(e) = check_and_handle_exit_work(&workspace_path, &agent_for_exit)
                     {
                         eprintln!("Warning: exit work check failed: {}", e);
                     }
