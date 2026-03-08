@@ -105,8 +105,12 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
         let agent_for_exit = agent.clone();
         let workspace = match kind {
-            WorkspaceKind::Checkout => WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(self.git)),
-            WorkspaceKind::Worktree => WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git)),
+            WorkspaceKind::Checkout => {
+                WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(self.git))
+            }
+            WorkspaceKind::Worktree => {
+                WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
+            }
         };
         let launch_result = AgentLauncher::new(
             workspace,

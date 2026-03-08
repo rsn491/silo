@@ -1,14 +1,7 @@
 use strum::Display;
 
 #[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Default,
-    Display,
-    clap::ValueEnum,
-    serde::Deserialize,
-    serde::Serialize,
+    Debug, Clone, PartialEq, Default, Display, clap::ValueEnum, serde::Deserialize, serde::Serialize,
 )]
 #[serde(rename_all = "lowercase")]
 /// Identifies the type of workspace.
