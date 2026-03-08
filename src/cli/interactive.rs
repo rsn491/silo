@@ -52,12 +52,13 @@ fn launch_agent(
 ) -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Launching {} in worktree...", agent);
 
-    let workspace = GitWorktreeWorkspace::new(Git);
+    let git = Git;
+    let workspace = GitWorktreeWorkspace::new(git.clone());
     let branch = prompt
         .as_deref()
         .map(|p| p.trim())
         .filter(|p| !p.is_empty())
-        .map(|p| GitSuggestionsService::new(agent.clone()).suggest_branch_name_from_prompt(p))
+        .map(|p| GitSuggestionsService::new(agent.clone()).suggest_branch_name_from_prompt(p, &git))
         .unwrap_or(Ok(None))
         .unwrap_or_default();
 

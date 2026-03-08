@@ -27,9 +27,10 @@ use services::silo_config::SiloConfig;
 #[command(name = "silo")]
 #[command(about = "A CLI tool for managing isolated Claude workspaces")]
 #[command(arg_required_else_help = true)]
+#[command(args_conflicts_with_subcommands = true)]
 pub struct Cli {
     /// Open the interactive TUI to configure and launch an agent.
-    #[arg(short = 'i', long = "interactive", conflicts_with = "command")]
+    #[arg(short = 'i', long = "interactive")]
     pub interactive: bool,
     /// The subcommand to execute.
     #[command(subcommand)]
