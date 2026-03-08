@@ -1,10 +1,17 @@
 //! Supported AI agents and their command-line mappings.
 
+mod claude_code;
+mod codex;
+mod open_code;
+
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 use strum::{Display, EnumIter, EnumString, IntoStaticStr};
 use thiserror::Error;
+
+use claude_code::ClaudeCodeAgent;
+use codex::CodexAgent;
+use open_code::OpenCodeAgent;
 
 /// Errors that can occur when prompting an agent in headless mode.
 #[derive(Debug, Error)]
@@ -15,6 +22,20 @@ pub enum PromptError {
     /// The agent exited with a non-zero status.
     #[error("agent prompt failed: {0}")]
     Failed(String),
+}
+
+/// Behavior that every agent variant must implement.
+pub trait AgentCommand {
+    /// Returns the executable name used to invoke this agent.
+    fn command_name(&self) -> &'static str;
+
+    /// Runs the agent in headless mode with the given prompt and returns captured stdout.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
+    /// if the agent exits with a non-zero status.
+    fn prompt(&self, message: &str) -> Result<String, PromptError>;
 }
 
 /// Represents the supported AI agents that can be launched.
@@ -52,18 +73,39 @@ pub enum Agent {
 }
 
 impl Agent {
-    /// Returns a [`Command`] configured to launch this agent.
-    pub fn command(&self) -> Command {
-        Command::new(self.command_name())
+    /// Returns the per-variant struct that implements [`AgentCommand`].
+    fn command(&self) -> &dyn AgentCommand {
+        match self {
+            Agent::ClaudeCode => &ClaudeCodeAgent,
+            Agent::OpenCode => &OpenCodeAgent,
+            Agent::Codex => &CodexAgent,
+        }
     }
 
     /// Returns the executable name of the agent's command.
     pub fn command_name(&self) -> &'static str {
-        match self {
-            Agent::ClaudeCode => "claude",
-            Agent::OpenCode => "opencode",
-            Agent::Codex => "codex",
-        }
+        self.command().command_name()
+    }
+
+    /// Runs the agent in headless (non-interactive) mode with the given prompt and returns the
+    /// captured stdout output.
+    ///
+    /// Each agent uses its own flag convention for headless/print mode:
+    /// - Claude Code: `--print`
+    /// - OpenCode: `-p`
+    /// - Codex: `-q`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
+    /// if the agent exits with a non-zero status.
+    pub fn prompt(&self, message: &str) -> Result<String, PromptError> {
+        self.command().prompt(message)
+    }
+
+    /// Returns a [`Command`] configured to launch this agent.
+    pub fn process(&self) -> std::process::Command {
+        std::process::Command::new(self.command_name())
     }
 
     /// Returns a list of command names for all supported agents.
@@ -93,33 +135,15 @@ impl Agent {
         use strum::IntoEnumIterator;
         Agent::iter().find(|agent| agent.command_name() == s)
     }
+}
 
-    /// Runs the agent in headless (non-interactive) mode with the given prompt and returns the
-    /// captured stdout output.
-    ///
-    /// Each agent uses its own flag convention for headless/print mode:
-    /// - Claude Code: `--print`
-    /// - OpenCode: `-p`
-    /// - Codex: `-q`
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
-    /// if the agent exits with a non-zero status.
-    pub fn prompt(&self, input: &str) -> Result<String, PromptError> {
-        let output = match self {
-            Agent::ClaudeCode => Command::new("claude").args(["--print", input]).output()?,
-            Agent::OpenCode => Command::new("opencode").args(["-p", input]).output()?,
-            Agent::Codex => Command::new("codex").args(["-q", input]).output()?,
-        };
+impl AgentCommand for Agent {
+    fn command_name(&self) -> &'static str {
+        self.command().command_name()
+    }
 
-        if !output.status.success() {
-            return Err(PromptError::Failed(
-                String::from_utf8_lossy(&output.stderr).trim().to_string(),
-            ));
-        }
-
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    fn prompt(&self, message: &str) -> Result<String, PromptError> {
+        self.command().prompt(message)
     }
 }
 
@@ -163,5 +187,12 @@ mod tests {
             Some(Agent::OpenCode)
         );
         assert_eq!(Agent::try_from_command_name("codex"), Some(Agent::Codex));
+    }
+
+    #[test]
+    fn test_agent_behavior_delegation() {
+        assert_eq!(Agent::ClaudeCode.command_name(), "claude");
+        assert_eq!(Agent::OpenCode.command_name(), "opencode");
+        assert_eq!(Agent::Codex.command_name(), "codex");
     }
 }
