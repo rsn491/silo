@@ -8,10 +8,9 @@ use uuid::Uuid;
 use super::agent_launcher::LaunchError;
 use super::agent_workspace::{
     CleanupError, CleanupResult, FailedWorkspace, RemovedWorkspace, SkippedWorkspace,
-    WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
+    WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote, reuse_inactive_workspace,
 };
 use super::silo_config::SiloConfig;
-use super::workspace_lock::WorkspaceLock;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 use crate::infra::workspace_kind::WorkspaceKind;
@@ -55,23 +54,8 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
     fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError> {
         if reuse {
             let all = self.get_all().map_err(LaunchError::Git)?;
-            let inactive = all.into_iter().find(|ws| {
-                !WorkspaceLock::is_locked(&ws.path)
-                    && !ws.has_uncommitted_changes
-                    && ws.commits_ahead == 0
-            });
-            if let Some(ws) = inactive {
-                let branch_name = branch.clone().unwrap_or_else(|| {
-                    let project = self
-                        .git
-                        .get_project_name()
-                        .unwrap_or_else(|_| "workspace".to_string());
-                    format!("{}-{}", project, &Uuid::new_v4().to_string()[..8])
-                });
-                self.git
-                    .checkout_new_branch(&ws.path, &branch_name)
-                    .map_err(LaunchError::Git)?;
-                return Ok(ws.path);
+            if let Some(path) = reuse_inactive_workspace(&self.git, all, branch.clone())? {
+                return Ok(path);
             }
         }
 
