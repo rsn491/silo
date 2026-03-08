@@ -11,6 +11,7 @@ use super::agent_workspace::{
     StatusError, WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
 };
 use super::silo_config::SiloConfig;
+use super::workspace_lock::WorkspaceLock;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::workspace_kind::WorkspaceKind;
 
@@ -88,7 +89,31 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
     /// # Errors
     ///
     /// Returns [`LaunchError`] if worktree creation fails.
-    fn create(&self, branch: Option<String>, _reuse: bool) -> Result<PathBuf, LaunchError> {
+    fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError> {
+        if reuse {
+            let all = self.get_all().map_err(LaunchError::Git)?;
+            let inactive = all.into_iter().find(|ws| {
+                !WorkspaceLock::is_locked(&ws.path)
+                    && !ws.has_uncommitted_changes
+                    && ws.commits_ahead == 0
+            });
+            if let Some(ws) = inactive {
+                let branch_name = branch.clone().unwrap_or_else(|| {
+                    let project = self
+                        .git
+                        .get_project_name()
+                        .unwrap_or_else(|_| "workspace".to_string());
+                    format!("{}-{}", project, &Uuid::new_v4().to_string()[..8])
+                });
+                self.git
+                    .checkout_new_branch(&ws.path, &branch_name)
+                    .map_err(LaunchError::Git)?;
+                eprintln!("Reusing inactive workspace: {}", ws.path.display());
+                return Ok(ws.path);
+            }
+            eprintln!("No inactive workspace found, creating new workspace...");
+        }
+
         let worktree_path = self.generate_worktree_path()?;
         let worktree_name = worktree_path
             .file_name()
