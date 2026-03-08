@@ -10,6 +10,7 @@ use cli::checkout::{CheckoutArgs, CheckoutCommand};
 use cli::cleanup::{CleanupArgs, CleanupCommand};
 use cli::completions::{CompletionsArgs, CompletionsCommand};
 use cli::init::{InitArgs, InitCommand};
+use cli::interactive::InteractiveCommand;
 use cli::launch::{LaunchArgs, LaunchCommand};
 use cli::ps::{PsArgs, PsCommand};
 use cli::status::StatusCommand;
@@ -34,6 +35,8 @@ pub struct Cli {
 /// Supported subcommands for Silo.
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Open the interactive TUI to configure and launch an agent.
+    Interactive,
     /// Create a new Git worktree and launch an agent in it.
     Launch(LaunchArgs),
     /// List running agents in worktrees of the current repository.
@@ -59,6 +62,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
     match cli.command {
+        Commands::Interactive => {
+            InteractiveCommand::new().run()?;
+        }
         Commands::Launch(args) => {
             let tab = args.tab;
             let split_pane = args.split_pane;

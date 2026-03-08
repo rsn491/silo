@@ -206,7 +206,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
             args.reuse,
             override_path,
         )
-        .launch();
+        .launch(None, None);
 
         match launch_result {
             Ok(workspace_path) => {
@@ -271,7 +271,7 @@ fn agent_display_color(agent: &Agent) -> Color {
 /// # Errors
 ///
 /// Returns an error if a TUI interaction fails.
-fn check_and_handle_exit_work(
+pub(crate) fn check_and_handle_exit_work(
     workspace_path: &Path,
     agent: &Agent,
     is_tmp: bool,

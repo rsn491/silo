@@ -1,6 +1,6 @@
 //! Service for generating descriptive git branch names via an AI agent.
 
-use crate::infra::agent::Agent;
+use crate::infra::agent::{Agent, PromptMode};
 
 /// Generates descriptive git branch name suggestions by prompting an AI agent in headless mode.
 pub struct GitSuggestionsService {
@@ -32,7 +32,39 @@ impl GitSuggestionsService {
             changes
         );
 
-        let raw = self.agent.prompt(&prompt).map_err(|e| e.to_string())?;
+        self.prompt_and_sanitize(&prompt)
+    }
+
+    /// Prompts the agent with a user description and returns a sanitized branch name.
+    ///
+    /// Returns `Ok(None)` if the agent output is empty or unsanitizable, and `Err` if the agent
+    /// call itself fails.
+    pub fn suggest_branch_name_from_prompt(
+        &self,
+        initial_prompt: &str,
+    ) -> Result<Option<String>, String> {
+        let prompt = format!(
+            "Based on the following description, suggest a concise, descriptive git branch name.\n\
+             Rules:\n\
+             - Lowercase letters and hyphens only (kebab-case)\n\
+             - 2–5 words maximum\n\
+             - Describes the work to be done\n\
+             - No prefixes like 'feature/' or 'fix/'\n\
+             - Output ONLY the branch name on a single line, nothing else\n\n\
+             Description:\n{}\n\n\
+             Branch name:",
+            initial_prompt
+        );
+
+        self.prompt_and_sanitize(&prompt)
+    }
+
+    /// Prompts the agent and returns the first sanitized kebab-case line.
+    fn prompt_and_sanitize(&self, prompt: &str) -> Result<Option<String>, String> {
+        let raw = self
+            .agent
+            .prompt(Some(prompt), None, PromptMode::Headless, None)
+            .map_err(|e| e.to_string())?;
         Ok(sanitize_branch_name(&raw))
     }
 
@@ -52,7 +84,10 @@ impl GitSuggestionsService {
             changes
         );
 
-        let raw = self.agent.prompt(&prompt).map_err(|e| e.to_string())?;
+        let raw = self
+            .agent
+            .prompt(Some(&prompt), None, PromptMode::Headless, None)
+            .map_err(|e| e.to_string())?;
 
         let trimmed = raw
             .lines()

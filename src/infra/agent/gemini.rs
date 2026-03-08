@@ -2,7 +2,7 @@
 
 use std::process::Command;
 
-use super::{AgentCommand, PromptError};
+use super::{AgentCommand, AgentMode, PromptError, PromptMode};
 
 /// Concrete implementation of [`AgentCommand`] for Google's Gemini CLI.
 pub(super) struct GeminiAgent;
@@ -12,13 +12,43 @@ impl AgentCommand for GeminiAgent {
         "gemini"
     }
 
-    fn prompt(&self, message: &str) -> Result<String, PromptError> {
-        let output = Command::new("gemini").args(["-p", message]).output()?;
-        if !output.status.success() {
-            return Err(PromptError::Failed(
-                String::from_utf8_lossy(&output.stderr).trim().to_string(),
-            ));
+    fn prompt(
+        &self,
+        message: Option<&str>,
+        _mode: Option<AgentMode>,
+        exec_mode: PromptMode,
+        working_dir: Option<&std::path::Path>,
+    ) -> Result<String, PromptError> {
+        let mut cmd = Command::new("gemini");
+        match exec_mode {
+            PromptMode::Headless => {
+                if let Some(msg) = message {
+                    cmd.args(["-p", msg]);
+                }
+                if let Some(dir) = working_dir {
+                    cmd.current_dir(dir);
+                }
+                let output = cmd.output()?;
+                if !output.status.success() {
+                    return Err(PromptError::Failed(
+                        String::from_utf8_lossy(&output.stderr).trim().to_string(),
+                    ));
+                }
+                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            }
+            PromptMode::Foreground => {
+                if let Some(msg) = message {
+                    cmd.args(["-p", msg]);
+                }
+                if let Some(dir) = working_dir {
+                    cmd.current_dir(dir);
+                }
+                let status = cmd.status()?;
+                if !status.success() {
+                    return Err(PromptError::ExitStatus(status));
+                }
+                Ok(String::new())
+            }
         }
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 }

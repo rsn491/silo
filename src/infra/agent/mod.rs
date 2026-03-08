@@ -15,15 +15,55 @@ use codex_agent::CodexAgent;
 use gemini::GeminiAgent;
 use open_code_agent::OpenCodeAgent;
 
-/// Errors that can occur when prompting an agent in headless mode.
+/// The interaction mode used when launching the agent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AgentMode {
+    /// Standard code-writing mode (default).
+    #[default]
+    Code,
+    /// Planning mode: the agent is invoked with its native plan-mode flag.
+    Plan,
+}
+
+impl AgentMode {
+    /// Returns the display label for this mode.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            AgentMode::Code => "Code",
+            AgentMode::Plan => "Plan",
+        }
+    }
+
+    /// Toggles between `Code` and `Plan`.
+    pub fn toggle(self) -> Self {
+        match self {
+            AgentMode::Code => AgentMode::Plan,
+            AgentMode::Plan => AgentMode::Code,
+        }
+    }
+}
+
+/// Errors that can occur when prompting an agent.
 #[derive(Debug, Error)]
 pub enum PromptError {
     /// The agent process could not be spawned.
     #[error("failed to spawn agent: {0}")]
     Io(#[from] std::io::Error),
-    /// The agent exited with a non-zero status.
+    /// The agent exited with a non-zero status (headless mode).
     #[error("agent prompt failed: {0}")]
     Failed(String),
+    /// The agent exited with a non-zero status (foreground mode).
+    #[error("agent exited with status: {0}")]
+    ExitStatus(std::process::ExitStatus),
+}
+
+/// Whether the agent is invoked interactively (foreground) or non-interactively (headless).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptMode {
+    /// Run the agent interactively with inherited stdio; output is not captured.
+    Foreground,
+    /// Run the agent non-interactively and capture its stdout output.
+    Headless,
 }
 
 /// Behavior that every agent variant must implement.
@@ -31,13 +71,39 @@ pub trait AgentCommand {
     /// Returns the executable name used to invoke this agent.
     fn command_name(&self) -> &'static str;
 
-    /// Runs the agent in headless mode with the given prompt and returns captured stdout.
+    /// Returns the CLI arguments required to invoke the agent in the given mode.
+    ///
+    /// The default implementation returns an empty slice (no extra args needed for `Code` mode).
+    /// Agents that support a native plan mode should override this for `AgentMode::Plan`.
+    fn mode_args(&self, mode: AgentMode) -> &'static [&'static str] {
+        let _ = mode;
+        &[]
+    }
+
+    /// Sends a prompt to the agent in the specified execution mode.
+    ///
+    /// - [`PromptMode::Headless`]: runs the agent non-interactively and returns captured stdout.
+    /// - [`PromptMode::Foreground`]: runs the agent interactively with inherited stdio; returns
+    ///   an empty string on success.
+    ///
+    /// `message` is optional for foreground mode (the agent launches without an initial prompt
+    /// when `None`). For headless mode `message` should always be `Some`.
+    ///
+    /// `working_dir` sets the working directory for the spawned process. Pass `None` to inherit
+    /// the current directory.
     ///
     /// # Errors
     ///
-    /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
-    /// if the agent exits with a non-zero status.
-    fn prompt(&self, message: &str) -> Result<String, PromptError>;
+    /// Returns [`PromptError::Io`] if the process cannot be spawned,
+    /// [`PromptError::Failed`] if a headless agent exits with a non-zero status, or
+    /// [`PromptError::ExitStatus`] if a foreground agent exits with a non-zero status.
+    fn prompt(
+        &self,
+        message: Option<&str>,
+        mode: Option<AgentMode>,
+        exec_mode: PromptMode,
+        working_dir: Option<&std::path::Path>,
+    ) -> Result<String, PromptError>;
 }
 
 /// Represents the supported AI agents that can be launched.
@@ -95,21 +161,33 @@ impl Agent {
         self.command().command_name()
     }
 
-    /// Runs the agent in headless (non-interactive) mode with the given prompt and returns the
-    /// captured stdout output.
+    /// Sends a prompt to the agent in the specified execution mode.
     ///
-    /// Each agent uses its own flag convention for headless/print mode:
-    /// - Claude Code: `--print`
-    /// - OpenCode: `-p`
-    /// - Codex: `-q`
-    /// - Gemini: `-p`
+    /// See [`AgentCommand::prompt`] for full documentation.
     ///
     /// # Errors
     ///
-    /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
-    /// if the agent exits with a non-zero status.
-    pub fn prompt(&self, message: &str) -> Result<String, PromptError> {
-        self.command().prompt(message)
+    /// Returns [`PromptError`] if the process cannot be spawned or exits with a non-zero status.
+    pub fn prompt(
+        &self,
+        message: Option<&str>,
+        mode: Option<AgentMode>,
+        exec_mode: PromptMode,
+        working_dir: Option<&std::path::Path>,
+    ) -> Result<String, PromptError> {
+        self.command().prompt(message, mode, exec_mode, working_dir)
+    }
+
+    /// Returns the CLI arguments for the given launch mode.
+    pub fn mode_args(&self, mode: AgentMode) -> &'static [&'static str] {
+        self.command().mode_args(mode)
+    }
+
+    /// Returns a [`Command`] configured to launch this agent in the given mode.
+    pub fn process_for_mode(&self, mode: AgentMode) -> std::process::Command {
+        let mut cmd = std::process::Command::new(self.command_name());
+        cmd.args(self.mode_args(mode));
+        cmd
     }
 
     /// Returns a [`Command`] configured to launch this agent.
@@ -151,8 +229,14 @@ impl AgentCommand for Agent {
         self.command().command_name()
     }
 
-    fn prompt(&self, message: &str) -> Result<String, PromptError> {
-        self.command().prompt(message)
+    fn prompt(
+        &self,
+        message: Option<&str>,
+        mode: Option<AgentMode>,
+        exec_mode: PromptMode,
+        working_dir: Option<&std::path::Path>,
+    ) -> Result<String, PromptError> {
+        self.command().prompt(message, mode, exec_mode, working_dir)
     }
 }
 
