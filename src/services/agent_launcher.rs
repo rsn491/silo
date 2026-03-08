@@ -4,6 +4,7 @@ use crate::infra::agent::Agent;
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::{Terminal, TerminalError};
 use crate::services::agent_workspace::WorkspaceFactory;
+use crate::services::workspace_lock::WorkspaceLock;
 use thiserror::Error;
 
 /// Modes for launching an agent.
@@ -95,32 +96,63 @@ where
 
     /// Executes the launch process: creates the workspace and then launches the agent.
     ///
+    /// A `silo.lock` file is created in the workspace before the agent starts.
+    /// For [`LaunchMode::ExecReplace`] the lock is removed automatically once
+    /// the agent process exits.  For tab/split-pane launches the process runs
+    /// detached, so the lock persists until removed manually:
+    ///
+    /// ```text
+    /// rm <workspace>/silo.lock
+    /// ```
+    ///
     /// # Errors
     ///
-    /// Returns [`LaunchError`] if workspace creation or agent spawning fails.
+    /// Returns [`LaunchError`] if workspace creation, lock acquisition, or
+    /// agent spawning fails.
     pub fn launch(&self) -> Result<std::path::PathBuf, LaunchError> {
-        // Step 1: Create workspace.
+        // Step 1: Create (or locate) workspace.
         let workspace_path = self.workspace.create(self.branch.clone())?;
 
-        // Step 2: Launch agent in the workspace.
+        // Step 2: Acquire lock — fails if workspace is already in use.
+        let lock = WorkspaceLock::new(&workspace_path);
+        lock.try_acquire().map_err(|e| LaunchError::AgentSpawnError(e.to_string()))?;
+
+        // Step 3: Launch agent in the workspace.
         match self.launch_mode {
-            LaunchMode::ExecReplace => self.launch_in_workspace(&workspace_path)?,
+            LaunchMode::ExecReplace => {
+                let result = self.launch_in_workspace(&workspace_path);
+                // Agent has exited; release the lock so the workspace can be reused.
+                lock.release();
+                result?;
+            }
+            // For async launches the agent runs in a detached terminal session.
+            // We cannot detect when it exits, so the lock must be removed manually.
             LaunchMode::NewTab => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
                     LaunchError::AgentSpawnError("no terminal provided for new tab".to_string())
                 })?;
                 match terminal.open_tab(&workspace_path, &self.agent) {
                     Ok(()) => {}
-                    Err(_e) => self.launch_in_workspace(&workspace_path)?,
+                    Err(_e) => {
+                        let result = self.launch_in_workspace(&workspace_path);
+                        lock.release();
+                        result?;
+                    }
                 }
             }
             LaunchMode::SplitPane => {
                 let terminal = self.terminal.as_ref().ok_or_else(|| {
-                    LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
+                    LaunchError::AgentSpawnError(
+                        "no terminal provided for split pane".to_string(),
+                    )
                 })?;
                 match terminal.split_pane(&workspace_path, &self.agent) {
                     Ok(()) => {}
-                    Err(_e) => self.launch_in_workspace(&workspace_path)?,
+                    Err(_e) => {
+                        let result = self.launch_in_workspace(&workspace_path);
+                        lock.release();
+                        result?;
+                    }
                 }
             }
         }
