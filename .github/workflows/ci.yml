@@ -10,6 +10,30 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      cargo: ${{ steps.filter.outputs.cargo }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            cargo:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'deny.toml'
+
+  cargo-deny:
+    name: cargo-deny
+    needs: changes
+    if: needs.changes.outputs.cargo == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
