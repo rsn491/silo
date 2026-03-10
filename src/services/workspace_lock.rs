@@ -96,60 +96,98 @@ mod tests {
 
     #[test]
     fn acquire_creates_lock_file() {
+        // Arrange
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
+
+        // Act
         lock.try_acquire().unwrap();
+
+        // Assert
         assert!(dir.path().join("silo.lock").exists());
     }
 
     #[test]
     fn is_locked_reflects_file_presence() {
+        // Arrange
         let dir = tmp();
         assert!(!WorkspaceLock::is_locked(dir.path()));
+
+        // Act
         WorkspaceLock::new(dir.path()).try_acquire().unwrap();
+
+        // Assert
         assert!(WorkspaceLock::is_locked(dir.path()));
     }
 
     #[test]
     fn acquire_fails_when_already_locked() {
+        // Arrange
         let dir = tmp();
         WorkspaceLock::new(dir.path()).try_acquire().unwrap();
+
+        // Act
         let err = WorkspaceLock::new(dir.path()).try_acquire().unwrap_err();
+
+        // Assert
         assert!(matches!(err, LockError::AlreadyLocked(_)));
     }
 
     #[test]
     fn release_removes_lock_file() {
+        // Arrange
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
         lock.try_acquire().unwrap();
+
+        // Act
         lock.release();
+
+        // Assert
         assert!(!dir.path().join("silo.lock").exists());
     }
 
     #[test]
     fn release_is_idempotent() {
+        // Arrange
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
+
+        // Act
         lock.release(); // no lock file — should not panic
         lock.release();
+
+        // Assert
+        assert!(!dir.path().join("silo.lock").exists());
     }
 
     #[test]
     fn acquire_after_release_succeeds() {
+        // Arrange
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
         lock.try_acquire().unwrap();
         lock.release();
-        lock.try_acquire().unwrap(); // should succeed again
+
+        // Act
+        let result = lock.try_acquire();
+
+        // Assert
+        assert!(result.is_ok());
     }
 
     #[test]
     fn manually_placed_lock_file_is_detected() {
+        // Arrange
         let dir = tmp();
         fs::write(dir.path().join("silo.lock"), b"").unwrap();
-        assert!(WorkspaceLock::is_locked(dir.path()));
+
+        // Act
+        let is_locked = WorkspaceLock::is_locked(dir.path());
         let err = WorkspaceLock::new(dir.path()).try_acquire().unwrap_err();
+
+        // Assert
+        assert!(is_locked);
         assert!(matches!(err, LockError::AlreadyLocked(_)));
     }
 }

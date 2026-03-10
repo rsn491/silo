@@ -222,6 +222,7 @@ mod tests {
 
     #[test]
     fn test_create_checkout_workspace() {
+        // Arrange
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_project_name()
@@ -233,10 +234,12 @@ mod tests {
         mock_git
             .expect_checkout_new_branch()
             .returning(|_, _| Ok(()));
-
         let workspace = GitCheckoutWorkspace::new(mock_git);
+
+        // Act
         let result = workspace.create(None, false);
 
+        // Assert
         assert!(result.is_ok());
         let path = result.unwrap();
         assert!(path.to_string_lossy().contains("test-project"));
@@ -244,6 +247,7 @@ mod tests {
 
     #[test]
     fn test_create_checkout_workspace_custom_branch() {
+        // Arrange
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_project_name()
@@ -255,10 +259,12 @@ mod tests {
         mock_git
             .expect_checkout_new_branch()
             .returning(|_, _| Ok(()));
-
         let workspace = GitCheckoutWorkspace::new(mock_git);
+
+        // Act
         let result = workspace.create(Some("my-feature".to_string()), false);
 
+        // Assert
         assert!(result.is_ok());
         let path = result.unwrap();
         assert!(path.to_string_lossy().contains("my-project"));
@@ -266,6 +272,7 @@ mod tests {
 
     #[test]
     fn test_find_checkout_dirs_skips_worktrees() {
+        // Arrange
         let temp = tempfile::TempDir::new().unwrap();
         let base = temp.path();
 
@@ -283,13 +290,17 @@ mod tests {
         )
         .unwrap();
 
+        // Act
         let results = find_checkout_dirs(base, "my-project-", &HashSet::new());
+
+        // Assert
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], checkout_dir);
     }
 
     #[test]
     fn test_find_checkout_dirs_skips_active() {
+        // Arrange
         let temp = tempfile::TempDir::new().unwrap();
         let base = temp.path();
 
@@ -305,7 +316,10 @@ mod tests {
         let mut exclude = HashSet::new();
         exclude.insert(checkout1.clone());
 
+        // Act
         let results = find_checkout_dirs(base, "my-project-", &exclude);
+
+        // Assert
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], checkout2);
     }
@@ -313,6 +327,7 @@ mod tests {
     #[test]
     #[allow(clippy::collapsible_if)]
     fn test_cleanup_skips_checkouts_with_unpushed_commits() {
+        // Arrange
         // Test the skipped checkout logic with find_checkout_dirs.
         let temp = tempfile::TempDir::new().unwrap();
         let silo_dir = temp.path();
@@ -346,6 +361,7 @@ mod tests {
                 }
             });
 
+        // Act
         // Simulate cleanup logic manually to avoid SiloConfig::get_silo_dir() dependency.
         let base_branch = mock_git.get_default_remote_branch().ok();
         let mut skipped_count = 0;
@@ -363,6 +379,7 @@ mod tests {
             would_remove_count += 1;
         }
 
+        // Assert
         assert_eq!(skipped_count, 1);
         assert_eq!(would_remove_count, 1);
     }

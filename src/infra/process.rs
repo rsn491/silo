@@ -145,12 +145,16 @@ mod tests {
 
     #[test]
     fn test_parse_ps_output_matching_processes() {
+        // Arrange
         let output = "  PID ARGS
   123 /usr/bin/claude --some-args
   456 /usr/bin/other-process
   789 /path/to/claude code";
 
+        // Act
         let processes = parse_ps_output_with_patterns(output, &["claude"], 999);
+
+        // Assert
         assert_eq!(processes.len(), 2);
         assert_eq!(processes[0].0, 123);
         assert!(processes[0].1.contains("claude"));
@@ -160,34 +164,46 @@ mod tests {
 
     #[test]
     fn test_parse_ps_output_excludes_own_pid() {
+        // Arrange
         let output = "  PID ARGS
   123 /usr/bin/claude --some-args
   456 /usr/bin/claude --other-args";
 
+        // Act
         let processes = parse_ps_output_with_patterns(output, &["claude"], 123);
+
+        // Assert
         assert_eq!(processes.len(), 1);
         assert_eq!(processes[0].0, 456);
     }
 
     #[test]
     fn test_parse_ps_output_no_matches() {
+        // Arrange
         let output = "  PID ARGS
   123 /usr/bin/other
   456 /usr/bin/different";
 
+        // Act
         let processes = parse_ps_output_with_patterns(output, &["claude"], 999);
+
+        // Assert
         assert_eq!(processes.len(), 0);
     }
 
     #[test]
     fn test_parse_ps_output_with_multiple_patterns() {
+        // Arrange
         let output = "  PID ARGS
   123 /usr/bin/claude --some-args
   456 /usr/bin/opencode --other-args
   789 /usr/bin/other-process
   101 /path/to/claude code";
 
+        // Act
         let processes = parse_ps_output_with_patterns(output, &["claude", "opencode"], 999);
+
+        // Assert
         assert_eq!(processes.len(), 3);
         assert_eq!(processes[0].0, 123);
         assert!(processes[0].1.contains("claude"));
@@ -199,10 +215,14 @@ mod tests {
 
     #[test]
     fn test_parse_lsof_cwd_output_normal() {
+        // Arrange
         let output = "p123
 n/path/to/worktree";
 
+        // Act
         let cwd = parse_lsof_cwd_output(output).unwrap();
+
+        // Assert
         assert_eq!(cwd, PathBuf::from("/path/to/worktree"));
     }
 

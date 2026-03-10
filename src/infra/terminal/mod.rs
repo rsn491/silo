@@ -77,15 +77,21 @@ mod tests {
 
     #[test]
     fn test_detect_terminal_auto_from_term_program() {
+        // Arrange
         // Set the environment variable for this test.
         unsafe {
             std::env::set_var("TERM_PROGRAM", "iTerm2.app");
         }
+
+        // Act
         let terminal = detect_terminal().unwrap();
+
+        // Assert
         // Test that we got a terminal of the correct type.
         // We can verify it's an ITerm2 by checking it implements Debug.
         let debug_str = format!("{:?}", terminal);
         assert!(debug_str.contains("ITerm2"));
+
         // Clean up.
         unsafe {
             std::env::remove_var("TERM_PROGRAM");

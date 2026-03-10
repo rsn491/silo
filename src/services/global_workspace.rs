@@ -85,6 +85,7 @@ mod tests {
 
     #[test]
     fn test_get_all_with_status() {
+        // Arrange
         let repo_root = PathBuf::from("/repo");
         let wt1_path = PathBuf::from("/wt1");
 
@@ -127,14 +128,17 @@ mod tests {
         let checkout = GitCheckoutWorkspace::new(checkout_mock);
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
+        // Act
         let all = service.get_all().unwrap();
 
+        // Assert
         assert_eq!(all.len(), 1);
         assert!(all.iter().any(|w| w.path == wt1_path));
     }
 
     #[test]
     fn test_cleanup_combines() {
+        // Arrange
         let repo_root = PathBuf::from("/repo");
 
         let mut worktree_mock = MockGitOperations::new();
@@ -160,8 +164,10 @@ mod tests {
         let checkout = GitCheckoutWorkspace::new(checkout_mock);
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
+        // Act
         let result = service.cleanup(&HashSet::new(), true, false).unwrap();
 
+        // Assert
         assert_eq!(result.removed.len(), 0);
         assert_eq!(result.skipped.len(), 0);
     }
@@ -169,6 +175,7 @@ mod tests {
     #[test]
     #[allow(clippy::cmp_owned)]
     fn test_get_all_combines() {
+        // Arrange
         let main_path = PathBuf::from("/repo");
         let wt1_path = PathBuf::from("/wt1");
 
@@ -209,8 +216,10 @@ mod tests {
         let checkout = GitCheckoutWorkspace::new(checkout_mock);
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
+        // Act
         let all = service.get_all().unwrap();
 
+        // Assert
         assert_eq!(all.len(), 1);
         assert!(all.iter().any(|w| w.path == PathBuf::from("/wt1")));
     }
