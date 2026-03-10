@@ -592,6 +592,7 @@ mod tests {
 
     #[test]
     fn test_parse_worktree_list_multiple_worktrees() {
+        // Arrange
         let output = "\
 worktree /path/to/main
 HEAD abc123def456
@@ -602,7 +603,11 @@ HEAD 789ghi012jkl
 branch refs/heads/feature-branch
 
 ";
+
+        // Act
         let worktrees = parse_worktree_list(output);
+
+        // Assert
         assert_eq!(worktrees.len(), 2);
         assert_eq!(worktrees[0].path, PathBuf::from("/path/to/main"));
         assert_eq!(worktrees[0].branch, Some("main".to_string()));
@@ -614,13 +619,18 @@ branch refs/heads/feature-branch
 
     #[test]
     fn test_parse_worktree_list_detached_head() {
+        // Arrange
         let output = "\
 worktree /path/to/detached
 HEAD abc123def456
 detached
 
 ";
+
+        // Act
         let worktrees = parse_worktree_list(output);
+
+        // Assert
         assert_eq!(worktrees.len(), 1);
         assert_eq!(worktrees[0].path, PathBuf::from("/path/to/detached"));
         assert_eq!(worktrees[0].branch, None);
@@ -635,10 +645,15 @@ detached
 
     #[test]
     fn test_parse_worktree_list_no_trailing_newline() {
+        // Arrange
         let output = "worktree /path/to/main
 HEAD abc123def456
 branch refs/heads/main";
+
+        // Act
         let worktrees = parse_worktree_list(output);
+
+        // Assert
         assert_eq!(worktrees.len(), 1);
         assert_eq!(worktrees[0].path, PathBuf::from("/path/to/main"));
         assert_eq!(worktrees[0].branch, Some("main".to_string()));

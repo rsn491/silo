@@ -154,6 +154,7 @@ mod tests {
 
     #[test]
     fn test_list_running_agents_in_worktrees() {
+        // Arrange
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(|| {
             Ok(vec![
@@ -207,8 +208,11 @@ mod tests {
         };
 
         let service = AgentListService::new(workspace_manager, mock_process);
+
+        // Act
         let agents = service.list_running_agents().unwrap();
 
+        // Assert
         assert_eq!(agents.len(), 2);
         assert_eq!(agents[0].pid, 123);
         assert_eq!(agents[0].path, PathBuf::from("/repo/worktree1"));
@@ -220,6 +224,7 @@ mod tests {
 
     #[test]
     fn test_list_running_agents_outside_worktrees() {
+        // Arrange
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(|| {
             Ok(vec![
@@ -262,13 +267,17 @@ mod tests {
         };
 
         let service = AgentListService::new(workspace_manager, mock_process);
+
+        // Act
         let agents = service.list_running_agents().unwrap();
 
+        // Assert
         assert_eq!(agents.len(), 0);
     }
 
     #[test]
     fn test_list_running_agents_cwd_resolution_failure() {
+        // Arrange
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(|| {
             Ok(vec![
@@ -315,8 +324,11 @@ mod tests {
         };
 
         let service = AgentListService::new(workspace_manager, mock_process);
+
+        // Act
         let agents = service.list_running_agents().unwrap();
 
+        // Assert
         // Should only find the agent with resolvable CWD.
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].pid, 123);
@@ -324,6 +336,7 @@ mod tests {
 
     #[test]
     fn test_list_running_agents_empty_cases() {
+        // Arrange
         // No worktrees.
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock
@@ -342,10 +355,14 @@ mod tests {
             cwds: vec![(123, PathBuf::from("/repo/worktree1"))],
         };
         let service = AgentListService::new(workspace_manager, mock_process);
+
+        // Act
         let agents = service.list_running_agents().unwrap();
+
+        // Assert
         assert_eq!(agents.len(), 0);
 
-        // No processes.
+        // Act - No processes.
         let mut worktree_mock = MockGitOperations::new();
         // Only main repo entry — skipped by get_all, so no workspaces returned
         worktree_mock.expect_list_worktrees().return_once(|| {
@@ -369,6 +386,8 @@ mod tests {
         };
         let service = AgentListService::new(workspace_manager, mock_process);
         let agents = service.list_running_agents().unwrap();
+
+        // Assert
         assert_eq!(agents.len(), 0);
     }
 }

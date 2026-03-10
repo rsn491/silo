@@ -148,30 +148,42 @@ mod tests {
 
     #[test]
     fn test_load_settings_missing_file() {
+        // Arrange
         let dir = tempdir().unwrap();
         let settings_path = dir.path().join("settings.json");
 
+        // Act
         let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+
+        // Assert
         assert!(settings.agent.is_none());
     }
 
     #[test]
     fn test_load_settings_valid_json() {
+        // Arrange
         let dir = tempdir().unwrap();
         let settings_path = dir.path().join("settings.json");
         fs::write(&settings_path, r#"{"agent":"codex"}"#).unwrap();
 
+        // Act
         let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+
+        // Assert
         assert_eq!(settings.agent, Some(Agent::Codex));
     }
 
     #[test]
     fn test_load_settings_invalid_json() {
+        // Arrange
         let dir = tempdir().unwrap();
         let settings_path = dir.path().join("settings.json");
         fs::write(&settings_path, "{invalid").unwrap();
 
+        // Act
         let err = SiloConfig::load_settings_from_path(&settings_path).unwrap_err();
+
+        // Assert
         match err {
             SiloConfigError::JsonParse(_) => {}
             other => panic!("unexpected error: {:?}", other),
@@ -180,16 +192,19 @@ mod tests {
 
     #[test]
     fn test_save_settings() {
+        // Arrange
         let dir = tempdir().unwrap();
         let settings_path = dir.path().join("settings.json");
-
         let settings = SiloSettings {
             agent: Some(Agent::OpenCode),
             workspace_type: None,
             exit_work: None,
         };
 
+        // Act
         SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
+
+        // Assert
         let contents = fs::read_to_string(&settings_path).unwrap();
         assert!(contents.contains("\"agent\""));
         assert!(contents.contains("opencode"));
@@ -197,53 +212,67 @@ mod tests {
 
     #[test]
     fn test_save_and_load_workspace_type() {
+        // Arrange
         let dir = tempdir().unwrap();
         let settings_path = dir.path().join("settings.json");
-
         let settings = SiloSettings {
             agent: None,
             workspace_type: Some(WorkspaceKind::Checkout),
             exit_work: None,
         };
-        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
 
+        // Act
+        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
         let loaded = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+
+        // Assert
         assert_eq!(loaded.workspace_type, Some(WorkspaceKind::Checkout));
     }
 
     #[test]
     fn test_workspace_type_default_is_absent() {
+        // Arrange
         let dir = tempdir().unwrap();
         let settings_path = dir.path().join("settings.json");
         fs::write(&settings_path, r#"{"agent":"claude"}"#).unwrap();
 
+        // Act
         let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+
+        // Assert
         assert!(settings.workspace_type.is_none());
     }
 
     #[test]
     fn test_exit_work_round_trip() {
+        // Arrange
         let dir = tempdir().unwrap();
         let settings_path = dir.path().join("settings.json");
-
         let settings = SiloSettings {
             agent: None,
             workspace_type: None,
             exit_work: Some(false),
         };
-        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
 
+        // Act
+        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
         let loaded = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+
+        // Assert
         assert_eq!(loaded.exit_work, Some(false));
     }
 
     #[test]
     fn test_exit_work_default_is_absent() {
+        // Arrange
         let dir = tempdir().unwrap();
         let settings_path = dir.path().join("settings.json");
         fs::write(&settings_path, r#"{"agent":"claude"}"#).unwrap();
 
+        // Act
         let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+
+        // Assert
         assert!(settings.exit_work.is_none());
     }
 }
