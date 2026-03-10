@@ -3,8 +3,8 @@
 use crate::infra::agent::Agent;
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::{Terminal, TerminalError};
-use crate::services::agent_workspace::WorkspaceFactory;
 use crate::services::workspace_lock::WorkspaceLock;
+use crate::services::workspace_manager::WorkspaceFactory;
 use thiserror::Error;
 
 /// Modes for launching an agent.

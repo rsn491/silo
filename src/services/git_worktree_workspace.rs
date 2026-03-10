@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::agent_launcher::LaunchError;
-use super::agent_workspace::{
+use super::workspace_manager::{
     CleanupError, CleanupResult, FailedWorkspace, GitStatus, RemovedWorkspace, SkippedWorkspace,
     StatusError, WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
     reuse_inactive_workspace,

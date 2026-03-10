@@ -4,7 +4,7 @@ pub mod agent;
 pub mod git;
 pub mod git_error;
 pub mod osascript;
-pub mod process;
+pub mod system_process;
 pub mod terminal;
 /// Workspace classification types used across services.
 pub mod workspace_kind;

@@ -5,9 +5,9 @@ use std::path::PathBuf;
 
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
-use crate::services::agent_workspace::{CleanupError, CleanupResult, WorkspaceManager};
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
+use crate::services::workspace_manager::{CleanupError, CleanupResult, WorkspaceManager};
 
 /// Orchestrates workspace operations across both Git worktrees and local checkouts.
 pub struct GlobalWorkspaceManager<G: GitOperations> {
