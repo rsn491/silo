@@ -80,6 +80,14 @@ pub trait AgentCommand {
         &[]
     }
 
+    /// Returns `true` if this agent supports the given interaction mode.
+    ///
+    /// Defaults to `true` for all modes. Agents that do not support a particular mode (e.g. no
+    /// native plan mode) should override this and return `false` for unsupported modes.
+    fn supports_mode(&self, _mode: AgentMode) -> bool {
+        true
+    }
+
     /// Runs the agent in the specified execution mode.
     ///
     /// - [`RunningMode::Background`]: runs the agent non-interactively and returns captured stdout.
@@ -181,6 +189,11 @@ impl Agent {
     /// Returns the CLI arguments for the given launch mode.
     pub fn mode_args(&self, mode: AgentMode) -> &'static [&'static str] {
         self.command().mode_args(mode)
+    }
+
+    /// Returns `true` if this agent supports the given interaction mode.
+    pub fn supports_mode(&self, mode: AgentMode) -> bool {
+        self.command().supports_mode(mode)
     }
 
     /// Returns a [`Command`] configured to launch this agent in the given mode.

@@ -19,6 +19,10 @@ impl AgentCommand for CodexAgent {
         }
     }
 
+    fn supports_mode(&self, mode: AgentMode) -> bool {
+        mode != AgentMode::Plan
+    }
+
     fn run(
         &self,
         message: Option<&str>,

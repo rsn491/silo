@@ -26,12 +26,14 @@ impl AgentCommand for OpenCodeAgent {
         exec_mode: RunningMode,
         working_dir: Option<&std::path::Path>,
     ) -> Result<String, PromptError> {
-        let mut cmd = Command::new("opencode");
-        cmd.args(self.mode_args(mode.unwrap_or(AgentMode::Code)));
         match exec_mode {
             RunningMode::Background => {
+                // `opencode run [message]` is the non-interactive subcommand.
+                let mut cmd = Command::new("opencode");
+                cmd.arg("run");
+                cmd.args(self.mode_args(mode.unwrap_or(AgentMode::Code)));
                 if let Some(msg) = message {
-                    cmd.args(["-p", msg]);
+                    cmd.arg(msg);
                 }
                 if let Some(dir) = working_dir {
                     cmd.current_dir(dir);
@@ -45,8 +47,10 @@ impl AgentCommand for OpenCodeAgent {
                 Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
             }
             RunningMode::Foreground => {
+                let mut cmd = Command::new("opencode");
+                cmd.args(self.mode_args(mode.unwrap_or(AgentMode::Code)));
                 if let Some(msg) = message {
-                    cmd.arg(msg);
+                    cmd.args(["--prompt", msg]);
                 }
                 if let Some(dir) = working_dir {
                     cmd.current_dir(dir);
