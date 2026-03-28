@@ -33,8 +33,17 @@ highlight = "all"
 skip = [
     # uuid 1.x requires getrandom 0.2.x; tempfile 3.x requires getrandom 0.3.x
     { crate = "getrandom", reason = "uuid 1.x and tempfile 3.x require different major versions of getrandom" },
-    # dirs-sys requires windows-sys 0.48.x; clap/anstyle ecosystem requires 0.61.x
-    { crate = "windows-sys", reason = "dirs-sys requires windows-sys 0.48.x while clap/anstyle requires 0.61.x" },
+    # dirs-sys requires windows-sys 0.48.x; dialoguer/console requires 0.59.x
+    # All windows-* sub-crates are duplicated for the same reason.
+    { crate = "windows-sys", reason = "dirs-sys requires windows-sys 0.48.x while dialoguer/console requires 0.59.x" },
+    { crate = "windows-targets", reason = "transitive duplicate from windows-sys version split" },
+    { crate = "windows_aarch64_gnullvm", reason = "transitive duplicate from windows-sys version split" },
+    { crate = "windows_aarch64_msvc", reason = "transitive duplicate from windows-sys version split" },
+    { crate = "windows_i686_gnu", reason = "transitive duplicate from windows-sys version split" },
+    { crate = "windows_i686_msvc", reason = "transitive duplicate from windows-sys version split" },
+    { crate = "windows_x86_64_gnu", reason = "transitive duplicate from windows-sys version split" },
+    { crate = "windows_x86_64_gnullvm", reason = "transitive duplicate from windows-sys version split" },
+    { crate = "windows_x86_64_msvc", reason = "transitive duplicate from windows-sys version split" },
 ]
 
 [sources]
