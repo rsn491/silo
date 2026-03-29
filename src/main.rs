@@ -13,11 +13,11 @@ use cli::launch::{LaunchArgs, LaunchCommand};
 use cli::ps::PsCommand;
 use cli::status::{StatusArgs, StatusCommand};
 use infra::git::Git;
-use infra::process::SystemProcess;
+use infra::system_process::SystemProcess;
 use infra::terminal;
 use services::agent_launcher::LaunchMode;
-use services::agent_list::AgentListService;
-use services::global_workspace::GlobalWorkspaceManager;
+use services::agent_list_service::AgentListService;
+use services::global_workspace_manager::GlobalWorkspaceManager;
 use services::silo_config::SiloConfig;
 
 /// The main CLI structure for Silo.

@@ -5,11 +5,11 @@ use dialoguer::{Select, theme::ColorfulTheme};
 use std::collections::HashSet;
 
 use crate::infra::git::GitOperations;
-use crate::infra::process::ProcessOperations;
-use crate::services::agent_list::AgentListService;
-use crate::services::agent_workspace::WorkspaceManager;
-use crate::services::global_workspace::GlobalWorkspaceManager;
+use crate::infra::system_process::ProcessOperations;
+use crate::services::agent_list_service::AgentListService;
+use crate::services::global_workspace_manager::GlobalWorkspaceManager;
 use crate::services::workspace_kind::WorkspaceKind;
+use crate::services::workspace_manager::WorkspaceManager;
 
 /// Arguments for the `cleanup` command.
 #[derive(Parser, Debug)]

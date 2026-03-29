@@ -3,8 +3,8 @@
 use clap::Parser;
 
 use crate::infra::git::GitOperations;
-use crate::services::agent_workspace::WorkspaceManager;
-use crate::services::global_workspace::GlobalWorkspaceManager;
+use crate::services::global_workspace_manager::GlobalWorkspaceManager;
+use crate::services::workspace_manager::WorkspaceManager;
 
 /// Arguments for the `status` command.
 #[derive(Parser, Debug)]

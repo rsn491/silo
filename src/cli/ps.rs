@@ -1,8 +1,8 @@
 //! Logic for the `ps` command.
 
 use crate::infra::git::GitOperations;
-use crate::infra::process::ProcessOperations;
-use crate::services::agent_list::AgentListService;
+use crate::infra::system_process::ProcessOperations;
+use crate::services::agent_list_service::AgentListService;
 
 /// Handler for the `ps` command.
 pub struct PsCommand<G: GitOperations + Clone, P: ProcessOperations> {

@@ -6,8 +6,8 @@ use clap::Parser;
 use dialoguer::Select;
 
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
-use crate::services::agent_workspace::WorkspaceManager;
-use crate::services::global_workspace::GlobalWorkspaceManager;
+use crate::services::global_workspace_manager::GlobalWorkspaceManager;
+use crate::services::workspace_manager::WorkspaceManager;
 
 /// Arguments for the `checkout` command.
 #[derive(Parser, Debug)]
