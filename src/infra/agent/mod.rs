@@ -1,19 +1,19 @@
 //! Supported AI agents and their command-line mappings.
 
-mod claude_code;
-mod codex;
+mod claude_code_agent;
+mod codex_agent;
 mod gemini;
-mod open_code;
+mod open_code_agent;
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, EnumString, IntoStaticStr};
 use thiserror::Error;
 
-use claude_code::ClaudeCodeAgent;
-use codex::CodexAgent;
+use claude_code_agent::ClaudeCodeAgent;
+use codex_agent::CodexAgent;
 use gemini::GeminiAgent;
-use open_code::OpenCodeAgent;
+use open_code_agent::OpenCodeAgent;
 
 /// Errors that can occur when prompting an agent in headless mode.
 #[derive(Debug, Error)]
