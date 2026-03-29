@@ -8,8 +8,8 @@ use crate::infra::git::GitOperations;
 use crate::infra::system_process::ProcessOperations;
 use crate::services::agent_list_service::AgentListService;
 use crate::services::global_workspace_manager::GlobalWorkspaceManager;
-use crate::services::workspace_manager::WorkspaceManager;
 use crate::services::workspace_kind::WorkspaceKind;
+use crate::services::workspace_manager::WorkspaceManager;
 
 /// Arguments for the `cleanup` command.
 #[derive(Parser, Debug)]

@@ -6,11 +6,11 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 use super::agent_launcher::LaunchError;
+use super::silo_config::SiloConfig;
 use super::workspace_manager::{
     CleanupError, CleanupResult, FailedWorkspace, RemovedWorkspace, SkippedWorkspace,
     WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote, reuse_inactive_workspace,
 };
-use super::silo_config::SiloConfig;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 use crate::infra::workspace_kind::WorkspaceKind;

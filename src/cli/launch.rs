@@ -57,7 +57,9 @@ enum WorkspaceBackend<G: GitOperations> {
     Checkout(GitCheckoutWorkspace<G>),
 }
 
-impl<G: GitOperations> crate::services::workspace_manager::WorkspaceFactory for WorkspaceBackend<G> {
+impl<G: GitOperations> crate::services::workspace_manager::WorkspaceFactory
+    for WorkspaceBackend<G>
+{
     fn create(
         &self,
         branch: Option<String>,
