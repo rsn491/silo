@@ -24,7 +24,7 @@ repos:
 
       - id: cargo-test
         name: cargo test
-        entry: cargo test
+        entry: cargo test --bins
         language: system
         types: [rust]
         pass_filenames: false
