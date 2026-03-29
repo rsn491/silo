@@ -19,6 +19,6 @@ jobs:
           toolchain: "1.93.0"
       - uses: Swatinem/rust-cache@v2
       - name: Install opencode
-        run: npm install -g opencode
+        run: npm install -g opencode-ai
       - name: Run integration tests
         run: cargo test --test '*' -- --ignored
