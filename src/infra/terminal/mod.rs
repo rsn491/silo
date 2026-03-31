@@ -26,12 +26,12 @@ pub trait Terminal: std::fmt::Debug {
     /// Returns [`TerminalError::TabOpenFailed`] if the terminal cannot open a new tab.
     fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError>;
 
-    /// Splits the current pane in the terminal, sets the working directory, and launches the agent.
+    /// Splits the current pane in the terminal and runs `command` from `working_dir`.
     ///
     /// # Errors
     ///
     /// Returns [`TerminalError::PaneSplitFailed`] if the terminal cannot split the pane.
-    fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError>;
+    fn split_pane(&self, working_dir: &Path, command: &str) -> Result<(), TerminalError>;
 }
 
 /// Creates a terminal instance of the specified kind.
