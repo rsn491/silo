@@ -39,16 +39,15 @@ impl Terminal for ITerm2 {
         run_osascript(&script).map_err(|e| TerminalError::TabOpenFailed(e.to_string()))
     }
 
-    /// Splits the current pane in iTerm2 vertically and launches the agent.
+    /// Splits the current pane in iTerm2 vertically and runs `command` from `working_dir`.
     ///
     /// # Errors
     ///
     /// Returns [`TerminalError::PaneSplitFailed`] if the AppleScript fails to execute.
-    fn split_pane(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError> {
-        let path_str = worktree_path.display().to_string();
+    fn split_pane(&self, working_dir: &Path, command: &str) -> Result<(), TerminalError> {
+        let path_str = working_dir.display().to_string();
         let escaped_path = path_str.replace('\'', "'\\''");
-        let command_name = agent.command_name();
-        let escaped_program = command_name.replace('\'', "'\\''");
+        let escaped_command = command.replace('"', "\\\"");
         let script = format!(
             r#"tell application "iTerm2"
                 activate
@@ -62,7 +61,7 @@ impl Terminal for ITerm2 {
                     end tell
                 end tell
             end tell"#,
-            escaped_path, escaped_program
+            escaped_path, escaped_command
         );
         run_osascript(&script).map_err(|e| TerminalError::PaneSplitFailed(e.to_string()))
     }

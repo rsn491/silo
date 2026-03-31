@@ -146,17 +146,8 @@ where
                 }
             }
             LaunchMode::SplitPane => {
-                let terminal = self.terminal.as_ref().ok_or_else(|| {
-                    LaunchError::AgentSpawnError("no terminal provided for split pane".to_string())
-                })?;
-                match terminal.split_pane(&workspace_path, &self.agent) {
-                    Ok(()) => {}
-                    Err(_e) => {
-                        let result = self.launch_in_workspace(&workspace_path);
-                        lock.release();
-                        result?;
-                    }
-                }
+                // SplitPane is handled before AgentLauncher is created (in LaunchCommand::run).
+                unreachable!("SplitPane should be handled upstream in LaunchCommand");
             }
         }
 

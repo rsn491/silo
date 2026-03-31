@@ -101,6 +101,14 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
     ///
     /// Returns an error if workspace creation or agent launching fails.
     pub fn run(self, args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
+        if self.launch_mode == LaunchMode::SplitPane {
+            let terminal = self.terminal.ok_or("no terminal provided for split pane")?;
+            let current_dir = std::env::current_dir()?;
+            let command = build_silo_launch_command(&args);
+            terminal.split_pane(&current_dir, &command)?;
+            return Ok(());
+        }
+
         let agent = resolve_agent(args.agent);
         let kind = resolve_workspace_type(args.checkout, args.worktree);
         eprintln!("Launching {:?} in {}...", agent, kind);
@@ -293,4 +301,39 @@ fn resolve_agent(agent: Option<Agent>) -> Agent {
                 .and_then(|settings| settings.agent)
         })
         .unwrap_or_default()
+}
+
+/// Builds a `silo launch` command string from the given args, excluding `--split-pane`.
+///
+/// Uses the current executable path so the new pane runs the same binary.
+fn build_silo_launch_command(args: &LaunchArgs) -> String {
+    let silo = std::env::current_exe()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| "silo".to_string());
+
+    let mut parts = vec![shell_quote(&silo), "launch".to_string()];
+
+    if let Some(agent) = &args.agent {
+        parts.push("--agent".to_string());
+        parts.push(shell_quote(agent.command_name()));
+    }
+    if let Some(branch) = &args.branch {
+        parts.push("--branch".to_string());
+        parts.push(shell_quote(branch));
+    }
+    if args.checkout {
+        parts.push("--checkout".to_string());
+    } else if args.worktree {
+        parts.push("--worktree".to_string());
+    }
+    if args.reuse {
+        parts.push("--reuse".to_string());
+    }
+
+    parts.join(" ")
+}
+
+/// Wraps a string in single quotes with internal single quotes escaped for POSIX shell.
+fn shell_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
 }
