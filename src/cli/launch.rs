@@ -11,6 +11,7 @@ use crate::infra::terminal::Terminal;
 use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
 use crate::services::git_branch_service::{BranchRenameOutcome, GitBranchService};
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
+use crate::services::git_suggestions_service::GitSuggestionsService;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
@@ -196,9 +197,23 @@ fn check_and_handle_exit_work(
             == 0;
 
         if should_commit {
-            let message: String = Input::with_theme(&ColorfulTheme::default())
-                .with_prompt("Commit message")
-                .interact_text()?;
+            eprintln!("Generating commit message suggestion...");
+            let suggestion = git
+                .get_changes_summary(workspace_path)
+                .ok()
+                .and_then(|changes| {
+                    GitSuggestionsService::new(agent.clone())
+                        .suggest_commit_message(&changes)
+                        .ok()
+                        .flatten()
+                });
+
+            let theme = ColorfulTheme::default();
+            let mut input = Input::<String>::with_theme(&theme).with_prompt("Commit message");
+            if let Some(ref msg) = suggestion {
+                input = input.with_initial_text(msg);
+            }
+            let message = input.interact_text()?;
 
             match git.commit_all(workspace_path, &message) {
                 Ok(()) => {

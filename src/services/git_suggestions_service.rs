@@ -61,4 +61,36 @@ impl GitSuggestionsService {
             Ok(Some(sanitized))
         }
     }
+
+    /// Prompts the agent in headless mode with the git changes and returns a suggested commit
+    /// message.
+    ///
+    /// Returns `Ok(None)` if the agent output is empty, and `Err` if the agent call itself fails.
+    pub fn suggest_commit_message(&self, changes: &str) -> Result<Option<String>, String> {
+        let prompt = format!(
+            "Based on the following git changes, suggest a concise git commit message.\n\
+             Rules:\n\
+             - One short sentence (imperative mood, e.g. \"Add login validation\")\n\
+             - No trailing period\n\
+             - Output ONLY the commit message on a single line, nothing else\n\n\
+             Git changes:\n{}\n\n\
+             Commit message:",
+            changes
+        );
+
+        let raw = self.agent.prompt(&prompt).map_err(|e| e.to_string())?;
+
+        let trimmed = raw
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+
+        if trimmed.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(trimmed))
+        }
+    }
 }
