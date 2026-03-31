@@ -87,9 +87,15 @@ fn select_interactively(
     let items: Vec<String> = workspaces
         .iter()
         .map(|w| {
-            let name = w.path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
+            let id = w.path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
             let branch = w.branch.as_deref().unwrap_or("(detached)");
-            format!("[{:<8}]  {:<32}  ({})", w.kind, name, branch)
+            let commit = w.latest_commit.as_deref().unwrap_or("-");
+            format!(
+                "{:<32}  {:<32}  {}",
+                trunc(id, 32),
+                trunc(branch, 32),
+                trunc(commit, 50)
+            )
         })
         .collect();
 
@@ -116,6 +122,18 @@ fn select_interactively(
 /// # Errors
 ///
 /// Returns an error if the shell process cannot be spawned.
+/// Truncates a string to the specified maximum length, adding an ellipsis if needed.
+fn trunc(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut t: String = s.chars().take(max - 1).collect();
+        t.push('…');
+        t
+    }
+}
+
+/// Spawns an interactive shell in the specified directory.
 fn spawn_shell_in(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
 
