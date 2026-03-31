@@ -194,14 +194,15 @@ impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
                 StatusError::Git(g) => g,
             })?;
 
+            let latest_commit = self.git.get_latest_commit(&s.path).ok().flatten();
+
             result.push(GitWorkspaceInfo {
                 path,
                 branch,
-                kind: WorkspaceKind::Worktree,
                 has_uncommitted_changes: s.has_uncommitted_changes,
-                uncommitted_file_count: s.uncommitted_file_count,
                 commits_ahead: s.commits_ahead,
                 commits_behind: s.commits_behind,
+                latest_commit,
             });
         }
 
@@ -493,6 +494,9 @@ mod tests {
         mock_git
             .expect_count_commits_behind()
             .returning(|_, _| Ok(0));
+        mock_git
+            .expect_get_latest_commit()
+            .returning(|_| Ok(Some("abc1234 initial commit".to_string())));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act
@@ -554,6 +558,9 @@ mod tests {
         mock_git
             .expect_count_commits_behind()
             .returning(|_, _| Ok(0));
+        mock_git
+            .expect_get_latest_commit()
+            .returning(|_| Ok(Some("abc1234 initial commit".to_string())));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act

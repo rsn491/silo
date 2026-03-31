@@ -49,36 +49,36 @@ impl<G: GitOperations> StatusCommand<G> {
             return Ok(());
         }
 
-        println!(
-            "{:<10} {:<50} {:<20} {:<12} {:<12}",
-            "TYPE", "PATH", "BRANCH", "UNCOMMITTED", "AHEAD/BEHIND"
-        );
+        println!("{:<32} {:<32} LATEST COMMIT", "ID", "BRANCH");
 
         for status in &statuses {
+            let id = status
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("?");
             let branch = status.branch.as_deref().unwrap_or("(detached)");
-
-            let uncommitted = if status.has_uncommitted_changes {
-                format!("{} files", status.uncommitted_file_count)
-            } else {
-                "-".to_string()
-            };
-
-            let divergence = if status.commits_ahead > 0 || status.commits_behind > 0 {
-                format!("+{} -{}", status.commits_ahead, status.commits_behind)
-            } else {
-                "-".to_string()
-            };
+            let commit = status.latest_commit.as_deref().unwrap_or("-");
 
             println!(
-                "{:<10} {:<50} {:<20} {:<12} {:<12}",
-                status.kind,
-                status.path.display(),
-                branch,
-                uncommitted,
-                divergence
+                "{:<32} {:<32} {}",
+                trunc(id, 32),
+                trunc(branch, 32),
+                trunc(commit, 50)
             );
         }
 
         Ok(())
+    }
+}
+
+/// Truncates a string to the specified maximum length, adding an ellipsis if needed.
+fn trunc(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut t: String = s.chars().take(max - 1).collect();
+        t.push('…');
+        t
     }
 }

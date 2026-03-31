@@ -187,6 +187,9 @@ mod tests {
         worktree_mock
             .expect_count_commits_behind()
             .returning(|_, _| Ok(0));
+        worktree_mock
+            .expect_get_latest_commit()
+            .returning(|_| Ok(None));
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock
             .expect_get_project_name()
@@ -252,6 +255,9 @@ mod tests {
         worktree_mock
             .expect_count_commits_behind()
             .returning(|_, _| Ok(0));
+        worktree_mock
+            .expect_get_latest_commit()
+            .returning(|_| Ok(None));
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock
             .expect_get_project_name()
@@ -305,6 +311,9 @@ mod tests {
         worktree_mock
             .expect_count_commits_behind()
             .returning(|_, _| Ok(0));
+        worktree_mock
+            .expect_get_latest_commit()
+            .returning(|_| Ok(None));
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock
             .expect_get_project_name()

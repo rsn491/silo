@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::infra::git_error::GitError;
-use crate::infra::workspace_kind::WorkspaceKind;
 
 /// Information about a Git workspace (worktree or clone).
 #[derive(Debug, Clone, Default)]
@@ -13,16 +12,14 @@ pub struct GitWorkspaceInfo {
     pub path: PathBuf,
     /// The name of the current branch in this workspace, if any.
     pub branch: Option<String>,
-    /// Whether the workspace is a worktree or a full checkout.
-    pub kind: WorkspaceKind,
     /// True when the workspace has uncommitted changes.
     pub has_uncommitted_changes: bool,
-    /// Count of uncommitted files reported by `git status`.
-    pub uncommitted_file_count: usize,
     /// Commits the workspace is ahead of the base branch.
     pub commits_ahead: usize,
     /// Commits the workspace is behind the base branch.
     pub commits_behind: usize,
+    /// The latest commit summary (short hash + message), if available.
+    pub latest_commit: Option<String>,
 }
 
 /// Trait defining Git operations required by the service layer.
@@ -158,6 +155,11 @@ pub trait GitOperations {
     ///
     /// Returns [`GitError::CommandFailed`] if `git branch -m` fails.
     fn rename_branch(&self, path: &Path, new_name: &str) -> Result<(), GitError>;
+
+    /// Returns a one-line summary of the latest commit at the specified path.
+    ///
+    /// Returns `None` if there are no commits or the command fails.
+    fn get_latest_commit(&self, path: &Path) -> Result<Option<String>, GitError>;
 }
 
 /// A concrete implementation of [`GitOperations`] using the `git` command-line tool.
@@ -495,6 +497,26 @@ impl GitOperations for Git {
 
         Ok(())
     }
+
+    fn get_latest_commit(&self, path: &Path) -> Result<Option<String>, GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["log", "--oneline", "-1"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            return Ok(None);
+        }
+
+        let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if commit.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(commit))
+        }
+    }
 }
 
 /// Extracts the project name from a Git repository URL.
@@ -611,10 +633,8 @@ branch refs/heads/feature-branch
         assert_eq!(worktrees.len(), 2);
         assert_eq!(worktrees[0].path, PathBuf::from("/path/to/main"));
         assert_eq!(worktrees[0].branch, Some("main".to_string()));
-        assert_eq!(worktrees[0].kind, WorkspaceKind::Worktree);
         assert_eq!(worktrees[1].path, PathBuf::from("/path/to/feature"));
         assert_eq!(worktrees[1].branch, Some("feature-branch".to_string()));
-        assert_eq!(worktrees[1].kind, WorkspaceKind::Worktree);
     }
 
     #[test]

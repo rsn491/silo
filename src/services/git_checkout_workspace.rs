@@ -102,14 +102,15 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
             let commits_ahead = self.git.count_commits_ahead(&path, &base_branch)?;
             let commits_behind = self.git.count_commits_behind(&path, &base_branch)?;
 
+            let latest_commit = self.git.get_latest_commit(&path).ok().flatten();
+
             result.push(GitWorkspaceInfo {
                 path,
                 branch,
-                kind: WorkspaceKind::Checkout,
                 has_uncommitted_changes: file_count > 0,
-                uncommitted_file_count: file_count,
                 commits_ahead,
                 commits_behind,
+                latest_commit,
             });
         }
 
