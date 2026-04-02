@@ -47,10 +47,8 @@ silo ps
 Display branch, commit, and change status across all workspaces:
 
 ```sh
-silo status [--all]
+silo status
 ```
-
-By default only workspaces with changes or commits ahead/behind are shown. Pass `--all` to include everything.
 
 ### Switch into a workspace
 
