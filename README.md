@@ -1,24 +1,38 @@
 # silo
 
-A CLI tool for managing isolated Git workspaces for multi-agent development. Silo lets multiple AI agents (Claude Code, OpenCode, Codex, Gemini) work simultaneously on the same repository without interfering with each other, by creating separate Git worktrees or clones for each agent.
+An agent launcher and isolated workspace manager for parallel agentic development. Silo lets you launch multiple AI agents — Claude Code, OpenCode, Codex, Gemini — to work simultaneously on the same repository, each in its own isolated Git worktree or clone.
 
 ## Usage
 
 ### Initialize
 
-Set up the `~/.silo/` directory where workspaces will be stored:
+Set up the `~/.silo/` directory and configure default preferences:
 
 ```sh
-silo init
+silo init [--agent <agent>] [--workspace-type <worktree|checkout>] [--exit-work <true|false>]
 ```
+
+When run without arguments in an interactive terminal, `init` walks you through setup. Preferences are saved to `~/.silo/settings.json`.
 
 ### Launch an agent
 
 Create an isolated workspace and launch an AI agent inside it:
 
 ```sh
-silo launch [--agent <agent>] [--branch <branch>] [--tab|--split-pane] [--checkout|--worktree]
+silo launch [--agent <agent>] [--branch <branch>] [--worktree|--checkout] [--reuse] [--tab|--split-pane]
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--agent <agent>` | Agent to launch: `claude` (default), `opencode`, `codex`, `gemini` |
+| `--branch <branch>` | Custom branch name (default: auto-generated) |
+| `--worktree` | Use a Git worktree (default) |
+| `--checkout` | Use a full local Git clone instead |
+| `--reuse` | Reuse an existing inactive workspace if available |
+| `--tab` | Open in a new terminal tab (iTerm2) |
+| `--split-pane` | Open in a vertical split pane (iTerm2) |
+
+When the agent exits, silo detects uncommitted changes and offers to commit, suggest a branch name, and push.
 
 ### List running agents
 
@@ -30,28 +44,44 @@ silo ps
 
 ### Show workspace status
 
-Display the status of all worktrees with commit information:
+Display branch, commit, and change status across all workspaces:
 
 ```sh
 silo status
 ```
 
+### Switch into a workspace
+
+Open an interactive shell inside a workspace directory:
+
+```sh
+silo checkout [workspace_id]
+```
+
+If no workspace ID is given, an interactive selector is displayed. Type `exit` to return to your original session.
+
 ### Clean up workspaces
 
-Remove inactive workspaces. By default, workspaces with uncommitted changes are skipped:
+Remove inactive workspaces. Workspaces with uncommitted changes are skipped unless `--force` is passed:
 
 ```sh
 silo cleanup [--all] [--force] [--yes]
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Clean all worktrees in the repo, including non-silo ones |
+| `--force` | Remove workspaces even with uncommitted or unpushed work |
+| `--yes` | Skip the confirmation prompt |
 
 ### Shell completions
 
 Generate shell completion scripts:
 
 ```sh
-silo completions --shell bash          # Bash completions
-silo completions --shell zsh           # Zsh completions
-silo completions --shell fish          # Fish completions
+silo completions --shell bash
+silo completions --shell zsh
+silo completions --shell fish
 ```
 
 ## Dependencies
