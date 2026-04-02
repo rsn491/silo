@@ -1,6 +1,6 @@
 # silo
 
-An agent launcher and isolated workspace manager for parallel agentic development. Silo lets you launch multiple AI agents — Claude Code, OpenCode, Codex, Gemini — to work simultaneously on the same repository, each in its own isolated Git worktree or clone.
+An agent launcher and isolated workspace manager for parallel agentic development. Silo lets you launch multiple AI agents — like Claude Code, OpenCode, Codex — to work simultaneously on the same repository, each in its own isolated Git worktree or clone.
 
 ## Usage
 
