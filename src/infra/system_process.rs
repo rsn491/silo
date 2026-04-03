@@ -220,7 +220,7 @@ mod tests {
 n/path/to/worktree";
 
         // Act
-        let cwd = parse_lsof_cwd_output(output).unwrap();
+        let cwd = parse_lsof_cwd_output(output).expect("should parse valid lsof output");
 
         // Assert
         assert_eq!(cwd, PathBuf::from("/path/to/worktree"));

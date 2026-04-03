@@ -132,7 +132,7 @@ mod tests {
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
         // Act
-        let all = service.get_all().unwrap();
+        let all = service.get_all().expect("get_all should succeed with mock data");
 
         // Assert
         assert_eq!(all.len(), 1);
@@ -168,7 +168,7 @@ mod tests {
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
         // Act
-        let result = service.cleanup(&HashSet::new(), true, false).unwrap();
+        let result = service.cleanup(&HashSet::new(), true, false).expect("cleanup should succeed with mock data");
 
         // Assert
         assert_eq!(result.removed.len(), 0);
@@ -223,7 +223,7 @@ mod tests {
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
         // Act
-        let all = service.get_all().unwrap();
+        let all = service.get_all().expect("get_all should succeed with mock data");
 
         // Assert
         assert_eq!(all.len(), 1);

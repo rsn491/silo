@@ -91,7 +91,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn tmp() -> TempDir {
-        tempfile::tempdir().unwrap()
+        tempfile::tempdir().expect("failed to create temp dir")
     }
 
     #[test]
@@ -101,7 +101,7 @@ mod tests {
         let lock = WorkspaceLock::new(dir.path());
 
         // Act
-        lock.try_acquire().unwrap();
+        lock.try_acquire().expect("should acquire lock on fresh directory");
 
         // Assert
         assert!(dir.path().join("silo.lock").exists());
@@ -114,7 +114,7 @@ mod tests {
         assert!(!WorkspaceLock::is_locked(dir.path()));
 
         // Act
-        WorkspaceLock::new(dir.path()).try_acquire().unwrap();
+        WorkspaceLock::new(dir.path()).try_acquire().expect("should acquire lock on fresh directory");
 
         // Assert
         assert!(WorkspaceLock::is_locked(dir.path()));
@@ -124,7 +124,7 @@ mod tests {
     fn acquire_fails_when_already_locked() {
         // Arrange
         let dir = tmp();
-        WorkspaceLock::new(dir.path()).try_acquire().unwrap();
+        WorkspaceLock::new(dir.path()).try_acquire().expect("should acquire lock on fresh directory");
 
         // Act
         let err = WorkspaceLock::new(dir.path()).try_acquire().unwrap_err();
@@ -138,7 +138,7 @@ mod tests {
         // Arrange
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
-        lock.try_acquire().unwrap();
+        lock.try_acquire().expect("should acquire lock on fresh directory");
 
         // Act
         lock.release();
@@ -166,7 +166,7 @@ mod tests {
         // Arrange
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
-        lock.try_acquire().unwrap();
+        lock.try_acquire().expect("should acquire lock on fresh directory");
         lock.release();
 
         // Act
@@ -180,7 +180,7 @@ mod tests {
     fn manually_placed_lock_file_is_detected() {
         // Arrange
         let dir = tmp();
-        fs::write(dir.path().join("silo.lock"), b"").unwrap();
+        fs::write(dir.path().join("silo.lock"), b"").expect("failed to write lock file");
 
         // Act
         let is_locked = WorkspaceLock::is_locked(dir.path());
