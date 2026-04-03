@@ -105,7 +105,7 @@ mod tests {
             .expect("should acquire lock on fresh directory");
 
         // Assert
-        assert!(dir.path().join("silo.lock").exists());
+        assert!(dir.path().join(LOCK_FILE_NAME).exists());
     }
 
     #[test]
@@ -150,7 +150,7 @@ mod tests {
         lock.release();
 
         // Assert
-        assert!(!dir.path().join("silo.lock").exists());
+        assert!(!dir.path().join(LOCK_FILE_NAME).exists());
     }
 
     #[test]
@@ -164,7 +164,7 @@ mod tests {
         lock.release();
 
         // Assert
-        assert!(!dir.path().join("silo.lock").exists());
+        assert!(!dir.path().join(LOCK_FILE_NAME).exists());
     }
 
     #[test]
@@ -187,7 +187,7 @@ mod tests {
     fn manually_placed_lock_file_is_detected() {
         // Arrange
         let dir = tmp();
-        fs::write(dir.path().join("silo.lock"), b"").expect("failed to write lock file");
+        fs::write(dir.path().join(LOCK_FILE_NAME), b"").expect("failed to write lock file");
 
         // Act
         let is_locked = WorkspaceLock::is_locked(dir.path());

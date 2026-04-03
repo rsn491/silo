@@ -8,6 +8,7 @@ use thiserror::Error;
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 use crate::services::agent_launcher::LaunchError;
+use crate::services::git_branch_service::UUID_SUFFIX_LEN;
 use crate::services::workspace_kind::WorkspaceKind;
 use crate::services::workspace_lock::WorkspaceLock;
 use uuid::Uuid;
@@ -131,7 +132,7 @@ pub fn reuse_inactive_workspace<G: GitOperations>(
             let project = git
                 .get_project_name()
                 .unwrap_or_else(|_| "workspace".to_string());
-            format!("{}-{}", project, &Uuid::new_v4().to_string()[..8])
+            format!("{}-{}", project, &Uuid::new_v4().to_string()[..UUID_SUFFIX_LEN])
         });
         git.checkout_new_branch(&ws.path, &branch_name)
             .map_err(LaunchError::Git)?;
