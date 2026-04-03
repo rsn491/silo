@@ -1,18 +1,8 @@
 //! Logic for the `status` command.
 
-use clap::Parser;
-
 use crate::infra::git::GitOperations;
 use crate::services::global_workspace_manager::GlobalWorkspaceManager;
 use crate::services::workspace_manager::WorkspaceManager;
-
-/// Arguments for the `status` command.
-#[derive(Parser, Debug)]
-pub struct StatusArgs {
-    /// Show all workspaces, including clean ones.
-    #[arg(long)]
-    pub all: bool,
-}
 
 /// Handler for the `status` command.
 pub struct StatusCommand<G: GitOperations> {
@@ -31,21 +21,10 @@ impl<G: GitOperations> StatusCommand<G> {
     /// # Errors
     ///
     /// Returns an error if workspace status cannot be retrieved.
-    pub fn run(&self, args: StatusArgs) -> Result<(), Box<dyn std::error::Error>> {
-        let workspaces = self.workspace_manager.get_all()?;
-        let statuses: Vec<_> = workspaces
-            .into_iter()
-            .filter(|w| {
-                args.all || w.has_uncommitted_changes || w.commits_ahead > 0 || w.commits_behind > 0
-            })
-            .collect();
+    pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let statuses = self.workspace_manager.get_all()?;
         if statuses.is_empty() {
-            if args.all {
-                println!("No workspaces found (excluding main worktree).");
-            } else {
-                println!("No workspaces with changes or commits ahead/behind.");
-                println!("Use --all to see all workspaces.");
-            }
+            println!("No workspaces found (excluding main worktree).");
             return Ok(());
         }
 

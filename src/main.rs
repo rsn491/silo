@@ -11,7 +11,7 @@ use cli::completions::{CompletionsArgs, CompletionsCommand};
 use cli::init::{InitArgs, InitCommand};
 use cli::launch::{LaunchArgs, LaunchCommand};
 use cli::ps::PsCommand;
-use cli::status::{StatusArgs, StatusCommand};
+use cli::status::StatusCommand;
 use infra::git::Git;
 use infra::system_process::SystemProcess;
 use infra::terminal;
@@ -41,8 +41,8 @@ pub enum Commands {
     Init(InitArgs),
     /// Clean up worktrees where no agents are running.
     Cleanup(CleanupArgs),
-    /// Show status of worktrees (uncommitted changes and commits ahead/behind).
-    Status(StatusArgs),
+    /// Show status of all worktrees inside the workspace root directory.
+    Status,
     /// Generate shell completion scripts.
     Completions(CompletionsArgs),
     /// Switch into a workspace by spawning a new shell in its directory.
@@ -88,8 +88,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             .run(args)?;
         }
-        Commands::Status(args) => {
-            StatusCommand::new(GlobalWorkspaceManager::with_git(Git)).run(args)?;
+        Commands::Status => {
+            StatusCommand::new(GlobalWorkspaceManager::with_git(Git)).run()?;
         }
         Commands::Completions(args) => CompletionsCommand::new().run(args)?,
         Commands::Checkout(args) => {
