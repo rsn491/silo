@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
+use crate::infra::system_process::pid_is_alive;
+
 /// Name of the lock file placed inside each workspace directory.
 const LOCK_FILE_NAME: &str = "silo.lock";
 
@@ -136,26 +138,6 @@ fn read_pid_from_lock(path: &Path) -> Option<u32> {
     std::fs::read_to_string(path)
         .ok()
         .and_then(|s| s.trim().parse().ok())
-}
-
-/// Returns `true` if the process with `pid` is currently running.
-///
-/// On Linux this is done by checking for the existence of `/proc/<pid>`,
-/// which is reliable and requires no external crates.  On other Unix
-/// systems the check falls back to a conservative `true` (assume alive)
-/// so that we never incorrectly reclaim a live lock on an unsupported
-/// platform.
-fn pid_is_alive(pid: u32) -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        Path::new(&format!("/proc/{pid}")).exists()
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = pid;
-        // Conservative fallback: assume the process is alive.
-        true
-    }
 }
 
 // ---------------------------------------------------------------------------
