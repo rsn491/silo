@@ -230,7 +230,7 @@ mod tests {
 
         // Assert
         assert!(result.is_ok());
-        let path = result.unwrap();
+        let path = result.expect("workspace creation should succeed");
         assert!(path.to_string_lossy().contains("test-project"));
     }
 
@@ -268,7 +268,9 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act
-        let status = workspace.get_git_status(worktree1_info).unwrap();
+        let status = workspace
+            .get_git_status(worktree1_info)
+            .expect("get_git_status should succeed");
 
         // Assert
         assert_eq!(status.path, worktree1_path);
@@ -312,7 +314,9 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act
-        let status = workspace.get_git_status(worktree1_info).unwrap();
+        let status = workspace
+            .get_git_status(worktree1_info)
+            .expect("get_git_status should succeed");
 
         // Assert
         assert_eq!(status.path, worktree1_path);
@@ -346,7 +350,9 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act
-        let status = workspace.get_git_status(worktree2_info).unwrap();
+        let status = workspace
+            .get_git_status(worktree2_info)
+            .expect("get_git_status should succeed");
 
         // Assert
         assert_eq!(status.path, worktree2_path);
@@ -382,7 +388,9 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act
-        let status = workspace.get_git_status(worktree1_info).unwrap();
+        let status = workspace
+            .get_git_status(worktree1_info)
+            .expect("get_git_status should succeed");
 
         // Assert
         assert_eq!(status.commits_ahead, 5);
@@ -417,7 +425,7 @@ mod tests {
 
         // Mock returns Ok with default values (no uncommitted changes, no divergence).
         assert!(result.is_ok());
-        let status = result.unwrap();
+        let status = result.expect("get_git_status should succeed");
         assert_eq!(status.path, nonexistent_path);
         assert!(!status.has_uncommitted_changes);
         assert_eq!(status.commits_ahead, 0);
@@ -500,7 +508,9 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act
-        let all = workspace.get_all().unwrap();
+        let all = workspace
+            .get_all()
+            .expect("get_all should succeed with mock data");
 
         // Assert
         // Should only return the non-main worktree with status populated.
@@ -564,13 +574,21 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act
-        let all = workspace.get_all().unwrap();
+        let all = workspace
+            .get_all()
+            .expect("get_all should succeed with mock data");
 
         // Assert
         // get_all returns all non-main worktrees including clean ones.
         assert_eq!(all.len(), 2);
-        let dirty = all.iter().find(|w| w.path == worktree1_path).unwrap();
-        let clean = all.iter().find(|w| w.path == worktree2_path).unwrap();
+        let dirty = all
+            .iter()
+            .find(|w| w.path == worktree1_path)
+            .expect("worktree1 should be in results");
+        let clean = all
+            .iter()
+            .find(|w| w.path == worktree2_path)
+            .expect("worktree2 should be in results");
         assert!(dirty.has_uncommitted_changes);
         assert!(!clean.has_uncommitted_changes);
     }
@@ -620,7 +638,9 @@ mod tests {
         let active = HashSet::new();
 
         // Act
-        let result = workspace.cleanup(&active, true, false).unwrap(); // Use all: true to include all worktrees.
+        let result = workspace
+            .cleanup(&active, true, false)
+            .expect("cleanup should succeed"); // Use all: true to include all worktrees.
 
         // Assert
         // worktree1 should be skipped, worktree2 should be removed.

@@ -20,8 +20,8 @@ fn test_launch_and_ps() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let home_dir = temp_dir.path().join("home");
     let repo_dir = temp_dir.path().join("repo");
-    fs::create_dir_all(&home_dir).unwrap();
-    fs::create_dir_all(&repo_dir).unwrap();
+    fs::create_dir_all(&home_dir).expect("failed to create home dir");
+    fs::create_dir_all(&repo_dir).expect("failed to create repo dir");
 
     // 1. Create a dummy git repo
     let run_git = |args: &[&str], dir: &PathBuf| {
@@ -36,7 +36,7 @@ fn test_launch_and_ps() {
     run_git(&["init"], &repo_dir);
     run_git(&["config", "user.email", "you@example.com"], &repo_dir);
     run_git(&["config", "user.name", "Your Name"], &repo_dir);
-    fs::write(repo_dir.join("README.md"), "Dummy README").unwrap();
+    fs::write(repo_dir.join("README.md"), "Dummy README").expect("failed to write README.md");
     run_git(&["add", "README.md"], &repo_dir);
     run_git(&["commit", "-m", "Initial commit"], &repo_dir);
 

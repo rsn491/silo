@@ -149,11 +149,12 @@ mod tests {
     #[test]
     fn test_load_settings_missing_file() {
         // Arrange
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
 
         // Act
-        let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        let settings = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load default settings when file is missing");
 
         // Assert
         assert!(settings.agent.is_none());
@@ -162,12 +163,13 @@ mod tests {
     #[test]
     fn test_load_settings_valid_json() {
         // Arrange
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
-        fs::write(&settings_path, r#"{"agent":"codex"}"#).unwrap();
+        fs::write(&settings_path, r#"{"agent":"codex"}"#).expect("failed to write settings file");
 
         // Act
-        let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        let settings = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings from valid JSON");
 
         // Assert
         assert_eq!(settings.agent, Some(Agent::Codex));
@@ -176,9 +178,9 @@ mod tests {
     #[test]
     fn test_load_settings_invalid_json() {
         // Arrange
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
-        fs::write(&settings_path, "{invalid").unwrap();
+        fs::write(&settings_path, "{invalid").expect("failed to write settings file");
 
         // Act
         let err = SiloConfig::load_settings_from_path(&settings_path).unwrap_err();
@@ -193,7 +195,7 @@ mod tests {
     #[test]
     fn test_save_settings() {
         // Arrange
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         let settings = SiloSettings {
             agent: Some(Agent::OpenCode),
@@ -202,10 +204,12 @@ mod tests {
         };
 
         // Act
-        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
+        SiloConfig::save_settings_to_path(&settings_path, &settings)
+            .expect("should save settings to path");
 
         // Assert
-        let contents = fs::read_to_string(&settings_path).unwrap();
+        let contents =
+            fs::read_to_string(&settings_path).expect("should read settings file after save");
         assert!(contents.contains("\"agent\""));
         assert!(contents.contains("opencode"));
     }
@@ -213,7 +217,7 @@ mod tests {
     #[test]
     fn test_save_and_load_workspace_type() {
         // Arrange
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         let settings = SiloSettings {
             agent: None,
@@ -222,8 +226,10 @@ mod tests {
         };
 
         // Act
-        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
-        let loaded = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        SiloConfig::save_settings_to_path(&settings_path, &settings)
+            .expect("should save settings to path");
+        let loaded = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings after save");
 
         // Assert
         assert_eq!(loaded.workspace_type, Some(WorkspaceKind::Checkout));
@@ -232,12 +238,13 @@ mod tests {
     #[test]
     fn test_workspace_type_default_is_absent() {
         // Arrange
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
-        fs::write(&settings_path, r#"{"agent":"claude"}"#).unwrap();
+        fs::write(&settings_path, r#"{"agent":"claude"}"#).expect("failed to write settings file");
 
         // Act
-        let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        let settings = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings from valid JSON");
 
         // Assert
         assert!(settings.workspace_type.is_none());
@@ -246,7 +253,7 @@ mod tests {
     #[test]
     fn test_exit_work_round_trip() {
         // Arrange
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         let settings = SiloSettings {
             agent: None,
@@ -255,8 +262,10 @@ mod tests {
         };
 
         // Act
-        SiloConfig::save_settings_to_path(&settings_path, &settings).unwrap();
-        let loaded = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        SiloConfig::save_settings_to_path(&settings_path, &settings)
+            .expect("should save settings to path");
+        let loaded = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings after save");
 
         // Assert
         assert_eq!(loaded.exit_work, Some(false));
@@ -265,12 +274,13 @@ mod tests {
     #[test]
     fn test_exit_work_default_is_absent() {
         // Arrange
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
-        fs::write(&settings_path, r#"{"agent":"claude"}"#).unwrap();
+        fs::write(&settings_path, r#"{"agent":"claude"}"#).expect("failed to write settings file");
 
         // Act
-        let settings = SiloConfig::load_settings_from_path(&settings_path).unwrap();
+        let settings = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings from valid JSON");
 
         // Assert
         assert!(settings.exit_work.is_none());

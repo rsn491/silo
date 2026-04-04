@@ -242,7 +242,7 @@ mod tests {
 
         // Assert
         assert!(result.is_ok());
-        let path = result.unwrap();
+        let path = result.expect("workspace creation should succeed");
         assert!(path.to_string_lossy().contains("test-project"));
     }
 
@@ -267,29 +267,29 @@ mod tests {
 
         // Assert
         assert!(result.is_ok());
-        let path = result.unwrap();
+        let path = result.expect("workspace creation should succeed");
         assert!(path.to_string_lossy().contains("my-project"));
     }
 
     #[test]
     fn test_find_checkout_dirs_skips_worktrees() {
         // Arrange
-        let temp = tempfile::TempDir::new().unwrap();
+        let temp = tempfile::TempDir::new().expect("failed to create temp dir");
         let base = temp.path();
 
         // Create a directory that looks like a checkout (`.git` is a dir).
         let checkout_dir = base.join("my-project-abc12345");
-        std::fs::create_dir_all(&checkout_dir).unwrap();
-        std::fs::create_dir_all(checkout_dir.join(".git")).unwrap();
+        std::fs::create_dir_all(&checkout_dir).expect("failed to create checkout dir");
+        std::fs::create_dir_all(checkout_dir.join(".git")).expect("failed to create .git dir");
 
         // Create a directory that looks like a worktree (`.git` is a file).
         let worktree_dir = base.join("my-project-xyz67890");
-        std::fs::create_dir_all(&worktree_dir).unwrap();
+        std::fs::create_dir_all(&worktree_dir).expect("failed to create worktree dir");
         std::fs::write(
             worktree_dir.join(".git"),
             "gitdir: /repo/.git/worktrees/xyz",
         )
-        .unwrap();
+        .expect("failed to write .git file");
 
         // Act
         let results = find_checkout_dirs(base, "my-project-", &HashSet::new());
@@ -302,17 +302,17 @@ mod tests {
     #[test]
     fn test_find_checkout_dirs_skips_active() {
         // Arrange
-        let temp = tempfile::TempDir::new().unwrap();
+        let temp = tempfile::TempDir::new().expect("failed to create temp dir");
         let base = temp.path();
 
         // Create two checkout dirs.
         let checkout1 = base.join("my-project-aaa11111");
-        std::fs::create_dir_all(&checkout1).unwrap();
-        std::fs::create_dir_all(checkout1.join(".git")).unwrap();
+        std::fs::create_dir_all(&checkout1).expect("failed to create checkout dir");
+        std::fs::create_dir_all(checkout1.join(".git")).expect("failed to create .git dir");
 
         let checkout2 = base.join("my-project-bbb22222");
-        std::fs::create_dir_all(&checkout2).unwrap();
-        std::fs::create_dir_all(checkout2.join(".git")).unwrap();
+        std::fs::create_dir_all(&checkout2).expect("failed to create checkout dir");
+        std::fs::create_dir_all(checkout2.join(".git")).expect("failed to create .git dir");
 
         let mut exclude = HashSet::new();
         exclude.insert(checkout1.clone());
@@ -330,17 +330,17 @@ mod tests {
     fn test_cleanup_skips_checkouts_with_unpushed_commits() {
         // Arrange
         // Test the skipped checkout logic with find_checkout_dirs.
-        let temp = tempfile::TempDir::new().unwrap();
+        let temp = tempfile::TempDir::new().expect("failed to create temp dir");
         let silo_dir = temp.path();
 
         // Create two checkout dirs.
         let checkout1 = silo_dir.join("my-project-aaa11111");
-        std::fs::create_dir_all(&checkout1).unwrap();
-        std::fs::create_dir_all(checkout1.join(".git")).unwrap();
+        std::fs::create_dir_all(&checkout1).expect("failed to create checkout dir");
+        std::fs::create_dir_all(checkout1.join(".git")).expect("failed to create .git dir");
 
         let checkout2 = silo_dir.join("my-project-bbb22222");
-        std::fs::create_dir_all(&checkout2).unwrap();
-        std::fs::create_dir_all(checkout2.join(".git")).unwrap();
+        std::fs::create_dir_all(&checkout2).expect("failed to create checkout dir");
+        std::fs::create_dir_all(checkout2.join(".git")).expect("failed to create .git dir");
 
         // Verify find_checkout_dirs finds both.
         let candidates = find_checkout_dirs(silo_dir, "my-project-", &HashSet::new());
