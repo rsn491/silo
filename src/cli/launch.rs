@@ -6,6 +6,7 @@ use std::path::Path;
 use dialoguer::{Input, Select, theme::ColorfulTheme};
 
 use crate::infra::agent::Agent;
+use crate::infra::git::validate_branch_name;
 use crate::infra::git::{Git, GitOperations};
 use crate::infra::terminal::Terminal;
 use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
@@ -101,6 +102,10 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
     ///
     /// Returns an error if workspace creation or agent launching fails.
     pub fn run(self, args: LaunchArgs) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(branch) = &args.branch {
+            validate_branch_name(branch).map_err(|e| format!("invalid --branch: {}", e))?;
+        }
+
         if self.launch_mode == LaunchMode::SplitPane {
             let terminal = self.terminal.ok_or("no terminal provided for split pane")?;
             let current_dir = std::env::current_dir()?;
