@@ -3,15 +3,13 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use uuid::Uuid;
-
 use super::agent_launcher::LaunchError;
-use super::git_branch_service::UUID_SUFFIX_LEN;
 use super::silo_config::SiloConfig;
 use super::workspace_manager::{
     CleanupError, CleanupResult, FailedWorkspace, RemovedWorkspace, SkippedWorkspace,
     WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote, reuse_inactive_workspace,
 };
+use super::workspace_utils::{generate_workspace_path, parse_uncommitted_changes};
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 use crate::infra::workspace_kind::WorkspaceKind;
@@ -28,22 +26,6 @@ impl<G: GitOperations> GitCheckoutWorkspace<G> {
         Self { git }
     }
 
-    /// Generates a unique path for a new checkout within the Silo directory.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LaunchError`] if the Silo directory cannot be determined or if Git operations fail.
-    fn generate_checkout_path(&self) -> Result<PathBuf, LaunchError> {
-        let base_dir = SiloConfig::get_silo_dir().ok_or_else(|| {
-            LaunchError::AgentSpawnError("checkout workspaces require ~/.silo/ to exist".into())
-        })?;
-        let checkout_name = format!(
-            "{}-{}",
-            self.git.get_project_name()?,
-            &Uuid::new_v4().to_string()[..UUID_SUFFIX_LEN]
-        );
-        Ok(base_dir.join(&checkout_name))
-    }
 }
 
 impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
@@ -61,7 +43,8 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
         }
 
         let repo_root = self.git.get_repo_root()?;
-        let dest = self.generate_checkout_path()?;
+        let dest =
+            generate_workspace_path(&self.git, "checkout workspaces require ~/.silo/ to exist")?;
         let dest_name = dest
             .file_name()
             .ok_or_else(|| LaunchError::AgentSpawnError("invalid checkout path".into()))?
@@ -99,7 +82,7 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
         for path in checkout_dirs {
             let branch = self.git.get_current_branch(&path)?;
             let status_output = self.git.get_status_porcelain(&path)?;
-            let file_count = status_output.lines().filter(|l| !l.is_empty()).count();
+            let (has_uncommitted_changes, _) = parse_uncommitted_changes(&status_output);
             let commits_ahead = self.git.count_commits_ahead(&path, &base_branch)?;
             let commits_behind = self.git.count_commits_behind(&path, &base_branch)?;
 
@@ -108,7 +91,7 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
             result.push(GitWorkspaceInfo {
                 path,
                 branch,
-                has_uncommitted_changes: file_count > 0,
+                has_uncommitted_changes,
                 commits_ahead,
                 commits_behind,
                 latest_commit,

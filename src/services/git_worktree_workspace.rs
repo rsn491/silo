@@ -3,16 +3,14 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use uuid::Uuid;
-
 use super::agent_launcher::LaunchError;
-use super::git_branch_service::UUID_SUFFIX_LEN;
 use super::silo_config::SiloConfig;
 use super::workspace_manager::{
     CleanupError, CleanupResult, FailedWorkspace, GitStatus, RemovedWorkspace, SkippedWorkspace,
     StatusError, WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
     reuse_inactive_workspace,
 };
+use super::workspace_utils::{generate_workspace_path, parse_uncommitted_changes};
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::workspace_kind::WorkspaceKind;
 
@@ -28,34 +26,6 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
         Self { git }
     }
 
-    /// Generates a unique path for a new worktree within the Silo directory.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`LaunchError`] if the Silo directory cannot be determined or if Git operations fail.
-    fn generate_worktree_path(&self) -> Result<PathBuf, LaunchError> {
-        let base_dir = SiloConfig::get_silo_dir().ok_or_else(|| {
-            LaunchError::AgentSpawnError("could not determine home directory".into())
-        })?;
-
-        let worktree_name = format!(
-            "{}-{}",
-            self.git.get_project_name()?,
-            &Uuid::new_v4().to_string()[..UUID_SUFFIX_LEN]
-        );
-        Ok(base_dir.join(&worktree_name))
-    }
-
-    /// Parses the porcelain Git status output to determine if there are uncommitted changes.
-    fn parse_uncommitted_changes(status_output: &str) -> (bool, usize) {
-        let file_count = status_output
-            .lines()
-            .filter(|line| !line.is_empty())
-            .count();
-        let has_changes = file_count > 0;
-        (has_changes, file_count)
-    }
-
     /// Retrieves the Git status for a specific worktree.
     ///
     /// # Errors
@@ -65,7 +35,7 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
         let base_branch = self.git.get_default_remote_branch()?;
         let status_output = self.git.get_status_porcelain(&worktree.path)?;
         let (has_uncommitted_changes, uncommitted_file_count) =
-            Self::parse_uncommitted_changes(&status_output);
+            parse_uncommitted_changes(&status_output);
 
         let commits_ahead = self.git.count_commits_ahead(&worktree.path, &base_branch)?;
         let commits_behind = self
@@ -98,7 +68,8 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
             }
         }
 
-        let worktree_path = self.generate_worktree_path()?;
+        let worktree_path =
+            generate_workspace_path(&self.git, "could not determine home directory")?;
         let worktree_name = worktree_path
             .file_name()
             .ok_or_else(|| LaunchError::AgentSpawnError("invalid worktree path".into()))?
@@ -431,33 +402,6 @@ mod tests {
         assert!(!status.has_uncommitted_changes);
         assert_eq!(status.commits_ahead, 0);
         assert_eq!(status.commits_behind, 0);
-    }
-
-    #[test]
-    fn test_parse_uncommitted_changes_with_files() {
-        let status_output = " M file1.txt\n M file2.txt\n M file3.txt\n";
-        let (has_changes, count) =
-            GitWorktreeWorkspace::<MockGitOperations>::parse_uncommitted_changes(status_output);
-        assert!(has_changes);
-        assert_eq!(count, 3);
-    }
-
-    #[test]
-    fn test_parse_uncommitted_changes_empty() {
-        let status_output = "";
-        let (has_changes, count) =
-            GitWorktreeWorkspace::<MockGitOperations>::parse_uncommitted_changes(status_output);
-        assert!(!has_changes);
-        assert_eq!(count, 0);
-    }
-
-    #[test]
-    fn test_parse_uncommitted_changes_with_empty_lines() {
-        let status_output = " M file1.txt\n\n M file2.txt\n";
-        let (has_changes, count) =
-            GitWorktreeWorkspace::<MockGitOperations>::parse_uncommitted_changes(status_output);
-        assert!(has_changes);
-        assert_eq!(count, 2); // Should only count non-empty lines.
     }
 
     #[test]
