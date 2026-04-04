@@ -16,8 +16,6 @@ pub struct GitWorkspaceInfo {
     pub has_uncommitted_changes: bool,
     /// Commits the workspace is ahead of the base branch.
     pub commits_ahead: usize,
-    /// Commits the workspace is behind the base branch.
-    pub commits_behind: usize,
     /// The latest commit summary (short hash + message), if available.
     pub latest_commit: Option<String>,
 }
