@@ -80,6 +80,24 @@ impl ProcessOperations for SystemProcess {
     }
 }
 
+/// Returns `true` if the process with `pid` is currently running.
+///
+/// On Linux this is done by checking for the existence of `/proc/<pid>`,
+/// which is reliable and requires no external crates. On other platforms
+/// the check falls back to a conservative `true` (assume alive) so that
+/// a live lock is never incorrectly reclaimed on an unsupported platform.
+pub fn pid_is_alive(pid: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        std::path::Path::new(&format!("/proc/{pid}")).exists()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = pid;
+        true
+    }
+}
+
 /// Parses the output of `ps -eo pid,args` and filters by the provided patterns.
 fn parse_ps_output_with_patterns(
     output: &str,
