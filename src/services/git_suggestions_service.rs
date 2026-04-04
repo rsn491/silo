@@ -33,33 +33,7 @@ impl GitSuggestionsService {
         );
 
         let raw = self.agent.prompt(&prompt).map_err(|e| e.to_string())?;
-
-        // Take only the first non-empty line and sanitize to kebab-case.
-        let sanitized: String = raw
-            .lines()
-            .find(|l| !l.trim().is_empty())
-            .unwrap_or("")
-            .trim()
-            .to_lowercase()
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() || c == '-' {
-                    c
-                } else {
-                    '-'
-                }
-            })
-            .collect::<String>()
-            .split('-')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("-");
-
-        if sanitized.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(sanitized))
-        }
+        Ok(sanitize_branch_name(&raw))
     }
 
     /// Prompts the agent in headless mode with the git changes and returns a suggested commit
@@ -92,5 +66,88 @@ impl GitSuggestionsService {
         } else {
             Ok(Some(trimmed))
         }
+    }
+}
+
+/// Takes the first non-empty line of `raw`, lowercases it, replaces every non-alphanumeric
+/// (non-hyphen) character with a hyphen, then collapses consecutive hyphens.
+///
+/// Returns `None` when the result would be empty.
+fn sanitize_branch_name(raw: &str) -> Option<String> {
+    let sanitized: String = raw
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("")
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+
+    if sanitized.is_empty() { None } else { Some(sanitized) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_branch_name_already_kebab_case() {
+        assert_eq!(
+            sanitize_branch_name("add-auth-support"),
+            Some("add-auth-support".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sanitize_branch_name_uppercases_lowered() {
+        assert_eq!(
+            sanitize_branch_name("Add Auth Support"),
+            Some("add-auth-support".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sanitize_branch_name_special_chars_replaced() {
+        assert_eq!(
+            sanitize_branch_name("add_auth/support!"),
+            Some("add-auth-support".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sanitize_branch_name_consecutive_hyphens_collapsed() {
+        assert_eq!(
+            sanitize_branch_name("add---auth---support"),
+            Some("add-auth-support".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sanitize_branch_name_empty_input_returns_none() {
+        assert_eq!(sanitize_branch_name(""), None);
+        assert_eq!(sanitize_branch_name("   "), None);
+        assert_eq!(sanitize_branch_name("---"), None);
+        assert_eq!(sanitize_branch_name("___"), None);
+    }
+
+    #[test]
+    fn test_sanitize_branch_name_uses_only_first_line() {
+        assert_eq!(
+            sanitize_branch_name("add-auth\nsome other line"),
+            Some("add-auth".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sanitize_branch_name_skips_blank_leading_lines() {
+        assert_eq!(
+            sanitize_branch_name("\n\nadd-auth"),
+            Some("add-auth".to_string())
+        );
     }
 }

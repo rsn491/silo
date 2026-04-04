@@ -98,4 +98,46 @@ mod tests {
             std::env::remove_var("TERM_PROGRAM");
         }
     }
+
+    #[test]
+    fn test_detect_terminal_iterm2_variant_names() {
+        // All known iTerm2 TERM_PROGRAM values should be accepted.
+        for value in &["iterm", "iterm2", "iterm.app", "iterm2.app", "iTerm2"] {
+            unsafe {
+                std::env::set_var("TERM_PROGRAM", value);
+            }
+            let result = detect_terminal();
+            unsafe {
+                std::env::remove_var("TERM_PROGRAM");
+            }
+            assert!(
+                result.is_ok(),
+                "TERM_PROGRAM={value:?} should be recognised as iTerm2"
+            );
+        }
+    }
+
+    #[test]
+    fn test_detect_terminal_unsupported_terminal_returns_error() {
+        unsafe {
+            std::env::set_var("TERM_PROGRAM", "gnome-terminal");
+        }
+
+        let result = detect_terminal();
+
+        unsafe {
+            std::env::remove_var("TERM_PROGRAM");
+        }
+
+        assert!(
+            result.is_err(),
+            "unsupported terminal should yield an error"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, TerminalError::TerminalNotSupported(_)),
+            "expected TerminalNotSupported, got {:?}",
+            err
+        );
+    }
 }
