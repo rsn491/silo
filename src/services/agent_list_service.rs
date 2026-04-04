@@ -66,7 +66,10 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
         for (pid, args) in processes {
             let cwd = match self.process.get_process_cwd(pid) {
                 Ok(path) => path,
-                Err(_) => continue,
+                Err(e) => {
+                    eprintln!("[warn] could not read cwd for pid {}: {}; skipping", pid, e);
+                    continue;
+                }
             };
 
             for workspace in &workspaces {

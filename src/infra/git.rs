@@ -261,7 +261,12 @@ impl GitOperations for Git {
                 .to_string();
             Ok(branch)
         } else {
-            // Fallback to DEFAULT_REMOTE_BRANCH if command fails.
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!(
+                "[warn] could not determine default remote branch ({}); falling back to {}",
+                stderr.trim(),
+                DEFAULT_REMOTE_BRANCH
+            );
             Ok(DEFAULT_REMOTE_BRANCH.to_string())
         }
     }
@@ -302,6 +307,13 @@ impl GitOperations for Git {
                 .unwrap_or(0);
             Ok(count)
         } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!(
+                "[warn] could not count commits ahead of {} in {:?} ({}); reporting 0",
+                base_branch,
+                worktree_path,
+                stderr.trim()
+            );
             Ok(0)
         }
     }
@@ -326,6 +338,13 @@ impl GitOperations for Git {
                 .unwrap_or(0);
             Ok(count)
         } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!(
+                "[warn] could not count commits behind {} in {:?} ({}); reporting 0",
+                base_branch,
+                worktree_path,
+                stderr.trim()
+            );
             Ok(0)
         }
     }
