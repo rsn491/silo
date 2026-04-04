@@ -137,9 +137,7 @@ mod tests {
     fn test_try_rename_skips_when_current_branch_is_none() {
         // Arrange — detached HEAD state.
         let mut mock_git = MockGitOperations::new();
-        mock_git
-            .expect_get_current_branch()
-            .returning(|_| Ok(None));
+        mock_git.expect_get_current_branch().returning(|_| Ok(None));
         let service = GitBranchService::new(Agent::ClaudeCode);
 
         // Act

@@ -201,7 +201,10 @@ mod tests {
         let result = service.get_all();
 
         // Assert
-        assert!(result.is_err(), "get_all should propagate a worktree list error");
+        assert!(
+            result.is_err(),
+            "get_all should propagate a worktree list error"
+        );
     }
 
     #[test]
@@ -225,7 +228,10 @@ mod tests {
         let result = service.cleanup(&HashSet::new(), true, false);
 
         // Assert
-        assert!(result.is_err(), "cleanup should propagate a worktree list error");
+        assert!(
+            result.is_err(),
+            "cleanup should propagate a worktree list error"
+        );
     }
 
     #[test]

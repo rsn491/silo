@@ -437,7 +437,10 @@ mod tests {
     #[test]
     fn test_build_silo_launch_command_with_checkout_flag() {
         // Arrange
-        let args = LaunchArgs { checkout: true, ..Default::default() };
+        let args = LaunchArgs {
+            checkout: true,
+            ..Default::default()
+        };
 
         // Act
         let cmd = build_silo_launch_command(&args);
@@ -450,7 +453,10 @@ mod tests {
     #[test]
     fn test_build_silo_launch_command_with_worktree_flag() {
         // Arrange
-        let args = LaunchArgs { worktree: true, ..Default::default() };
+        let args = LaunchArgs {
+            worktree: true,
+            ..Default::default()
+        };
 
         // Act
         let cmd = build_silo_launch_command(&args);
@@ -463,7 +469,10 @@ mod tests {
     #[test]
     fn test_build_silo_launch_command_with_branch() {
         // Arrange
-        let args = LaunchArgs { branch: Some("my-feature".to_string()), ..Default::default() };
+        let args = LaunchArgs {
+            branch: Some("my-feature".to_string()),
+            ..Default::default()
+        };
 
         // Act
         let cmd = build_silo_launch_command(&args);
@@ -476,7 +485,10 @@ mod tests {
     #[test]
     fn test_build_silo_launch_command_with_agent() {
         // Arrange
-        let args = LaunchArgs { agent: Some(Agent::Codex), ..Default::default() };
+        let args = LaunchArgs {
+            agent: Some(Agent::Codex),
+            ..Default::default()
+        };
 
         // Act
         let cmd = build_silo_launch_command(&args);
@@ -489,7 +501,10 @@ mod tests {
     #[test]
     fn test_build_silo_launch_command_with_reuse() {
         // Arrange
-        let args = LaunchArgs { reuse: true, ..Default::default() };
+        let args = LaunchArgs {
+            reuse: true,
+            ..Default::default()
+        };
 
         // Act
         let cmd = build_silo_launch_command(&args);
@@ -501,7 +516,10 @@ mod tests {
     #[test]
     fn test_build_silo_launch_command_split_pane_flag_not_included() {
         // Arrange — split_pane is consumed before this function is called (handled in run())
-        let args = LaunchArgs { split_pane: true, ..Default::default() };
+        let args = LaunchArgs {
+            split_pane: true,
+            ..Default::default()
+        };
 
         // Act
         let cmd = build_silo_launch_command(&args);
