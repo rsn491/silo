@@ -378,7 +378,11 @@ mod tests {
             "a",
         ];
         for name in valid {
-            assert!(validate_branch_name(name).is_ok(), "should accept {:?}", name);
+            assert!(
+                validate_branch_name(name).is_ok(),
+                "should accept {:?}",
+                name
+            );
         }
     }
 
