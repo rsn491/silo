@@ -213,7 +213,9 @@ mod tests {
         let service = AgentListService::new(workspace_manager, mock_process);
 
         // Act
-        let agents = service.list_running_agents().expect("list_running_agents should succeed with mock data");
+        let agents = service
+            .list_running_agents()
+            .expect("list_running_agents should succeed with mock data");
 
         // Assert
         assert_eq!(agents.len(), 2);
@@ -275,7 +277,9 @@ mod tests {
         let service = AgentListService::new(workspace_manager, mock_process);
 
         // Act
-        let agents = service.list_running_agents().expect("list_running_agents should succeed with mock data");
+        let agents = service
+            .list_running_agents()
+            .expect("list_running_agents should succeed with mock data");
 
         // Assert
         assert_eq!(agents.len(), 0);
@@ -335,7 +339,9 @@ mod tests {
         let service = AgentListService::new(workspace_manager, mock_process);
 
         // Act
-        let agents = service.list_running_agents().expect("list_running_agents should succeed with mock data");
+        let agents = service
+            .list_running_agents()
+            .expect("list_running_agents should succeed with mock data");
 
         // Assert
         // Should only find the agent with resolvable CWD.
@@ -366,7 +372,9 @@ mod tests {
         let service = AgentListService::new(workspace_manager, mock_process);
 
         // Act
-        let agents = service.list_running_agents().expect("list_running_agents should succeed with mock data");
+        let agents = service
+            .list_running_agents()
+            .expect("list_running_agents should succeed with mock data");
 
         // Assert
         assert_eq!(agents.len(), 0);
@@ -394,7 +402,9 @@ mod tests {
             cwds: vec![],
         };
         let service = AgentListService::new(workspace_manager, mock_process);
-        let agents = service.list_running_agents().expect("list_running_agents should succeed with mock data");
+        let agents = service
+            .list_running_agents()
+            .expect("list_running_agents should succeed with mock data");
 
         // Assert
         assert_eq!(agents.len(), 0);

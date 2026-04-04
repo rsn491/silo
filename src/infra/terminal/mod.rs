@@ -84,7 +84,8 @@ mod tests {
         }
 
         // Act
-        let terminal = detect_terminal().expect("should detect iTerm2 from TERM_PROGRAM=iTerm2.app");
+        let terminal =
+            detect_terminal().expect("should detect iTerm2 from TERM_PROGRAM=iTerm2.app");
 
         // Assert
         // Test that we got a terminal of the correct type.

@@ -153,7 +153,8 @@ mod tests {
         let settings_path = dir.path().join("settings.json");
 
         // Act
-        let settings = SiloConfig::load_settings_from_path(&settings_path).expect("should load default settings when file is missing");
+        let settings = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load default settings when file is missing");
 
         // Assert
         assert!(settings.agent.is_none());
@@ -167,7 +168,8 @@ mod tests {
         fs::write(&settings_path, r#"{"agent":"codex"}"#).expect("failed to write settings file");
 
         // Act
-        let settings = SiloConfig::load_settings_from_path(&settings_path).expect("should load settings from valid JSON");
+        let settings = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings from valid JSON");
 
         // Assert
         assert_eq!(settings.agent, Some(Agent::Codex));
@@ -202,10 +204,12 @@ mod tests {
         };
 
         // Act
-        SiloConfig::save_settings_to_path(&settings_path, &settings).expect("should save settings to path");
+        SiloConfig::save_settings_to_path(&settings_path, &settings)
+            .expect("should save settings to path");
 
         // Assert
-        let contents = fs::read_to_string(&settings_path).expect("should read settings file after save");
+        let contents =
+            fs::read_to_string(&settings_path).expect("should read settings file after save");
         assert!(contents.contains("\"agent\""));
         assert!(contents.contains("opencode"));
     }
@@ -222,8 +226,10 @@ mod tests {
         };
 
         // Act
-        SiloConfig::save_settings_to_path(&settings_path, &settings).expect("should save settings to path");
-        let loaded = SiloConfig::load_settings_from_path(&settings_path).expect("should load settings after save");
+        SiloConfig::save_settings_to_path(&settings_path, &settings)
+            .expect("should save settings to path");
+        let loaded = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings after save");
 
         // Assert
         assert_eq!(loaded.workspace_type, Some(WorkspaceKind::Checkout));
@@ -237,7 +243,8 @@ mod tests {
         fs::write(&settings_path, r#"{"agent":"claude"}"#).expect("failed to write settings file");
 
         // Act
-        let settings = SiloConfig::load_settings_from_path(&settings_path).expect("should load settings from valid JSON");
+        let settings = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings from valid JSON");
 
         // Assert
         assert!(settings.workspace_type.is_none());
@@ -255,8 +262,10 @@ mod tests {
         };
 
         // Act
-        SiloConfig::save_settings_to_path(&settings_path, &settings).expect("should save settings to path");
-        let loaded = SiloConfig::load_settings_from_path(&settings_path).expect("should load settings after save");
+        SiloConfig::save_settings_to_path(&settings_path, &settings)
+            .expect("should save settings to path");
+        let loaded = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings after save");
 
         // Assert
         assert_eq!(loaded.exit_work, Some(false));
@@ -270,7 +279,8 @@ mod tests {
         fs::write(&settings_path, r#"{"agent":"claude"}"#).expect("failed to write settings file");
 
         // Act
-        let settings = SiloConfig::load_settings_from_path(&settings_path).expect("should load settings from valid JSON");
+        let settings = SiloConfig::load_settings_from_path(&settings_path)
+            .expect("should load settings from valid JSON");
 
         // Assert
         assert!(settings.exit_work.is_none());
