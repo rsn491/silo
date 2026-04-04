@@ -132,7 +132,11 @@ pub fn reuse_inactive_workspace<G: GitOperations>(
             let project = git
                 .get_project_name()
                 .unwrap_or_else(|_| "workspace".to_string());
-            format!("{}-{}", project, &Uuid::new_v4().to_string()[..UUID_SUFFIX_LEN])
+            format!(
+                "{}-{}",
+                project,
+                &Uuid::new_v4().to_string()[..UUID_SUFFIX_LEN]
+            )
         });
         git.checkout_new_branch(&ws.path, &branch_name)
             .map_err(LaunchError::Git)?;
