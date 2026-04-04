@@ -378,3 +378,221 @@ fn build_silo_launch_command(args: &LaunchArgs) -> String {
 fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
+
+#[cfg(test)]
+impl Default for LaunchArgs {
+    fn default() -> Self {
+        Self {
+            branch: None,
+            tab: false,
+            split_pane: false,
+            agent: None,
+            checkout: false,
+            worktree: false,
+            reuse: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shell_quote_simple_string() {
+        // Arrange
+        let input = "hello";
+
+        // Act
+        let result = shell_quote(input);
+
+        // Assert
+        assert_eq!(result, "'hello'");
+    }
+
+    #[test]
+    fn test_shell_quote_empty_string() {
+        // Arrange
+        let input = "";
+
+        // Act
+        let result = shell_quote(input);
+
+        // Assert
+        assert_eq!(result, "''");
+    }
+
+    #[test]
+    fn test_shell_quote_string_with_spaces() {
+        // Arrange
+        let input = "hello world";
+
+        // Act
+        let result = shell_quote(input);
+
+        // Assert
+        assert_eq!(result, "'hello world'");
+    }
+
+    #[test]
+    fn test_shell_quote_string_with_single_quote() {
+        // Arrange
+        let input = "it's";
+
+        // Act
+        let result = shell_quote(input);
+
+        // Assert — POSIX shell escaping replaces ' with '\''
+        assert_eq!(result, "'it'\\''s'");
+    }
+
+    #[test]
+    fn test_shell_quote_multiple_single_quotes() {
+        // Arrange
+        let input = "a'b'c";
+
+        // Act
+        let result = shell_quote(input);
+
+        // Assert
+        assert_eq!(result, "'a'\\''b'\\''c'");
+    }
+
+    #[test]
+    fn test_build_silo_launch_command_minimal_args() {
+        // Arrange
+        let args = LaunchArgs::default();
+
+        // Act
+        let cmd = build_silo_launch_command(&args);
+
+        // Assert
+        assert!(cmd.contains("launch"));
+        assert!(!cmd.contains("--agent"));
+        assert!(!cmd.contains("--branch"));
+        assert!(!cmd.contains("--checkout"));
+        assert!(!cmd.contains("--worktree"));
+        assert!(!cmd.contains("--reuse"));
+    }
+
+    #[test]
+    fn test_build_silo_launch_command_with_checkout_flag() {
+        // Arrange
+        let args = LaunchArgs {
+            checkout: true,
+            ..Default::default()
+        };
+
+        // Act
+        let cmd = build_silo_launch_command(&args);
+
+        // Assert
+        assert!(cmd.contains("--checkout"));
+        assert!(!cmd.contains("--worktree"));
+    }
+
+    #[test]
+    fn test_build_silo_launch_command_with_worktree_flag() {
+        // Arrange
+        let args = LaunchArgs {
+            worktree: true,
+            ..Default::default()
+        };
+
+        // Act
+        let cmd = build_silo_launch_command(&args);
+
+        // Assert
+        assert!(cmd.contains("--worktree"));
+        assert!(!cmd.contains("--checkout"));
+    }
+
+    #[test]
+    fn test_build_silo_launch_command_with_branch() {
+        // Arrange
+        let args = LaunchArgs {
+            branch: Some("my-feature".to_string()),
+            ..Default::default()
+        };
+
+        // Act
+        let cmd = build_silo_launch_command(&args);
+
+        // Assert
+        assert!(cmd.contains("--branch"));
+        assert!(cmd.contains("'my-feature'"));
+    }
+
+    #[test]
+    fn test_build_silo_launch_command_with_agent() {
+        // Arrange
+        let args = LaunchArgs {
+            agent: Some(Agent::Codex),
+            ..Default::default()
+        };
+
+        // Act
+        let cmd = build_silo_launch_command(&args);
+
+        // Assert
+        assert!(cmd.contains("--agent"));
+        assert!(cmd.contains("'codex'"));
+    }
+
+    #[test]
+    fn test_build_silo_launch_command_with_reuse() {
+        // Arrange
+        let args = LaunchArgs {
+            reuse: true,
+            ..Default::default()
+        };
+
+        // Act
+        let cmd = build_silo_launch_command(&args);
+
+        // Assert
+        assert!(cmd.contains("--reuse"));
+    }
+
+    #[test]
+    fn test_build_silo_launch_command_split_pane_flag_not_included() {
+        // Arrange — split_pane is consumed before this function is called (handled in run())
+        let args = LaunchArgs {
+            split_pane: true,
+            ..Default::default()
+        };
+
+        // Act
+        let cmd = build_silo_launch_command(&args);
+
+        // Assert
+        assert!(!cmd.contains("--split-pane"));
+    }
+
+    #[test]
+    fn test_resolve_workspace_type_checkout_flag_wins() {
+        // Act
+        let kind = resolve_workspace_type(true, false);
+
+        // Assert
+        assert_eq!(kind, WorkspaceKind::Checkout);
+    }
+
+    #[test]
+    fn test_resolve_workspace_type_worktree_flag_wins() {
+        // Act
+        let kind = resolve_workspace_type(false, true);
+
+        // Assert
+        assert_eq!(kind, WorkspaceKind::Worktree);
+    }
+
+    #[test]
+    fn test_resolve_agent_returns_explicit_agent() {
+        // Assert — any explicit agent arg is passed through unchanged.
+        assert_eq!(resolve_agent(Some(Agent::Codex)), Agent::Codex);
+        assert_eq!(resolve_agent(Some(Agent::Gemini)), Agent::Gemini);
+        assert_eq!(resolve_agent(Some(Agent::OpenCode)), Agent::OpenCode);
+        assert_eq!(resolve_agent(Some(Agent::ClaudeCode)), Agent::ClaudeCode);
+    }
+}

@@ -80,6 +80,7 @@ impl<G: GitOperations> WorkspaceManager for GlobalWorkspaceManager<G> {
 mod tests {
     use super::*;
     use crate::infra::git::{GitWorkspaceInfo, MockGitOperations};
+    use crate::infra::git_error::GitError;
     use std::collections::HashSet;
     use std::path::PathBuf;
 
@@ -177,6 +178,60 @@ mod tests {
         // Assert
         assert_eq!(result.removed.len(), 0);
         assert_eq!(result.skipped.len(), 0);
+    }
+
+    #[test]
+    fn test_get_all_propagates_worktree_error() {
+        // Arrange — list_worktrees fails; the error should bubble up through get_all.
+        let mut worktree_mock = MockGitOperations::new();
+        worktree_mock
+            .expect_list_worktrees()
+            .return_once(|| Err(GitError::CommandFailed("git failure".to_string())));
+
+        let mut checkout_mock = MockGitOperations::new();
+        checkout_mock
+            .expect_get_project_name()
+            .returning(|| Ok("test-project".to_string()));
+
+        let worktree = GitWorktreeWorkspace::new(worktree_mock);
+        let checkout = GitCheckoutWorkspace::new(checkout_mock);
+        let service = GlobalWorkspaceManager::new(worktree, checkout);
+
+        // Act
+        let result = service.get_all();
+
+        // Assert
+        assert!(
+            result.is_err(),
+            "get_all should propagate a worktree list error"
+        );
+    }
+
+    #[test]
+    fn test_cleanup_propagates_worktree_list_error() {
+        // Arrange — list_worktrees fails during cleanup.
+        let mut worktree_mock = MockGitOperations::new();
+        worktree_mock
+            .expect_list_worktrees()
+            .return_once(|| Err(GitError::CommandFailed("git failure".to_string())));
+
+        let mut checkout_mock = MockGitOperations::new();
+        checkout_mock
+            .expect_get_project_name()
+            .returning(|| Ok("test-project".to_string()));
+
+        let worktree = GitWorktreeWorkspace::new(worktree_mock);
+        let checkout = GitCheckoutWorkspace::new(checkout_mock);
+        let service = GlobalWorkspaceManager::new(worktree, checkout);
+
+        // Act
+        let result = service.cleanup(&HashSet::new(), true, false);
+
+        // Assert
+        assert!(
+            result.is_err(),
+            "cleanup should propagate a worktree list error"
+        );
     }
 
     #[test]

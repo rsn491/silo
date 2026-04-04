@@ -86,7 +86,11 @@ impl GitBranchService {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
+    use crate::infra::git::MockGitOperations;
+    use crate::infra::git_error::GitError;
 
     #[test]
     fn test_is_auto_generated_branch_matches_silo_pattern() {
@@ -111,5 +115,108 @@ mod tests {
         ));
         // Non-hex suffix.
         assert!(!GitBranchService::is_auto_generated_branch("silo-xyz12345"));
+    }
+
+    #[test]
+    fn test_try_rename_skips_when_get_current_branch_errors() {
+        // Arrange
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_current_branch()
+            .returning(|_| Err(GitError::CommandFailed("git error".to_string())));
+        let service = GitBranchService::new(Agent::ClaudeCode);
+
+        // Act
+        let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
+        // Assert — any Git error on get_current_branch should be treated as Skipped.
+        assert!(matches!(outcome, BranchRenameOutcome::Skipped));
+    }
+
+    #[test]
+    fn test_try_rename_skips_when_current_branch_is_none() {
+        // Arrange — detached HEAD state.
+        let mut mock_git = MockGitOperations::new();
+        mock_git.expect_get_current_branch().returning(|_| Ok(None));
+        let service = GitBranchService::new(Agent::ClaudeCode);
+
+        // Act
+        let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
+        // Assert
+        assert!(matches!(outcome, BranchRenameOutcome::Skipped));
+    }
+
+    #[test]
+    fn test_try_rename_skips_when_branch_is_not_auto_generated() {
+        // Arrange — user has already renamed the branch.
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_current_branch()
+            .returning(|_| Ok(Some("my-feature-branch".to_string())));
+        let service = GitBranchService::new(Agent::ClaudeCode);
+
+        // Act — get_changes_summary should never be called.
+        let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
+        // Assert
+        assert!(matches!(outcome, BranchRenameOutcome::Skipped));
+    }
+
+    #[test]
+    fn test_try_rename_skips_when_changes_summary_is_empty() {
+        // Arrange — auto-generated branch but working tree is clean.
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_current_branch()
+            .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
+        mock_git
+            .expect_get_changes_summary()
+            .returning(|_| Ok(String::new()));
+        let service = GitBranchService::new(Agent::ClaudeCode);
+
+        // Act
+        let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
+        // Assert
+        assert!(matches!(outcome, BranchRenameOutcome::Skipped));
+    }
+
+    #[test]
+    fn test_try_rename_skips_when_changes_summary_is_whitespace_only() {
+        // Arrange
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_current_branch()
+            .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
+        mock_git
+            .expect_get_changes_summary()
+            .returning(|_| Ok("   \n\t  ".to_string()));
+        let service = GitBranchService::new(Agent::ClaudeCode);
+
+        // Act
+        let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
+        // Assert
+        assert!(matches!(outcome, BranchRenameOutcome::Skipped));
+    }
+
+    #[test]
+    fn test_try_rename_skips_when_get_changes_summary_fails() {
+        // Arrange — auto-generated branch but git diff fails.
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_current_branch()
+            .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
+        mock_git
+            .expect_get_changes_summary()
+            .returning(|_| Err(GitError::CommandFailed("git diff failed".to_string())));
+        let service = GitBranchService::new(Agent::ClaudeCode);
+
+        // Act
+        let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
+        // Assert
+        assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
 }
