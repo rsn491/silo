@@ -25,7 +25,6 @@ impl<G: GitOperations> GitCheckoutWorkspace<G> {
     pub fn new(git: G) -> Self {
         Self { git }
     }
-
 }
 
 impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
