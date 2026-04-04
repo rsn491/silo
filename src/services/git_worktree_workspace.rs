@@ -37,10 +37,20 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
         let (has_uncommitted_changes, uncommitted_file_count) =
             parse_uncommitted_changes(&status_output);
 
-        let commits_ahead = self.git.count_commits_ahead(&worktree.path, &base_branch)?;
+        let commits_ahead = self
+            .git
+            .count_commits_ahead(&worktree.path, &base_branch)
+            .unwrap_or_else(|e| {
+                log::warn!("could not count commits ahead for {:?}: {}", worktree.path, e);
+                0
+            });
         let commits_behind = self
             .git
-            .count_commits_behind(&worktree.path, &base_branch)?;
+            .count_commits_behind(&worktree.path, &base_branch)
+            .unwrap_or_else(|e| {
+                log::warn!("could not count commits behind for {:?}: {}", worktree.path, e);
+                0
+            });
 
         Ok(GitStatus {
             kind: WorkspaceKind::Worktree,

@@ -75,10 +75,10 @@ impl WorkspaceLock {
     /// If the file was already removed the workspace is effectively unlocked
     /// regardless, but unexpected I/O errors are logged as warnings.
     pub fn release(&self) {
-        if let Err(e) = std::fs::remove_file(&self.path) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                log::warn!("failed to release workspace lock {:?}: {}", self.path, e);
-            }
+        if let Err(e) = std::fs::remove_file(&self.path)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            log::warn!("failed to release workspace lock {:?}: {}", self.path, e);
         }
     }
 
