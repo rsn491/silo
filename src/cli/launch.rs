@@ -6,8 +6,8 @@ use std::path::Path;
 use dialoguer::{Input, Select, theme::ColorfulTheme};
 
 use crate::infra::agent::Agent;
+use crate::infra::git::validate_branch_name;
 use crate::infra::git::{Git, GitOperations};
-use crate::infra::git_branch::validate_branch_name;
 use crate::infra::terminal::Terminal;
 use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
 use crate::services::git_branch_service::{BranchRenameOutcome, GitBranchService};
