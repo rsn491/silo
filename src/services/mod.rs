@@ -11,3 +11,4 @@ pub mod silo_config;
 pub mod workspace_kind;
 pub mod workspace_lock;
 pub mod workspace_manager;
+pub mod workspace_utils;
