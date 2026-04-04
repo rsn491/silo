@@ -77,7 +77,7 @@ impl WorkspaceLock {
     pub fn release(&self) {
         if let Err(e) = std::fs::remove_file(&self.path) {
             if e.kind() != std::io::ErrorKind::NotFound {
-                eprintln!("[warn] failed to release workspace lock {:?}: {}", self.path, e);
+                log::warn!("failed to release workspace lock {:?}: {}", self.path, e);
             }
         }
     }

@@ -50,6 +50,7 @@ pub enum Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
     if let Err(e) = SiloConfig::initialize() {
         eprintln!("Failed to initialize silo: {}", e);
         std::process::exit(1);

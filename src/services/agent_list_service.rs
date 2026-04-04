@@ -67,7 +67,7 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
             let cwd = match self.process.get_process_cwd(pid) {
                 Ok(path) => path,
                 Err(e) => {
-                    eprintln!("[warn] could not read cwd for pid {}: {}; skipping", pid, e);
+                    log::warn!("could not read cwd for pid {}: {}; skipping", pid, e);
                     continue;
                 }
             };
