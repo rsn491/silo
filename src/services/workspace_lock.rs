@@ -179,7 +179,10 @@ mod tests {
         // Act
         let contents =
             fs::read_to_string(dir.path().join(LOCK_FILE_NAME)).expect("failed to read lock file");
-        let stored_pid: u32 = contents.trim().parse().expect("lock file should contain a PID");
+        let stored_pid: u32 = contents
+            .trim()
+            .parse()
+            .expect("lock file should contain a PID");
 
         // Assert
         assert_eq!(stored_pid, std::process::id());
@@ -279,7 +282,10 @@ mod tests {
         // Assert
         let contents =
             fs::read_to_string(dir.path().join(LOCK_FILE_NAME)).expect("failed to read lock file");
-        let stored_pid: u32 = contents.trim().parse().expect("lock file should contain a PID");
+        let stored_pid: u32 = contents
+            .trim()
+            .parse()
+            .expect("lock file should contain a PID");
         assert_eq!(stored_pid, std::process::id());
     }
 
