@@ -101,7 +101,6 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
             let status_output = self.git.get_status_porcelain(&path)?;
             let file_count = status_output.lines().filter(|l| !l.is_empty()).count();
             let commits_ahead = self.git.count_commits_ahead(&path, &base_branch)?;
-            let commits_behind = self.git.count_commits_behind(&path, &base_branch)?;
 
             let latest_commit = self.git.get_latest_commit(&path).ok().flatten();
 
@@ -110,7 +109,6 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
                 branch,
                 has_uncommitted_changes: file_count > 0,
                 commits_ahead,
-                commits_behind,
                 latest_commit,
             });
         }

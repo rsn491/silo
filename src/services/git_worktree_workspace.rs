@@ -202,7 +202,6 @@ impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
                 branch,
                 has_uncommitted_changes: s.has_uncommitted_changes,
                 commits_ahead: s.commits_ahead,
-                commits_behind: s.commits_behind,
                 latest_commit,
             });
         }
