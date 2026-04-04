@@ -177,10 +177,16 @@ fn check_and_handle_exit_work(
     agent: &Agent,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let git = Git;
+    handle_branch_rename(workspace_path, agent, &git);
+    let just_committed = handle_commit_flow(workspace_path, agent, &git)?;
+    handle_push_confirmation(workspace_path, just_committed, &git)?;
+    Ok(())
+}
 
-    // --- Step 1: Rename auto-generated branch ---
+/// Attempts to rename the auto-generated branch to a descriptive name and reports the outcome.
+fn handle_branch_rename(workspace_path: &Path, agent: &Agent, git: &Git) {
     eprintln!("\nRenaming branch...");
-    match GitBranchService::new(agent.clone()).try_rename(workspace_path, &git) {
+    match GitBranchService::new(agent.clone()).try_rename(workspace_path, git) {
         BranchRenameOutcome::Skipped => {}
         BranchRenameOutcome::Renamed(name) => {
             eprintln!("Branch renamed to '{}'.", name);
@@ -192,85 +198,115 @@ fn check_and_handle_exit_work(
             eprintln!("Warning: could not get branch name suggestion: {}", e);
         }
     }
+}
 
-    // --- Step 2: Check for uncommitted changes ---
-    let mut just_committed = false;
+/// Interactively prompts the user to commit any uncommitted changes.
+///
+/// Returns `true` if a commit was successfully created, `false` otherwise.
+///
+/// # Errors
+///
+/// Returns an error if a `dialoguer` interaction or git status check fails.
+fn handle_commit_flow(
+    workspace_path: &Path,
+    agent: &Agent,
+    git: &Git,
+) -> Result<bool, Box<dyn std::error::Error>> {
     let status = git.get_status_porcelain(workspace_path)?;
-    if !status.trim().is_empty() {
-        eprintln!("\nUncommitted changes detected:");
-        for line in status.lines() {
-            eprintln!("  {}", line);
-        }
+    if status.trim().is_empty() {
+        return Ok(false);
+    }
 
-        let should_commit = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Commit these changes?")
-            .items(["Yes", "No"])
-            .default(0)
-            .interact()?
-            == 0;
+    eprintln!("\nUncommitted changes detected:");
+    for line in status.lines() {
+        eprintln!("  {}", line);
+    }
 
-        if should_commit {
-            eprintln!("Generating commit message suggestion...");
-            let suggestion = git
-                .get_changes_summary(workspace_path)
+    let should_commit = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Commit these changes?")
+        .items(["Yes", "No"])
+        .default(0)
+        .interact()?
+        == 0;
+
+    if !should_commit {
+        return Ok(false);
+    }
+
+    eprintln!("Generating commit message suggestion...");
+    let suggestion = git
+        .get_changes_summary(workspace_path)
+        .ok()
+        .and_then(|changes| {
+            GitSuggestionsService::new(agent.clone())
+                .suggest_commit_message(&changes)
                 .ok()
-                .and_then(|changes| {
-                    GitSuggestionsService::new(agent.clone())
-                        .suggest_commit_message(&changes)
-                        .ok()
-                        .flatten()
-                });
+                .flatten()
+        });
 
-            let theme = ColorfulTheme::default();
-            let mut input = Input::<String>::with_theme(&theme).with_prompt("Commit message");
-            if let Some(ref msg) = suggestion {
-                input = input.with_initial_text(msg);
-            }
-            let message = input.interact_text()?;
+    let theme = ColorfulTheme::default();
+    let mut input = Input::<String>::with_theme(&theme).with_prompt("Commit message");
+    if let Some(ref msg) = suggestion {
+        input = input.with_initial_text(msg);
+    }
+    let message = input.interact_text()?;
 
-            match git.commit_all(workspace_path, &message) {
-                Ok(()) => {
-                    eprintln!("Changes committed.");
-                    just_committed = true;
-                }
-                Err(e) => {
-                    eprintln!("Failed to commit: {}", e);
-                    eprintln!("Skipping push step due to failed commit.");
-                    return Ok(());
-                }
-            }
-
-            // Verify the commit actually landed before proceeding.
-            let post_status = git.get_status_porcelain(workspace_path)?;
-            if !post_status.trim().is_empty() {
-                eprintln!("Working tree still has changes after commit; skipping push step.");
-                return Ok(());
-            }
+    match git.commit_all(workspace_path, &message) {
+        Ok(()) => eprintln!("Changes committed."),
+        Err(e) => {
+            eprintln!("Failed to commit: {}", e);
+            eprintln!("Skipping push step due to failed commit.");
+            return Ok(false);
         }
     }
 
-    // --- Step 3: Check for unpushed commits ---
+    // Verify the commit actually landed before proceeding.
+    let post_status = git.get_status_porcelain(workspace_path)?;
+    if !post_status.trim().is_empty() {
+        eprintln!("Working tree still has changes after commit; skipping push step.");
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+/// Interactively prompts the user to push any unpushed commits.
+///
+/// `just_committed` indicates whether the caller just created a commit, which
+/// is used as a fallback when no upstream tracking branch is configured yet.
+///
+/// # Errors
+///
+/// Returns an error if a `dialoguer` interaction fails.
+fn handle_push_confirmation(
+    workspace_path: &Path,
+    just_committed: bool,
+    git: &Git,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Use @{u} to compare against the configured upstream; fall back to 1 if we just committed
     // but no upstream is configured (new branch with no remote tracking branch yet).
     let unpushed = git
         .count_commits_ahead(workspace_path, "@{u}")
         .unwrap_or(if just_committed { 1 } else { 0 });
-    if unpushed > 0 || just_committed {
-        let unpushed = unpushed.max(if just_committed { 1 } else { 0 });
-        eprintln!("\nYou have {} unpushed commit(s).", unpushed);
+    let unpushed = unpushed.max(if just_committed { 1 } else { 0 });
 
-        let options = &["Push", "Continue without pushing"];
-        let selection = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("What would you like to do?")
-            .items(options)
-            .default(0)
-            .interact()?;
+    if unpushed == 0 {
+        return Ok(());
+    }
 
-        if selection == 0 {
-            match git.push(workspace_path) {
-                Ok(()) => eprintln!("Changes pushed."),
-                Err(e) => eprintln!("Push failed: {}", e),
-            }
+    eprintln!("\nYou have {} unpushed commit(s).", unpushed);
+
+    let options = &["Push", "Continue without pushing"];
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("What would you like to do?")
+        .items(options)
+        .default(0)
+        .interact()?;
+
+    if selection == 0 {
+        match git.push(workspace_path) {
+            Ok(()) => eprintln!("Changes pushed."),
+            Err(e) => eprintln!("Push failed: {}", e),
         }
     }
 
