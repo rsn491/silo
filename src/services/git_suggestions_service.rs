@@ -97,57 +97,82 @@ mod tests {
 
     #[test]
     fn test_sanitize_branch_name_already_kebab_case() {
-        assert_eq!(
-            sanitize_branch_name("add-auth-support"),
-            Some("add-auth-support".to_string())
-        );
+        // Arrange
+        let input = "add-auth-support";
+
+        // Act
+        let result = sanitize_branch_name(input);
+
+        // Assert
+        assert_eq!(result.as_deref(), Some("add-auth-support"));
     }
 
     #[test]
     fn test_sanitize_branch_name_uppercases_lowered() {
-        assert_eq!(
-            sanitize_branch_name("Add Auth Support"),
-            Some("add-auth-support".to_string())
-        );
+        // Arrange
+        let input = "Add Auth Support";
+
+        // Act
+        let result = sanitize_branch_name(input);
+
+        // Assert
+        assert_eq!(result.as_deref(), Some("add-auth-support"));
     }
 
     #[test]
     fn test_sanitize_branch_name_special_chars_replaced() {
-        assert_eq!(
-            sanitize_branch_name("add_auth/support!"),
-            Some("add-auth-support".to_string())
-        );
+        // Arrange
+        let input = "add_auth/support!";
+
+        // Act
+        let result = sanitize_branch_name(input);
+
+        // Assert
+        assert_eq!(result.as_deref(), Some("add-auth-support"));
     }
 
     #[test]
     fn test_sanitize_branch_name_consecutive_hyphens_collapsed() {
-        assert_eq!(
-            sanitize_branch_name("add---auth---support"),
-            Some("add-auth-support".to_string())
-        );
+        // Arrange
+        let input = "add---auth---support";
+
+        // Act
+        let result = sanitize_branch_name(input);
+
+        // Assert
+        assert_eq!(result.as_deref(), Some("add-auth-support"));
     }
 
     #[test]
     fn test_sanitize_branch_name_empty_input_returns_none() {
-        assert_eq!(sanitize_branch_name(""), None);
-        assert_eq!(sanitize_branch_name("   "), None);
-        assert_eq!(sanitize_branch_name("---"), None);
-        assert_eq!(sanitize_branch_name("___"), None);
+        // Assert — inputs containing only non-alphanumeric characters all sanitize to nothing.
+        assert!(sanitize_branch_name("").is_none());
+        assert!(sanitize_branch_name("   ").is_none());
+        assert!(sanitize_branch_name("---").is_none());
+        assert!(sanitize_branch_name("___").is_none());
     }
 
     #[test]
     fn test_sanitize_branch_name_uses_only_first_line() {
-        assert_eq!(
-            sanitize_branch_name("add-auth\nsome other line"),
-            Some("add-auth".to_string())
-        );
+        // Arrange
+        let input = "add-auth\nsome other line";
+
+        // Act
+        let result = sanitize_branch_name(input);
+
+        // Assert
+        assert_eq!(result.as_deref(), Some("add-auth"));
     }
 
     #[test]
     fn test_sanitize_branch_name_skips_blank_leading_lines() {
-        assert_eq!(
-            sanitize_branch_name("\n\nadd-auth"),
-            Some("add-auth".to_string())
-        );
+        // Arrange
+        let input = "\n\nadd-auth";
+
+        // Act
+        let result = sanitize_branch_name(input);
+
+        // Assert
+        assert_eq!(result.as_deref(), Some("add-auth"));
     }
 }
