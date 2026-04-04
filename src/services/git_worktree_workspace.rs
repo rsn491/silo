@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::agent_launcher::LaunchError;
+use super::git_branch_service::UUID_SUFFIX_LEN;
 use super::silo_config::SiloConfig;
 use super::workspace_manager::{
     CleanupError, CleanupResult, FailedWorkspace, GitStatus, RemovedWorkspace, SkippedWorkspace,
@@ -40,7 +41,7 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
         let worktree_name = format!(
             "{}-{}",
             self.git.get_project_name()?,
-            &Uuid::new_v4().to_string()[..8]
+            &Uuid::new_v4().to_string()[..UUID_SUFFIX_LEN]
         );
         Ok(base_dir.join(&worktree_name))
     }

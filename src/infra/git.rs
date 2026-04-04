@@ -162,6 +162,9 @@ pub trait GitOperations {
     fn get_latest_commit(&self, path: &Path) -> Result<Option<String>, GitError>;
 }
 
+/// Default fallback remote branch used when the remote HEAD cannot be determined.
+const DEFAULT_REMOTE_BRANCH: &str = "origin/main";
+
 /// A concrete implementation of [`GitOperations`] using the `git` command-line tool.
 #[derive(Default, Clone)]
 pub struct Git;
@@ -256,12 +259,12 @@ impl GitOperations for Git {
             let branch = String::from_utf8_lossy(&output.stdout)
                 .trim()
                 .strip_prefix("refs/remotes/")
-                .unwrap_or("origin/main")
+                .unwrap_or(DEFAULT_REMOTE_BRANCH)
                 .to_string();
             Ok(branch)
         } else {
-            // Fallback to origin/main if command fails.
-            Ok("origin/main".to_string())
+            // Fallback to DEFAULT_REMOTE_BRANCH if command fails.
+            Ok(DEFAULT_REMOTE_BRANCH.to_string())
         }
     }
 

@@ -23,6 +23,9 @@ pub enum BranchRenameOutcome {
     SuggestionFailed(String),
 }
 
+/// Length of the UUID hex suffix appended to auto-generated branch/workspace names.
+pub const UUID_SUFFIX_LEN: usize = 8;
+
 /// Handles renaming of auto-generated git branches using AI-generated suggestions.
 pub struct GitBranchService {
     /// Agent used to generate branch name suggestions.
@@ -42,7 +45,7 @@ impl GitBranchService {
     /// this pattern has not been intentionally renamed by the user.
     pub fn is_auto_generated_branch(branch: &str) -> bool {
         if let Some(suffix) = branch.rsplit('-').next() {
-            suffix.len() == 8 && suffix.chars().all(|c| c.is_ascii_hexdigit())
+            suffix.len() == UUID_SUFFIX_LEN && suffix.chars().all(|c| c.is_ascii_hexdigit())
         } else {
             false
         }
