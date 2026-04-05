@@ -140,7 +140,7 @@ fn prompt_for_agent() -> Result<Option<Agent>, Box<dyn std::error::Error>> {
 
 /// Prompts the user to choose a default workspace type.
 fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, Box<dyn std::error::Error>> {
-    let items = &["worktree (default)", "checkout", "Skip"];
+    let items = &["worktree (default)", "clone", "Skip"];
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Choose default workspace type")
@@ -150,7 +150,7 @@ fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, Box<dyn std::err
 
     match selection {
         Some(0) => Ok(Some(WorkspaceKind::Worktree)),
-        Some(1) => Ok(Some(WorkspaceKind::Checkout)),
+        Some(1) => Ok(Some(WorkspaceKind::Clone)),
         _ => Ok(None),
     }
 }

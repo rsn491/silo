@@ -9,7 +9,7 @@ Isolated workspace manager for parallel agentic development. Silo lets you launc
 Set up the `~/.silo/` directory and configure default preferences:
 
 ```sh
-silo init [--agent <agent>] [--workspace-type <worktree|checkout>] [--exit-work <true|false>]
+silo init [--agent <agent>] [--workspace-type <worktree|clone>] [--exit-work <true|false>]
 ```
 
 When run without arguments in an interactive terminal, `init` walks you through setup. Preferences are saved to `~/.silo/settings.json`.
@@ -19,7 +19,7 @@ When run without arguments in an interactive terminal, `init` walks you through 
 Create an isolated workspace and launch an AI agent inside it:
 
 ```sh
-silo launch [--agent <agent>] [--branch <branch>] [--worktree|--checkout] [--reuse] [--tab|--split-pane]
+silo launch [--agent <agent>] [--branch <branch>] [--worktree|--clone] [--reuse] [--tab|--split-pane]
 ```
 
 | Flag | Description |
@@ -27,7 +27,7 @@ silo launch [--agent <agent>] [--branch <branch>] [--worktree|--checkout] [--reu
 | `--agent <agent>` | Agent to launch: `claude` (default), `opencode`, `codex`, `gemini` |
 | `--branch <branch>` | Custom branch name (default: auto-generated) |
 | `--worktree` | Use a Git worktree (default) |
-| `--checkout` | Use a full local Git clone instead |
+| `--clone` | Use a full local Git clone instead |
 | `--reuse` | Reuse an existing inactive workspace if available |
 | `--tab` | Open in a new terminal tab (iTerm2) |
 | `--split-pane` | Open in a vertical split pane (iTerm2) |

@@ -86,7 +86,7 @@ impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
                 WorkspaceKind::Worktree => {
                     format!("branch: {}", ws.branch.as_deref().unwrap_or("(detached)"))
                 }
-                WorkspaceKind::Checkout => "checkout clone".to_string(),
+                WorkspaceKind::Clone => "checkout clone".to_string(),
             };
             println!("  ✓ Removed {} ({})", ws.path.display(), detail);
         }
@@ -98,7 +98,7 @@ impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
                 WorkspaceKind::Worktree => {
                     format!("branch: {}", ws.branch.as_deref().unwrap_or("(detached)"))
                 }
-                WorkspaceKind::Checkout => "checkout clone".to_string(),
+                WorkspaceKind::Clone => "checkout clone".to_string(),
             };
             println!(
                 "  ⚠ Skipped {} ({}, has {} unpushed commit(s)) — use --force to remove anyway",
