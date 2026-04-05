@@ -55,10 +55,10 @@ silo status
 Open an interactive shell inside a workspace directory:
 
 ```sh
-silo checkout [workspace_id]
+silo checkout [workspace_id|branch_name]
 ```
 
-If no workspace ID is given, an interactive selector is displayed. Type `exit` to return to your original session.
+The argument can be a workspace ID (directory name) or a branch name — directory name takes precedence if both match. If no argument is given, an interactive selector is displayed. Type `exit` to return to your original session.
 
 ### Clean up workspaces
 
