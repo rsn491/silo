@@ -12,7 +12,7 @@ use crate::services::workspace_manager::WorkspaceManager;
 /// Arguments for the `checkout` command.
 #[derive(Parser, Debug)]
 pub struct CheckoutArgs {
-    /// The workspace ID (directory name) to switch into.
+    /// The workspace ID (directory name) or branch name to switch into.
     ///
     /// If omitted, an interactive selector is displayed.
     pub workspace_id: Option<String>,
@@ -53,23 +53,26 @@ impl<G: GitOperations> CheckoutCommand<G> {
     }
 }
 
-/// Finds a workspace by matching the provided ID against each workspace's directory name.
+/// Finds a workspace by matching the provided query against each workspace's directory name or
+/// branch name, whichever matches first.
 ///
 /// # Errors
 ///
-/// Exits with code 1 if no workspace with the given ID is found.
+/// Exits with code 1 if no workspace with the given ID or branch is found.
 fn find_by_id(
     workspaces: &[GitWorkspaceInfo],
     id: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let found = workspaces
-        .iter()
-        .find(|w| w.path.file_name().and_then(|n| n.to_str()) == Some(id));
+    let found = workspaces.iter().find(|w| {
+        let name_match = w.path.file_name().and_then(|n| n.to_str()) == Some(id);
+        let branch_match = w.branch.as_deref() == Some(id);
+        name_match || branch_match
+    });
 
     match found {
         Some(w) => Ok(w.path.clone()),
         None => {
-            eprintln!("No workspace found with ID '{}'.", id);
+            eprintln!("No workspace found with ID or branch '{}'.", id);
             std::process::exit(1);
         }
     }
@@ -130,6 +133,54 @@ fn trunc(s: &str, max: usize) -> String {
         let mut t: String = s.chars().take(max - 1).collect();
         t.push('…');
         t
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::infra::git::GitWorkspaceInfo;
+
+    use super::find_by_id;
+
+    fn make_workspace(dir: &str, branch: Option<&str>) -> GitWorkspaceInfo {
+        GitWorkspaceInfo {
+            path: PathBuf::from(format!("/silo/{}", dir)),
+            branch: branch.map(str::to_string),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn find_by_id_matches_directory_name() {
+        let workspaces = vec![
+            make_workspace("project-abc12345", Some("main")),
+            make_workspace("project-xyz67890", Some("feature/foo")),
+        ];
+        let result = find_by_id(&workspaces, "project-abc12345").unwrap();
+        assert_eq!(result, PathBuf::from("/silo/project-abc12345"));
+    }
+
+    #[test]
+    fn find_by_id_matches_branch_name() {
+        let workspaces = vec![
+            make_workspace("project-abc12345", Some("main")),
+            make_workspace("project-xyz67890", Some("feature/foo")),
+        ];
+        let result = find_by_id(&workspaces, "feature/foo").unwrap();
+        assert_eq!(result, PathBuf::from("/silo/project-xyz67890"));
+    }
+
+    #[test]
+    fn find_by_id_prefers_directory_name_over_branch() {
+        // workspace whose dir name equals another workspace's branch name
+        let workspaces = vec![
+            make_workspace("my-branch", Some("other-branch")),
+            make_workspace("project-xyz67890", Some("my-branch")),
+        ];
+        let result = find_by_id(&workspaces, "my-branch").unwrap();
+        assert_eq!(result, PathBuf::from("/silo/my-branch"));
     }
 }
 
