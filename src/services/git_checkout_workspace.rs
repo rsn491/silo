@@ -82,7 +82,13 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
             let branch = self.git.get_current_branch(&path)?;
             let status_output = self.git.get_status_porcelain(&path)?;
             let (has_uncommitted_changes, _) = parse_uncommitted_changes(&status_output);
-            let commits_ahead = self.git.count_commits_ahead(&path, &base_branch)?;
+            let commits_ahead = self
+                .git
+                .count_commits_ahead(&path, &base_branch)
+                .unwrap_or_else(|e| {
+                    log::warn!("could not count commits ahead for {:?}: {}", path, e);
+                    0
+                });
 
             let latest_commit = self.git.get_latest_commit(&path).ok().flatten();
 

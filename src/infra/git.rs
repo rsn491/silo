@@ -261,7 +261,12 @@ impl GitOperations for Git {
                 .to_string();
             Ok(branch)
         } else {
-            // Fallback to DEFAULT_REMOTE_BRANCH if command fails.
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log::warn!(
+                "could not determine default remote branch ({}); falling back to {}",
+                stderr.trim(),
+                DEFAULT_REMOTE_BRANCH
+            );
             Ok(DEFAULT_REMOTE_BRANCH.to_string())
         }
     }
@@ -302,7 +307,8 @@ impl GitOperations for Git {
                 .unwrap_or(0);
             Ok(count)
         } else {
-            Ok(0)
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(GitError::CommandFailed(stderr.trim().to_string()))
         }
     }
 
@@ -326,7 +332,8 @@ impl GitOperations for Git {
                 .unwrap_or(0);
             Ok(count)
         } else {
-            Ok(0)
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(GitError::CommandFailed(stderr.trim().to_string()))
         }
     }
 

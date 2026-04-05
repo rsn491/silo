@@ -104,10 +104,14 @@ impl WorkspaceLock {
 
     /// Releases the lock by deleting the lock file.
     ///
-    /// Errors are silently ignored — if the file was already removed the
-    /// workspace is effectively unlocked regardless.
+    /// If the file was already removed the workspace is effectively unlocked
+    /// regardless, but unexpected I/O errors are logged as warnings.
     pub fn release(&self) {
-        let _ = std::fs::remove_file(&self.path);
+        if let Err(e) = std::fs::remove_file(&self.path)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            log::warn!("failed to release workspace lock {:?}: {}", self.path, e);
+        }
     }
 
     /// Returns `true` when `silo.lock` exists inside `workspace_path` **and**
