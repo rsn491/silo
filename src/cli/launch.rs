@@ -38,7 +38,7 @@ pub struct LaunchArgs {
 
     /// Use Git clone instead of Git worktrees for workspace isolation.
     #[arg(long, group = "workspace")]
-    pub checkout: bool,
+    pub clone: bool,
 
     /// Use Git worktrees for workspace isolation (overrides settings.json default).
     #[arg(long, group = "workspace")]
@@ -115,7 +115,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         }
 
         let agent = resolve_agent(args.agent);
-        let kind = resolve_workspace_type(args.checkout, args.worktree);
+        let kind = resolve_workspace_type(args.clone, args.worktree);
         eprintln!("Launching {:?} in {}...", agent, kind);
 
         let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
@@ -314,8 +314,8 @@ fn handle_push_confirmation(
 }
 
 /// Determines the workspace type based on CLI arguments and persistent settings.
-fn resolve_workspace_type(checkout: bool, worktree: bool) -> WorkspaceKind {
-    if checkout {
+fn resolve_workspace_type(clone: bool, worktree: bool) -> WorkspaceKind {
+    if clone {
         return WorkspaceKind::Checkout;
     }
     if worktree {
@@ -362,8 +362,8 @@ fn build_silo_launch_command(args: &LaunchArgs) -> String {
         parts.push("--branch".to_string());
         parts.push(shell_quote(branch));
     }
-    if args.checkout {
-        parts.push("--checkout".to_string());
+    if args.clone {
+        parts.push("--clone".to_string());
     } else if args.worktree {
         parts.push("--worktree".to_string());
     }
@@ -387,7 +387,7 @@ impl Default for LaunchArgs {
             tab: false,
             split_pane: false,
             agent: None,
-            checkout: false,
+            clone: false,
             worktree: false,
             reuse: false,
         }
@@ -470,16 +470,16 @@ mod tests {
         assert!(cmd.contains("launch"));
         assert!(!cmd.contains("--agent"));
         assert!(!cmd.contains("--branch"));
-        assert!(!cmd.contains("--checkout"));
+        assert!(!cmd.contains("--clone"));
         assert!(!cmd.contains("--worktree"));
         assert!(!cmd.contains("--reuse"));
     }
 
     #[test]
-    fn test_build_silo_launch_command_with_checkout_flag() {
+    fn test_build_silo_launch_command_with_clone_flag() {
         // Arrange
         let args = LaunchArgs {
-            checkout: true,
+            clone: true,
             ..Default::default()
         };
 
@@ -487,7 +487,7 @@ mod tests {
         let cmd = build_silo_launch_command(&args);
 
         // Assert
-        assert!(cmd.contains("--checkout"));
+        assert!(cmd.contains("--clone"));
         assert!(!cmd.contains("--worktree"));
     }
 
@@ -504,7 +504,7 @@ mod tests {
 
         // Assert
         assert!(cmd.contains("--worktree"));
-        assert!(!cmd.contains("--checkout"));
+        assert!(!cmd.contains("--clone"));
     }
 
     #[test]
@@ -570,7 +570,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_workspace_type_checkout_flag_wins() {
+    fn test_resolve_workspace_type_clone_flag_wins() {
         // Act
         let kind = resolve_workspace_type(true, false);
 
