@@ -133,7 +133,7 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
                 let branch = self.git.get_current_branch(&path).ok().flatten();
                 result.skipped.push(SkippedWorkspace {
                     path: path.clone(),
-                    kind: WorkspaceKind::Checkout,
+                    kind: WorkspaceKind::Clone,
                     branch,
                     commits_ahead: ahead,
                 });
@@ -143,7 +143,7 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
             match std::fs::remove_dir_all(&path) {
                 Ok(_) => result.removed.push(RemovedWorkspace {
                     path,
-                    kind: WorkspaceKind::Checkout,
+                    kind: WorkspaceKind::Clone,
                     branch: None,
                 }),
                 Err(e) => result.failed.push(FailedWorkspace {

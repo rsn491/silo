@@ -56,7 +56,7 @@ enum WorkspaceBackend<G: GitOperations> {
     /// Use Git worktrees.
     Worktree(GitWorktreeWorkspace<G>),
     /// Use local Git clones.
-    Checkout(GitCheckoutWorkspace<G>),
+    Clone(GitCheckoutWorkspace<G>),
 }
 
 impl<G: GitOperations> crate::services::workspace_manager::WorkspaceFactory
@@ -69,7 +69,7 @@ impl<G: GitOperations> crate::services::workspace_manager::WorkspaceFactory
     ) -> Result<std::path::PathBuf, LaunchError> {
         match self {
             WorkspaceBackend::Worktree(w) => w.create(branch, reuse),
-            WorkspaceBackend::Checkout(w) => w.create(branch, reuse),
+            WorkspaceBackend::Clone(w) => w.create(branch, reuse),
         }
     }
 }
@@ -121,9 +121,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
         let agent_for_exit = agent.clone();
         let workspace = match kind {
-            WorkspaceKind::Checkout => {
-                WorkspaceBackend::Checkout(GitCheckoutWorkspace::new(self.git))
-            }
+            WorkspaceKind::Clone => WorkspaceBackend::Clone(GitCheckoutWorkspace::new(self.git)),
             WorkspaceKind::Worktree => {
                 WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
             }
@@ -316,7 +314,7 @@ fn handle_push_confirmation(
 /// Determines the workspace type based on CLI arguments and persistent settings.
 fn resolve_workspace_type(clone: bool, worktree: bool) -> WorkspaceKind {
     if clone {
-        return WorkspaceKind::Checkout;
+        return WorkspaceKind::Clone;
     }
     if worktree {
         return WorkspaceKind::Worktree;
@@ -575,7 +573,7 @@ mod tests {
         let kind = resolve_workspace_type(true, false);
 
         // Assert
-        assert_eq!(kind, WorkspaceKind::Checkout);
+        assert_eq!(kind, WorkspaceKind::Clone);
     }
 
     #[test]

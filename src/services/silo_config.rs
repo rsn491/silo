@@ -221,7 +221,7 @@ mod tests {
         let settings_path = dir.path().join("settings.json");
         let settings = SiloSettings {
             agent: None,
-            workspace_type: Some(WorkspaceKind::Checkout),
+            workspace_type: Some(WorkspaceKind::Clone),
             exit_work: None,
         };
 
@@ -232,7 +232,7 @@ mod tests {
             .expect("should load settings after save");
 
         // Assert
-        assert_eq!(loaded.workspace_type, Some(WorkspaceKind::Checkout));
+        assert_eq!(loaded.workspace_type, Some(WorkspaceKind::Clone));
     }
 
     #[test]

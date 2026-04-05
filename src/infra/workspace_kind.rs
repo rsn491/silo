@@ -10,7 +10,7 @@ pub enum WorkspaceKind {
     /// A Git worktree attached to the main repository.
     #[strum(to_string = "worktree")]
     Worktree,
-    /// A full checkout created via local clone.
-    #[strum(to_string = "checkout")]
-    Checkout,
+    /// A full local clone of the repository.
+    #[strum(to_string = "clone")]
+    Clone,
 }
