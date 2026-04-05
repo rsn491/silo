@@ -4,6 +4,21 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.93.0"
 publish = false
+description = "Isolated workspace manager for parallel agentic development"
+repository = "https://github.com/rsn491/silo"
+license = "MIT"
+
+[package.metadata.dist]
+cargo-dist-version = "0.28.0"
+ci = "github"
+installers = ["shell"]
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
