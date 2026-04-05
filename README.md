@@ -9,7 +9,7 @@ Isolated workspace manager for parallel agentic development. Silo lets you launc
 Set up the `~/.silo/` directory and configure default preferences:
 
 ```sh
-silo init [--agent <agent>] [--workspace-type <worktree|checkout>] [--exit-work <true|false>]
+silo init [--agent <agent>] [--workspace-type <worktree|clone>] [--exit-work <true|false>]
 ```
 
 When run without arguments in an interactive terminal, `init` walks you through setup. Preferences are saved to `~/.silo/settings.json`.
