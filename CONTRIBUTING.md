@@ -80,8 +80,7 @@ CLI (src/cli/)  -->  Services (src/services/)  -->  Infrastructure (src/infra/)
 - Contains domain-specific error types with `From` implementations for the `?` operator.
 - Has no knowledge of how output is displayed.
 
-**Infrastructure** (`src/infra/`) - System interactions and trait definitions.
-- Defines traits (`GitOperations`, `ProcessOperations`, `Terminal`) and their concrete implementations.
+**Infrastructure** (`src/infra/`) - System interactions.
 - Wraps external commands (git, ps, lsof) and OS-specific APIs (osascript).
 
 ### Dependency Rules
