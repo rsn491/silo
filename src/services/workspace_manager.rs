@@ -138,7 +138,11 @@ pub fn reuse_inactive_workspace<G: GitOperations>(
                 &Uuid::new_v4().to_string()[..UUID_SUFFIX_LEN]
             )
         });
-        git.checkout_new_branch(&ws.path, &branch_name)
+        git.fetch_remote(&ws.path).map_err(LaunchError::Git)?;
+        let default_branch = git
+            .get_default_remote_branch()
+            .map_err(LaunchError::Git)?;
+        git.checkout_new_branch_from(&ws.path, &branch_name, &default_branch)
             .map_err(LaunchError::Git)?;
         return Ok(Some(ws.path));
     }

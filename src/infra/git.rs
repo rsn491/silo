@@ -108,6 +108,25 @@ pub trait GitOperations {
     /// Returns [`GitError::CommandFailed`] if the `git checkout -b` command fails.
     fn checkout_new_branch(&self, path: &Path, branch: &str) -> Result<(), GitError>;
 
+    /// Checks out a new branch starting from `start_point` in the specified path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the `git checkout -b` command fails.
+    fn checkout_new_branch_from(
+        &self,
+        path: &Path,
+        branch: &str,
+        start_point: &str,
+    ) -> Result<(), GitError>;
+
+    /// Fetches from origin in the specified repository path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the `git fetch` command fails.
+    fn fetch_remote(&self, path: &Path) -> Result<(), GitError>;
+
     /// Returns the name of the current branch at the specified path.
     ///
     /// # Errors
@@ -358,6 +377,43 @@ impl GitOperations for Git {
             .args(["-C"])
             .arg(path)
             .args(["checkout", "-b", branch])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.to_string()));
+        }
+
+        Ok(())
+    }
+
+    fn checkout_new_branch_from(
+        &self,
+        path: &Path,
+        branch: &str,
+        start_point: &str,
+    ) -> Result<(), GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["checkout", "-b", branch, start_point])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.to_string()));
+        }
+
+        Ok(())
+    }
+
+    fn fetch_remote(&self, path: &Path) -> Result<(), GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["fetch", "origin"])
             .output()
             .map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
