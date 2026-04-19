@@ -4,6 +4,12 @@ Isolated workspace manager for parallel agentic development. Silo lets you launc
 
 <kbd><img title="Silo launch" src="docs/silo_launch.gif"></kbd><br/>
 
+## Installation
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/silo/releases/latest/download/silo-installer.sh | sh
+```
+
 ## Usage
 
 ### Initialize

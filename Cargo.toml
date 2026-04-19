@@ -1,9 +1,30 @@
 [package]
 name = "silo"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 rust-version = "1.93.0"
 publish = false
+description = "Isolated workspace manager for parallel agentic development"
+repository = "https://github.com/rsn491/silo"
+license = "MIT"
+
+[package.metadata.dist]
+dist = true
+
+# Config for 'dist'
+[workspace.metadata.dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.31.0"
+# CI backends to support
+ci = "github"
+# The installers to generate for each app
+installers = ["shell"]
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+# Path that installers should place binaries in
+install-path = "CARGO_HOME"
+# Whether to install an updater program
+install-updater = false
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
@@ -26,3 +47,8 @@ tempfile = "3.25.0"
 missing_errors_doc = "warn"
 missing_panics_doc = "warn"
 missing_docs_in_private_items = "warn"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
