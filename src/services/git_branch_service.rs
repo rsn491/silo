@@ -26,6 +26,9 @@ pub enum BranchRenameOutcome {
 /// Length of the UUID hex suffix appended to auto-generated branch/workspace names.
 pub const UUID_SUFFIX_LEN: usize = 8;
 
+/// Prefix used for all auto-generated silo branch and workspace names.
+pub const SILO_PREFIX: &str = "silo-";
+
 /// Handles renaming of auto-generated git branches using AI-generated suggestions.
 pub struct GitBranchService {
     /// Agent used to generate branch name suggestions.
@@ -44,6 +47,9 @@ impl GitBranchService {
     /// the first 8 characters of a UUID (e.g., `silo-64c05006`). Any branch that still matches
     /// this pattern has not been intentionally renamed by the user.
     pub fn is_auto_generated_branch(branch: &str) -> bool {
+        if !branch.starts_with(SILO_PREFIX) {
+            return false;
+        }
         if let Some(suffix) = branch.rsplit('-').next() {
             suffix.len() == UUID_SUFFIX_LEN && suffix.chars().all(|c| c.is_ascii_hexdigit())
         } else {
@@ -95,9 +101,7 @@ mod tests {
     #[test]
     fn test_is_auto_generated_branch_matches_silo_pattern() {
         assert!(GitBranchService::is_auto_generated_branch("silo-64c05006"));
-        assert!(GitBranchService::is_auto_generated_branch(
-            "myrepo-a1b2c3d4"
-        ));
+        assert!(GitBranchService::is_auto_generated_branch("silo-a1b2c3d4"));
     }
 
     #[test]
@@ -107,6 +111,10 @@ mod tests {
         ));
         assert!(!GitBranchService::is_auto_generated_branch("main"));
         assert!(!GitBranchService::is_auto_generated_branch("fix-login-bug"));
+        // Does not start with "silo-".
+        assert!(!GitBranchService::is_auto_generated_branch(
+            "myrepo-a1b2c3d4"
+        ));
         // 7 hex chars — too short.
         assert!(!GitBranchService::is_auto_generated_branch("silo-64c0500"));
         // 9 hex chars — too long.
@@ -169,7 +177,7 @@ mod tests {
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_current_branch()
-            .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
+            .returning(|_| Ok(Some("silo-a1b2c3d4".to_string())));
         mock_git
             .expect_get_changes_summary()
             .returning(|_| Ok(String::new()));
@@ -188,7 +196,7 @@ mod tests {
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_current_branch()
-            .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
+            .returning(|_| Ok(Some("silo-a1b2c3d4".to_string())));
         mock_git
             .expect_get_changes_summary()
             .returning(|_| Ok("   \n\t  ".to_string()));
@@ -207,7 +215,7 @@ mod tests {
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_current_branch()
-            .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
+            .returning(|_| Ok(Some("silo-a1b2c3d4".to_string())));
         mock_git
             .expect_get_changes_summary()
             .returning(|_| Err(GitError::CommandFailed("git diff failed".to_string())));
