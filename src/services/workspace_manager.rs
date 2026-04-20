@@ -124,7 +124,9 @@ pub fn reuse_inactive_workspace<G: GitOperations>(
     branch: Option<String>,
 ) -> Result<Option<PathBuf>, LaunchError> {
     let inactive = workspaces.into_iter().find(|ws| {
-        !WorkspaceLock::is_locked(&ws.path) && !ws.has_uncommitted_changes && ws.commits_ahead == 0
+        !WorkspaceLock::is_locked(&ws.path)
+            && !ws.has_uncommitted_changes
+            && (ws.commits_ahead == 0 || git.is_fully_pushed(&ws.path))
     });
 
     if let Some(ws) = inactive {
@@ -138,7 +140,9 @@ pub fn reuse_inactive_workspace<G: GitOperations>(
                 &Uuid::new_v4().to_string()[..UUID_SUFFIX_LEN]
             )
         });
-        git.checkout_new_branch(&ws.path, &branch_name)
+        git.fetch_remote(&ws.path).map_err(LaunchError::Git)?;
+        let default_branch = git.get_default_remote_branch().map_err(LaunchError::Git)?;
+        git.checkout_new_branch_from(&ws.path, &branch_name, &default_branch)
             .map_err(LaunchError::Git)?;
         return Ok(Some(ws.path));
     }
@@ -158,6 +162,104 @@ pub trait WorkspaceFactory {
     ///
     /// Returns [`LaunchError`] if workspace creation fails.
     fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infra::git::MockGitOperations;
+    use tempfile::TempDir;
+
+    fn make_workspace(tmp: &TempDir, commits_ahead: usize) -> GitWorkspaceInfo {
+        GitWorkspaceInfo {
+            path: tmp.path().to_path_buf(),
+            branch: Some("feature".to_string()),
+            has_uncommitted_changes: false,
+            commits_ahead,
+            latest_commit: None,
+        }
+    }
+
+    #[test]
+    fn reuse_picks_workspace_at_base_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = make_workspace(&tmp, 0);
+
+        let mut mock = MockGitOperations::new();
+        mock.expect_is_fully_pushed().never();
+        mock.expect_get_project_name()
+            .returning(|| Ok("proj".to_string()));
+        mock.expect_fetch_remote().returning(|_| Ok(()));
+        mock.expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock.expect_checkout_new_branch_from()
+            .returning(|_, _, _| Ok(()));
+
+        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    fn reuse_picks_workspace_with_pushed_commits() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = make_workspace(&tmp, 3);
+
+        let mut mock = MockGitOperations::new();
+        mock.expect_is_fully_pushed().once().returning(|_| true);
+        mock.expect_get_project_name()
+            .returning(|| Ok("proj".to_string()));
+        mock.expect_fetch_remote().returning(|_| Ok(()));
+        mock.expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock.expect_checkout_new_branch_from()
+            .returning(|_, _, _| Ok(()));
+
+        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    fn reuse_skips_workspace_with_unpushed_commits() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = make_workspace(&tmp, 2);
+
+        let mut mock = MockGitOperations::new();
+        mock.expect_is_fully_pushed().once().returning(|_| false);
+        mock.expect_get_project_name().never();
+
+        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn reuse_skips_locked_workspace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lock = WorkspaceLock::new(tmp.path());
+        lock.try_acquire().unwrap();
+
+        let ws = make_workspace(&tmp, 0);
+        let mock = MockGitOperations::new();
+
+        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn reuse_skips_workspace_with_uncommitted_changes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = GitWorkspaceInfo {
+            path: tmp.path().to_path_buf(),
+            branch: Some("feature".to_string()),
+            has_uncommitted_changes: true,
+            commits_ahead: 0,
+            latest_commit: None,
+        };
+
+        let mock = MockGitOperations::new();
+
+        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        assert!(result.unwrap().is_none());
+    }
 }
 
 /// Trait for managing and inspecting existing workspaces.

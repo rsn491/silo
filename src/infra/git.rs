@@ -108,6 +108,25 @@ pub trait GitOperations {
     /// Returns [`GitError::CommandFailed`] if the `git checkout -b` command fails.
     fn checkout_new_branch(&self, path: &Path, branch: &str) -> Result<(), GitError>;
 
+    /// Checks out a new branch starting from `start_point` in the specified path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the `git checkout -b` command fails.
+    fn checkout_new_branch_from(
+        &self,
+        path: &Path,
+        branch: &str,
+        start_point: &str,
+    ) -> Result<(), GitError>;
+
+    /// Fetches from origin in the specified repository path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the `git fetch` command fails.
+    fn fetch_remote(&self, path: &Path) -> Result<(), GitError>;
+
     /// Returns the name of the current branch at the specified path.
     ///
     /// # Errors
@@ -158,6 +177,12 @@ pub trait GitOperations {
     ///
     /// Returns `None` if there are no commits or the command fails.
     fn get_latest_commit(&self, path: &Path) -> Result<Option<String>, GitError>;
+
+    /// Returns `true` when the current branch at `path` has an upstream tracking
+    /// branch and all local commits have been pushed (i.e. `@{u}..HEAD` is empty).
+    ///
+    /// Returns `false` if there is no upstream, or the command fails.
+    fn is_fully_pushed(&self, path: &Path) -> bool;
 }
 
 /// Default fallback remote branch used when the remote HEAD cannot be determined.
@@ -369,6 +394,43 @@ impl GitOperations for Git {
         Ok(())
     }
 
+    fn checkout_new_branch_from(
+        &self,
+        path: &Path,
+        branch: &str,
+        start_point: &str,
+    ) -> Result<(), GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["checkout", "-b", branch, start_point])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.to_string()));
+        }
+
+        Ok(())
+    }
+
+    fn fetch_remote(&self, path: &Path) -> Result<(), GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["fetch", "origin"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.to_string()));
+        }
+
+        Ok(())
+    }
+
     fn get_current_branch(&self, path: &Path) -> Result<Option<String>, GitError> {
         let output = Command::new("git")
             .args(["-C"])
@@ -523,6 +585,25 @@ impl GitOperations for Git {
             Ok(None)
         } else {
             Ok(Some(commit))
+        }
+    }
+
+    fn is_fully_pushed(&self, path: &Path) -> bool {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["rev-list", "--count", "@{u}..HEAD"])
+            .output();
+
+        match output {
+            Ok(out) if out.status.success() => {
+                let count = String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .parse::<usize>()
+                    .unwrap_or(1);
+                count == 0
+            }
+            _ => false,
         }
     }
 }
