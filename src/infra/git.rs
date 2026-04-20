@@ -177,6 +177,12 @@ pub trait GitOperations {
     ///
     /// Returns `None` if there are no commits or the command fails.
     fn get_latest_commit(&self, path: &Path) -> Result<Option<String>, GitError>;
+
+    /// Returns `true` when the current branch at `path` has an upstream tracking
+    /// branch and all local commits have been pushed (i.e. `@{u}..HEAD` is empty).
+    ///
+    /// Returns `false` if there is no upstream, or the command fails.
+    fn is_fully_pushed(&self, path: &Path) -> bool;
 }
 
 /// Default fallback remote branch used when the remote HEAD cannot be determined.
@@ -579,6 +585,25 @@ impl GitOperations for Git {
             Ok(None)
         } else {
             Ok(Some(commit))
+        }
+    }
+
+    fn is_fully_pushed(&self, path: &Path) -> bool {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["rev-list", "--count", "@{u}..HEAD"])
+            .output();
+
+        match output {
+            Ok(out) if out.status.success() => {
+                let count = String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .parse::<usize>()
+                    .unwrap_or(1);
+                count == 0
+            }
+            _ => false,
         }
     }
 }
