@@ -2,6 +2,8 @@
 
 use std::path::Path;
 
+use uuid::Uuid;
+
 use crate::infra::agent::Agent;
 use crate::infra::git::GitOperations;
 use crate::services::git_suggestions_service::GitSuggestionsService;
@@ -75,6 +77,17 @@ impl GitBranchService {
             Ok(None) => BranchRenameOutcome::Skipped,
             Ok(Some(suggested)) => match git.rename_branch(workspace_path, &suggested) {
                 Ok(()) => BranchRenameOutcome::Renamed(suggested),
+                Err(e) if e.to_string().contains("already exists") => {
+                    let suffix = &Uuid::new_v4().to_string()[..UUID_SUFFIX_LEN];
+                    let fallback = format!("{}-{}", suggested, suffix);
+                    match git.rename_branch(workspace_path, &fallback) {
+                        Ok(()) => BranchRenameOutcome::Renamed(fallback),
+                        Err(e2) => BranchRenameOutcome::RenameFailed {
+                            suggested,
+                            error: e2.to_string(),
+                        },
+                    }
+                }
                 Err(e) => BranchRenameOutcome::RenameFailed {
                     suggested,
                     error: e.to_string(),
