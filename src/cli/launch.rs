@@ -1,7 +1,7 @@
 //! Logic for the `launch` command.
 
 use clap::Parser;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use dialoguer::{Input, Select, theme::ColorfulTheme};
 
@@ -16,6 +16,8 @@ use crate::services::git_suggestions_service::GitSuggestionsService;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
+use crate::services::workspace_lock::WorkspaceLock;
+use crate::services::workspace_manager::WorkspaceManager;
 
 /// Arguments for the `launch` command.
 #[derive(Parser, Debug)]
@@ -126,6 +128,40 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                 WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
             }
         };
+
+        let override_path: Option<PathBuf> = if let Some(branch_name) = &args.branch {
+            if let Some(existing_path) = find_workspace_by_branch(&workspace, branch_name) {
+                if WorkspaceLock::is_locked(&existing_path) {
+                    return Err(format!(
+                        "an agent is already running in workspace '{}' at {}",
+                        branch_name,
+                        existing_path.display()
+                    )
+                    .into());
+                }
+                let use_existing = Select::with_theme(&ColorfulTheme::default())
+                    .with_prompt(format!(
+                        "Workspace for '{}' already exists at {}. Launch agent there?",
+                        branch_name,
+                        existing_path.display()
+                    ))
+                    .items(["Yes", "No"])
+                    .default(0)
+                    .interact()?
+                    == 0;
+                if use_existing {
+                    Some(existing_path)
+                } else {
+                    eprintln!("Aborted.");
+                    return Ok(());
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let launch_result = AgentLauncher::new(
             workspace,
             self.terminal,
@@ -133,6 +169,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
             agent,
             args.branch,
             args.reuse,
+            override_path,
         )
         .launch();
 
@@ -309,6 +346,20 @@ fn handle_push_confirmation(
     }
 
     Ok(())
+}
+
+/// Finds a workspace whose current branch matches `branch`, searching within the active backend.
+fn find_workspace_by_branch<G: GitOperations>(
+    backend: &WorkspaceBackend<G>,
+    branch: &str,
+) -> Option<PathBuf> {
+    let all = match backend {
+        WorkspaceBackend::Worktree(w) => w.get_all().ok()?,
+        WorkspaceBackend::Clone(w) => w.get_all().ok()?,
+    };
+    all.into_iter()
+        .find(|ws| ws.branch.as_deref() == Some(branch))
+        .map(|ws| ws.path)
 }
 
 /// Determines the workspace type based on CLI arguments and persistent settings.
