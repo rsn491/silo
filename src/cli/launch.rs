@@ -49,6 +49,10 @@ pub struct LaunchArgs {
     /// workspace when no eligible workspace is found.
     #[arg(long)]
     pub reuse: bool,
+
+    /// Delete the workspace after the agent exits if all work is committed and pushed.
+    #[arg(long)]
+    pub tmp: bool,
 }
 
 /// A wrapper for the different workspace backend implementations.
@@ -116,6 +120,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 
         let agent = resolve_agent(args.agent);
         let kind = resolve_workspace_type(args.clone, args.worktree);
+        let workspace_kind = kind.clone();
         eprintln!("Launching {:?} in {}...", agent, kind);
 
         let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
@@ -152,6 +157,11 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                     {
                         eprintln!("Warning: exit work check failed: {}", e);
                     }
+                    if args.tmp
+                        && let Err(e) = cleanup_tmp_workspace(&workspace_path, workspace_kind)
+                    {
+                        eprintln!("Warning: tmp workspace cleanup failed: {}", e);
+                    }
                 }
                 Ok(())
             }
@@ -178,6 +188,55 @@ fn check_and_handle_exit_work(
     handle_branch_rename(workspace_path, agent, &git);
     let just_committed = handle_commit_flow(workspace_path, agent, &git)?;
     handle_push_confirmation(workspace_path, just_committed, &git)?;
+    Ok(())
+}
+
+/// Deletes the workspace at `path` if it has no uncommitted changes and no unpushed commits.
+///
+/// For worktrees uses `git worktree remove --force`; for clones uses `fs::remove_dir_all`.
+/// If the upstream is not configured, treats the branch as clean (nothing to push).
+fn cleanup_tmp_workspace(
+    path: &Path,
+    kind: WorkspaceKind,
+) -> Result<(), Box<dyn std::error::Error>> {
+    cleanup_tmp_workspace_with_git(path, kind, &Git)
+}
+
+/// Inner implementation of [`cleanup_tmp_workspace`] that accepts any [`GitOperations`]
+/// implementation, enabling unit testing with mocks.
+fn cleanup_tmp_workspace_with_git<G: GitOperations>(
+    path: &Path,
+    kind: WorkspaceKind,
+    git: &G,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let status = git.get_status_porcelain(path)?;
+    if !status.trim().is_empty() {
+        eprintln!(
+            "\nWorkspace not deleted: uncommitted changes remain in {}.",
+            path.display()
+        );
+        return Ok(());
+    }
+
+    let unpushed = git.count_commits_ahead(path, "@{u}").unwrap_or(0);
+    if unpushed > 0 {
+        eprintln!(
+            "\nWorkspace not deleted: {} unpushed commit(s) remain in {}.",
+            unpushed,
+            path.display()
+        );
+        return Ok(());
+    }
+
+    let result: Result<(), Box<dyn std::error::Error>> = match kind {
+        WorkspaceKind::Worktree => git.remove_worktree(path).map_err(Into::into),
+        WorkspaceKind::Clone => std::fs::remove_dir_all(path).map_err(Into::into),
+    };
+
+    match result {
+        Ok(()) => eprintln!("\nTemporary workspace deleted: {}", path.display()),
+        Err(e) => eprintln!("\nFailed to delete workspace {}: {}", path.display(), e),
+    }
     Ok(())
 }
 
@@ -368,6 +427,9 @@ fn build_silo_launch_command(args: &LaunchArgs) -> String {
     if args.reuse {
         parts.push("--reuse".to_string());
     }
+    if args.tmp {
+        parts.push("--tmp".to_string());
+    }
 
     parts.join(" ")
 }
@@ -388,6 +450,7 @@ impl Default for LaunchArgs {
             clone: false,
             worktree: false,
             reuse: false,
+            tmp: false,
         }
     }
 }
@@ -592,5 +655,123 @@ mod tests {
         assert_eq!(resolve_agent(Some(Agent::Gemini)), Agent::Gemini);
         assert_eq!(resolve_agent(Some(Agent::OpenCode)), Agent::OpenCode);
         assert_eq!(resolve_agent(Some(Agent::ClaudeCode)), Agent::ClaudeCode);
+    }
+
+    #[test]
+    fn test_build_silo_launch_command_with_tmp() {
+        // Arrange
+        let args = LaunchArgs {
+            tmp: true,
+            ..Default::default()
+        };
+
+        // Act
+        let cmd = build_silo_launch_command(&args);
+
+        // Assert
+        assert!(cmd.contains("--tmp"));
+    }
+
+    #[test]
+    fn test_build_silo_launch_command_without_tmp_not_included() {
+        // Arrange
+        let args = LaunchArgs::default();
+
+        // Act
+        let cmd = build_silo_launch_command(&args);
+
+        // Assert
+        assert!(!cmd.contains("--tmp"));
+    }
+
+    #[test]
+    fn test_cleanup_tmp_workspace_skips_when_uncommitted_changes() {
+        // Arrange
+        let mut mock = crate::infra::git::MockGitOperations::new();
+        let path = std::path::Path::new("/fake/path");
+        mock.expect_get_status_porcelain()
+            .returning(|_| Ok("M  src/main.rs".to_string()));
+        mock.expect_remove_worktree().never();
+
+        // Act
+        let result = cleanup_tmp_workspace_with_git(path, WorkspaceKind::Worktree, &mock);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cleanup_tmp_workspace_skips_when_unpushed_commits() {
+        // Arrange
+        let mut mock = crate::infra::git::MockGitOperations::new();
+        let path = std::path::Path::new("/fake/path");
+        mock.expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        mock.expect_count_commits_ahead().returning(|_, _| Ok(3));
+        mock.expect_remove_worktree().never();
+
+        // Act
+        let result = cleanup_tmp_workspace_with_git(path, WorkspaceKind::Worktree, &mock);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cleanup_tmp_workspace_deletes_clean_worktree() {
+        // Arrange
+        let mut mock = crate::infra::git::MockGitOperations::new();
+        let path = std::path::Path::new("/fake/path");
+        mock.expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        mock.expect_count_commits_ahead().returning(|_, _| Ok(0));
+        mock.expect_remove_worktree().once().returning(|_| Ok(()));
+
+        // Act
+        let result = cleanup_tmp_workspace_with_git(path, WorkspaceKind::Worktree, &mock);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cleanup_tmp_workspace_treats_no_upstream_as_clean() {
+        // Arrange — count_commits_ahead returns Err (no upstream configured) → treated as 0.
+        let mut mock = crate::infra::git::MockGitOperations::new();
+        let path = std::path::Path::new("/fake/path");
+        mock.expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        mock.expect_count_commits_ahead().returning(|_, _| {
+            Err(crate::infra::git_error::GitError::CommandFailed(
+                "no upstream".to_string(),
+            ))
+        });
+        mock.expect_remove_worktree().once().returning(|_| Ok(()));
+
+        // Act
+        let result = cleanup_tmp_workspace_with_git(path, WorkspaceKind::Worktree, &mock);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cleanup_tmp_workspace_deletes_clean_clone() {
+        // Arrange — use a real temp dir since remove_dir_all is not behind a trait.
+        let tmp_dir = tempfile::TempDir::new().expect("failed to create temp dir");
+        let path = tmp_dir.path();
+        let mut mock = crate::infra::git::MockGitOperations::new();
+        mock.expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        mock.expect_count_commits_ahead().returning(|_, _| Ok(0));
+
+        // Act
+        let result = cleanup_tmp_workspace_with_git(path, WorkspaceKind::Clone, &mock);
+
+        // Assert
+        assert!(result.is_ok());
+        assert!(!path.exists(), "temp dir should have been removed");
+        // Prevent TempDir from trying to clean up an already-deleted directory.
+        let _ = tmp_dir.keep();
     }
 }
