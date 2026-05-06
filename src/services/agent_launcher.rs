@@ -1,5 +1,7 @@
 //! Logic for launching AI agents in isolated workspaces.
 
+use std::path::PathBuf;
+
 use crate::infra::agent::Agent;
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::{Terminal, TerminalError};
@@ -56,6 +58,8 @@ where
     branch: Option<String>,
     /// Whether to reuse an existing inactive workspace.
     reuse: bool,
+    /// When set, skip workspace creation and launch directly in this path.
+    override_path: Option<PathBuf>,
 }
 
 impl<W, T> AgentLauncher<W, T>
@@ -71,6 +75,7 @@ where
         agent: Agent,
         branch: Option<String>,
         reuse: bool,
+        override_path: Option<PathBuf>,
     ) -> Self {
         Self {
             workspace,
@@ -79,6 +84,7 @@ where
             agent,
             branch,
             reuse,
+            override_path,
         }
     }
 
@@ -115,7 +121,11 @@ where
     /// agent spawning fails.
     pub fn launch(&self) -> Result<std::path::PathBuf, LaunchError> {
         // Step 1: Create (or locate) workspace.
-        let workspace_path = self.workspace.create(self.branch.clone(), self.reuse)?;
+        let workspace_path = if let Some(path) = self.override_path.clone() {
+            path
+        } else {
+            self.workspace.create(self.branch.clone(), self.reuse)?
+        };
 
         // Step 2: Acquire lock — fails if workspace is already in use.
         let lock = WorkspaceLock::new(&workspace_path);

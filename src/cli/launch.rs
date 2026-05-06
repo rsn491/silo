@@ -1,7 +1,7 @@
 //! Logic for the `launch` command.
 
 use clap::Parser;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use dialoguer::{Input, Select, theme::ColorfulTheme};
 
@@ -16,6 +16,8 @@ use crate::services::git_suggestions_service::GitSuggestionsService;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
+use crate::services::workspace_lock::WorkspaceLock;
+use crate::services::workspace_manager::{WorkspaceManager, find_workspace_by_branch};
 
 /// Arguments for the `launch` command.
 #[derive(Parser, Debug)]
@@ -74,6 +76,32 @@ impl<G: GitOperations> crate::services::workspace_manager::WorkspaceFactory
     }
 }
 
+impl<G: GitOperations> WorkspaceManager for WorkspaceBackend<G> {
+    fn cleanup(
+        &self,
+        excluded_paths: &std::collections::HashSet<std::path::PathBuf>,
+        all: bool,
+        force: bool,
+    ) -> Result<
+        crate::services::workspace_manager::CleanupResult,
+        crate::services::workspace_manager::CleanupError,
+    > {
+        match self {
+            WorkspaceBackend::Worktree(w) => w.cleanup(excluded_paths, all, force),
+            WorkspaceBackend::Clone(w) => w.cleanup(excluded_paths, all, force),
+        }
+    }
+
+    fn get_all(
+        &self,
+    ) -> Result<Vec<crate::infra::git::GitWorkspaceInfo>, crate::infra::git_error::GitError> {
+        match self {
+            WorkspaceBackend::Worktree(w) => w.get_all(),
+            WorkspaceBackend::Clone(w) => w.get_all(),
+        }
+    }
+}
+
 /// Handler for the `launch` command.
 pub struct LaunchCommand<G: GitOperations, T: Terminal> {
     /// Git operations used for workspace creation.
@@ -126,6 +154,40 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                 WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(self.git))
             }
         };
+
+        let override_path: Option<PathBuf> = if let Some(branch_name) = &args.branch {
+            if let Some(existing_path) = find_workspace_by_branch(&workspace, branch_name) {
+                if WorkspaceLock::is_locked(&existing_path) {
+                    return Err(format!(
+                        "an agent is already running in workspace '{}' at {}",
+                        branch_name,
+                        existing_path.display()
+                    )
+                    .into());
+                }
+                let use_existing = Select::with_theme(&ColorfulTheme::default())
+                    .with_prompt(format!(
+                        "Workspace for '{}' already exists at {}. Launch agent there?",
+                        branch_name,
+                        existing_path.display()
+                    ))
+                    .items(["Yes", "No"])
+                    .default(0)
+                    .interact()?
+                    == 0;
+                if use_existing {
+                    Some(existing_path)
+                } else {
+                    eprintln!("Aborted.");
+                    return Ok(());
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let launch_result = AgentLauncher::new(
             workspace,
             self.terminal,
@@ -133,6 +195,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
             agent,
             args.branch,
             args.reuse,
+            override_path,
         )
         .launch();
 

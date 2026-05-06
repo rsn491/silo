@@ -262,6 +262,18 @@ mod tests {
     }
 }
 
+/// Finds a workspace whose current branch matches `branch`.
+///
+/// Returns `None` if no workspace with that branch exists or if listing workspaces fails.
+pub fn find_workspace_by_branch<W: WorkspaceManager>(manager: &W, branch: &str) -> Option<PathBuf> {
+    manager
+        .get_all()
+        .ok()?
+        .into_iter()
+        .find(|ws| ws.branch.as_deref() == Some(branch))
+        .map(|ws| ws.path)
+}
+
 /// Trait for managing and inspecting existing workspaces.
 pub trait WorkspaceManager {
     /// Removes all inactive workspaces and returns per-item results.
