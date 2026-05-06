@@ -153,7 +153,8 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                         .and_then(|s| s.exit_work)
                         .unwrap_or(true);
                     if exit_work_enabled
-                        && let Err(e) = check_and_handle_exit_work(&workspace_path, &agent_for_exit)
+                        && let Err(e) =
+                            check_and_handle_exit_work(&workspace_path, &agent_for_exit, args.tmp)
                     {
                         eprintln!("Warning: exit work check failed: {}", e);
                     }
@@ -183,9 +184,12 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 fn check_and_handle_exit_work(
     workspace_path: &Path,
     agent: &Agent,
+    is_tmp: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let git = Git;
-    handle_branch_rename(workspace_path, agent, &git);
+    if !is_tmp {
+        handle_branch_rename(workspace_path, agent, &git);
+    }
     let just_committed = handle_commit_flow(workspace_path, agent, &git)?;
     handle_push_confirmation(workspace_path, just_committed, &git)?;
     Ok(())
