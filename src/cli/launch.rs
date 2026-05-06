@@ -17,7 +17,7 @@ use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
 use crate::services::workspace_lock::WorkspaceLock;
-use crate::services::workspace_manager::WorkspaceManager;
+use crate::services::workspace_manager::{WorkspaceManager, find_workspace_by_branch};
 
 /// Arguments for the `launch` command.
 #[derive(Parser, Debug)]
@@ -72,6 +72,32 @@ impl<G: GitOperations> crate::services::workspace_manager::WorkspaceFactory
         match self {
             WorkspaceBackend::Worktree(w) => w.create(branch, reuse),
             WorkspaceBackend::Clone(w) => w.create(branch, reuse),
+        }
+    }
+}
+
+impl<G: GitOperations> WorkspaceManager for WorkspaceBackend<G> {
+    fn cleanup(
+        &self,
+        excluded_paths: &std::collections::HashSet<std::path::PathBuf>,
+        all: bool,
+        force: bool,
+    ) -> Result<
+        crate::services::workspace_manager::CleanupResult,
+        crate::services::workspace_manager::CleanupError,
+    > {
+        match self {
+            WorkspaceBackend::Worktree(w) => w.cleanup(excluded_paths, all, force),
+            WorkspaceBackend::Clone(w) => w.cleanup(excluded_paths, all, force),
+        }
+    }
+
+    fn get_all(
+        &self,
+    ) -> Result<Vec<crate::infra::git::GitWorkspaceInfo>, crate::infra::git_error::GitError> {
+        match self {
+            WorkspaceBackend::Worktree(w) => w.get_all(),
+            WorkspaceBackend::Clone(w) => w.get_all(),
         }
     }
 }
@@ -346,20 +372,6 @@ fn handle_push_confirmation(
     }
 
     Ok(())
-}
-
-/// Finds a workspace whose current branch matches `branch`, searching within the active backend.
-fn find_workspace_by_branch<G: GitOperations>(
-    backend: &WorkspaceBackend<G>,
-    branch: &str,
-) -> Option<PathBuf> {
-    let all = match backend {
-        WorkspaceBackend::Worktree(w) => w.get_all().ok()?,
-        WorkspaceBackend::Clone(w) => w.get_all().ok()?,
-    };
-    all.into_iter()
-        .find(|ws| ws.branch.as_deref() == Some(branch))
-        .map(|ws| ws.path)
 }
 
 /// Determines the workspace type based on CLI arguments and persistent settings.

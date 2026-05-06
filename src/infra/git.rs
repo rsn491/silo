@@ -236,6 +236,21 @@ impl GitOperations for Git {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            // Branch already exists but has no worktree — check it out directly.
+            if stderr.contains("already exists") {
+                let retry = Command::new("git")
+                    .args(["worktree", "add"])
+                    .arg(path)
+                    .arg(branch)
+                    .output()
+                    .map_err(|e| GitError::WorktreeCreationFailed(e.to_string()))?;
+
+                if !retry.status.success() {
+                    let retry_stderr = String::from_utf8_lossy(&retry.stderr);
+                    return Err(GitError::WorktreeCreationFailed(retry_stderr.to_string()));
+                }
+                return Ok(());
+            }
             return Err(GitError::WorktreeCreationFailed(stderr.to_string()));
         }
 
