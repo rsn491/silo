@@ -56,7 +56,7 @@ impl GitBranchService {
     /// Renames the branch at `workspace_path` to an AI-generated name if it is still auto-generated.
     ///
     /// Returns [`BranchRenameOutcome::Skipped`] if the branch has already been renamed, if no
-    /// changes are found, or if the current branch cannot be determined.
+    /// new commits exist, or if the current branch cannot be determined.
     pub fn try_rename<G: GitOperations>(
         &self,
         workspace_path: &Path,
@@ -66,6 +66,12 @@ impl GitBranchService {
             return BranchRenameOutcome::Skipped;
         };
         if !Self::is_auto_generated_branch(&current_branch) {
+            return BranchRenameOutcome::Skipped;
+        }
+        let base = git
+            .get_default_remote_branch()
+            .unwrap_or_else(|_| "origin/HEAD".to_string());
+        if git.count_commits_ahead(workspace_path, &base).unwrap_or(0) == 0 {
             return BranchRenameOutcome::Skipped;
         }
         let changes = match git.get_changes_summary(workspace_path) {
@@ -184,6 +190,12 @@ mod tests {
             .expect_get_current_branch()
             .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
         mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(1));
+        mock_git
             .expect_get_changes_summary()
             .returning(|_| Ok(String::new()));
         let service = GitBranchService::new(Agent::ClaudeCode);
@@ -203,11 +215,39 @@ mod tests {
             .expect_get_current_branch()
             .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
         mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(1));
+        mock_git
             .expect_get_changes_summary()
             .returning(|_| Ok("   \n\t  ".to_string()));
         let service = GitBranchService::new(Agent::ClaudeCode);
 
         // Act
+        let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
+        // Assert
+        assert!(matches!(outcome, BranchRenameOutcome::Skipped));
+    }
+
+    #[test]
+    fn test_try_rename_skips_when_no_new_commits() {
+        // Arrange — auto-generated branch with 0 commits ahead of base.
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_current_branch()
+            .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(0));
+        let service = GitBranchService::new(Agent::ClaudeCode);
+
+        // Act — get_changes_summary should never be called.
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
 
         // Assert
@@ -221,6 +261,12 @@ mod tests {
         mock_git
             .expect_get_current_branch()
             .returning(|_| Ok(Some("myrepo-a1b2c3d4".to_string())));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(1));
         mock_git
             .expect_get_changes_summary()
             .returning(|_| Err(GitError::CommandFailed("git diff failed".to_string())));
