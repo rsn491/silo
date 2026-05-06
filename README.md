@@ -130,15 +130,3 @@ Pre-commit hooks run `fmt`, `clippy`, `check`, and `test` automatically. To inst
 pip install pre-commit
 pre-commit install
 ```
-
-### Project structure
-
-```
-src/
-├── main.rs                 # CLI entry point, dependency injection
-├── cli/                    # Command handlers (launch, ps, cleanup, ...)
-├── services/               # Business logic (generic, trait-bounded)
-└── infra/                  # System interactions (git, process, terminal)
-```
-
-The codebase follows a three-layer architecture where dependencies flow strictly downward: CLI → Services → Infrastructure. Services use generic type parameters with trait bounds to keep business logic testable and decoupled from system calls.
