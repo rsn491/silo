@@ -3,6 +3,7 @@
 mod cli;
 mod infra;
 mod services;
+mod tui;
 
 use clap::{Parser, Subcommand};
 use cli::checkout::{CheckoutArgs, CheckoutCommand};

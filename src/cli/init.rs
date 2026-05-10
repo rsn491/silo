@@ -1,12 +1,14 @@
 //! Logic for the `init` command.
 
 use clap::Parser;
-use dialoguer::{Select, theme::ColorfulTheme};
 use std::io::{self, IsTerminal};
+
+use crossterm::style::Color;
 
 use crate::infra::agent::Agent;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
+use crate::tui::{SelectItem, print_status, run_confirm, run_select};
 
 /// Arguments for the `init` command.
 #[derive(Parser, Debug)]
@@ -41,12 +43,16 @@ impl InitCommand {
     pub fn run(&self, args: InitArgs) -> Result<(), Box<dyn std::error::Error>> {
         match SiloConfig::initialize() {
             Ok(path) => {
-                println!("Silo directory initialized successfully.");
-                println!("Future worktrees will be created in: {}", path.display());
-                println!("\nYou can now run 'silo launch' to create worktrees in this directory.");
+                print_status("✓", Color::Green, "Silo directory initialized successfully.")?;
+                print_status(
+                    "→",
+                    Color::Cyan,
+                    &format!("Future worktrees will be created in: {}", path.display()),
+                )?;
+                print_status("→", Color::DarkGrey, "Run 'silo launch' to create worktrees.")?;
             }
             Err(e) => {
-                eprintln!("Error initializing silo directory: {}", e);
+                print_status("✗", Color::Red, &format!("Error initializing silo directory: {}", e))?;
                 std::process::exit(1);
             }
         }
@@ -59,10 +65,8 @@ impl InitCommand {
             && args.workspace_type.is_none()
             && args.exit_work.is_none()
         {
-            println!("Non-interactive init detected; skipping settings.json.");
-            println!("Use `silo init --agent <name>` to set the default agent.");
-            println!("Use `silo init --workspace-type <type>` to set the default workspace type.");
-            println!("Use `silo init --exit-work <bool>` to configure exit prompts.");
+            print_status("–", Color::DarkGrey, "Non-interactive init; skipping settings.json.")?;
+            print_status("→", Color::DarkGrey, "Use `silo init --agent <name>` to set the default agent.")?;
             return Ok(());
         }
 
@@ -94,12 +98,12 @@ impl InitCommand {
         };
 
         if agent.is_none() && workspace_type.is_none() && exit_work.is_none() {
-            println!("No settings selected; skipping settings.json.");
+            print_status("–", Color::DarkGrey, "No settings selected; skipping settings.json.")?;
             return Ok(());
         }
 
         if settings_path.exists() && is_tty && !confirm_overwrite()? {
-            println!("Existing settings.json left unchanged.");
+            print_status("–", Color::DarkGrey, "Existing settings.json left unchanged.")?;
             return Ok(());
         }
 
@@ -114,7 +118,11 @@ impl InitCommand {
         }
 
         SiloConfig::save_settings(&settings)?;
-        println!("Saved settings to {}", settings_path.display());
+        print_status(
+            "✓",
+            Color::Green,
+            &format!("Saved settings to {}", settings_path.display()),
+        )?;
 
         Ok(())
     }
@@ -123,16 +131,19 @@ impl InitCommand {
 /// Prompts the user to choose a default AI agent.
 fn prompt_for_agent() -> Result<Option<Agent>, Box<dyn std::error::Error>> {
     let names = Agent::all_names();
-    let mut items: Vec<&str> = names.clone();
-    items.push("Skip");
+    let mut items: Vec<SelectItem> = names
+        .iter()
+        .map(|n| SelectItem {
+            label: n.to_string(),
+            detail: None,
+        })
+        .collect();
+    items.push(SelectItem {
+        label: "Skip".to_string(),
+        detail: Some("Leave agent setting unchanged".to_string()),
+    });
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Choose default agent")
-        .items(&items)
-        .default(0)
-        .interact_opt()?;
-
-    match selection {
+    match run_select("Choose default agent", &items, 0)? {
         Some(i) if i < names.len() => Ok(Agent::try_from_str(names[i]).map(Some).unwrap_or(None)),
         _ => Ok(None),
     }
@@ -140,15 +151,22 @@ fn prompt_for_agent() -> Result<Option<Agent>, Box<dyn std::error::Error>> {
 
 /// Prompts the user to choose a default workspace type.
 fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, Box<dyn std::error::Error>> {
-    let items = &["worktree (default)", "clone", "Skip"];
+    let items = vec![
+        SelectItem {
+            label: "worktree (default)".to_string(),
+            detail: Some("Faster; shares git objects with the main repo".to_string()),
+        },
+        SelectItem {
+            label: "clone".to_string(),
+            detail: Some("Fully isolated; uses more disk space".to_string()),
+        },
+        SelectItem {
+            label: "Skip".to_string(),
+            detail: Some("Leave workspace type setting unchanged".to_string()),
+        },
+    ];
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Choose default workspace type")
-        .items(items)
-        .default(0)
-        .interact_opt()?;
-
-    match selection {
+    match run_select("Choose default workspace type", &items, 0)? {
         Some(0) => Ok(Some(WorkspaceKind::Worktree)),
         Some(1) => Ok(Some(WorkspaceKind::Clone)),
         _ => Ok(None),
@@ -157,15 +175,22 @@ fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, Box<dyn std::err
 
 /// Prompts the user to enable or disable commit+push prompts on agent exit.
 fn prompt_for_exit_work() -> Result<Option<bool>, Box<dyn std::error::Error>> {
-    let items = &["Yes (default)", "No", "Skip"];
+    let items = vec![
+        SelectItem {
+            label: "Yes (default)".to_string(),
+            detail: Some("Prompt to commit and push when the agent exits".to_string()),
+        },
+        SelectItem {
+            label: "No".to_string(),
+            detail: Some("Skip commit/push prompts on agent exit".to_string()),
+        },
+        SelectItem {
+            label: "Skip".to_string(),
+            detail: Some("Leave this setting unchanged".to_string()),
+        },
+    ];
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enable commit+push prompts on agent exit?")
-        .items(items)
-        .default(0)
-        .interact_opt()?;
-
-    match selection {
+    match run_select("Enable commit+push prompts on agent exit?", &items, 0)? {
         Some(0) => Ok(Some(true)),
         Some(1) => Ok(Some(false)),
         _ => Ok(None),
@@ -174,10 +199,5 @@ fn prompt_for_exit_work() -> Result<Option<bool>, Box<dyn std::error::Error>> {
 
 /// Asks the user to confirm overwriting the existing `settings.json` file.
 fn confirm_overwrite() -> Result<bool, Box<dyn std::error::Error>> {
-    Ok(Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("settings.json already exists. Overwrite?")
-        .items(["Yes", "No"])
-        .default(1)
-        .interact()?
-        == 0)
+    run_confirm("settings.json already exists. Overwrite?", false)
 }

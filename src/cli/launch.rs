@@ -1,9 +1,8 @@
 //! Logic for the `launch` command.
 
 use clap::Parser;
+use crossterm::style::Color;
 use std::path::{Path, PathBuf};
-
-use dialoguer::{Input, Select, theme::ColorfulTheme};
 
 use crate::infra::agent::Agent;
 use crate::infra::git::validate_branch_name;
@@ -18,6 +17,7 @@ use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
 use crate::services::workspace_lock::WorkspaceLock;
 use crate::services::workspace_manager::{WorkspaceManager, find_workspace_by_branch};
+use crate::tui::{print_info, print_status, run_confirm, run_input};
 
 /// Arguments for the `launch` command.
 #[derive(Parser, Debug)]
@@ -149,7 +149,13 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
         let agent = resolve_agent(args.agent);
         let kind = resolve_workspace_type(args.clone, args.worktree);
         let workspace_kind = kind.clone();
-        eprintln!("Launching {:?} in {}...", agent, kind);
+
+        let agent_color = agent_display_color(&agent);
+        print_status(
+            "→",
+            agent_color,
+            &format!("Launching {} in {}…", agent, kind),
+        )?;
 
         let is_exec_replace = self.launch_mode == LaunchMode::ExecReplace;
         let agent_for_exit = agent.clone();
@@ -170,20 +176,18 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                     )
                     .into());
                 }
-                let use_existing = Select::with_theme(&ColorfulTheme::default())
-                    .with_prompt(format!(
+                let confirmed = run_confirm(
+                    &format!(
                         "Workspace for '{}' already exists at {}. Launch agent there?",
                         branch_name,
                         existing_path.display()
-                    ))
-                    .items(["Yes", "No"])
-                    .default(0)
-                    .interact()?
-                    == 0;
-                if use_existing {
+                    ),
+                    true,
+                )?;
+                if confirmed {
                     Some(existing_path)
                 } else {
-                    eprintln!("Aborted.");
+                    print_info("Aborted.")?;
                     return Ok(());
                 }
             } else {
@@ -206,10 +210,15 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 
         match launch_result {
             Ok(workspace_path) => {
-                eprintln!(
-                    "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
+                print_status(
+                    "✓",
+                    Color::Green,
+                    "Agent exited.",
+                )?;
+                print_info(&format!(
+                    "To resume, cd to the workspace:\n  cd {}",
                     workspace_path.display()
-                );
+                ))?;
                 if is_exec_replace {
                     let exit_work_enabled = SiloConfig::load_settings()
                         .ok()
@@ -219,22 +228,32 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                         && let Err(e) =
                             check_and_handle_exit_work(&workspace_path, &agent_for_exit, args.tmp)
                     {
-                        eprintln!("Warning: exit work check failed: {}", e);
+                        print_status("⚠", Color::Yellow, &format!("Exit work check failed: {}", e))?;
                     }
                     if args.tmp
                         && let Err(e) = cleanup_tmp_workspace(&workspace_path, workspace_kind)
                     {
-                        eprintln!("Warning: tmp workspace cleanup failed: {}", e);
+                        print_status("⚠", Color::Yellow, &format!("Tmp workspace cleanup failed: {}", e))?;
                     }
                 }
                 Ok(())
             }
             Err(LaunchError::AgentExitError(status)) => {
-                eprintln!("\n\nAgent failed with exit status: {}", status);
+                print_status("✗", Color::Red, &format!("Agent failed with exit status: {}", status))?;
                 Err(LaunchError::AgentExitError(status).into())
             }
             Err(e) => Err(e.into()),
         }
+    }
+}
+
+/// Returns a display colour for the given agent type.
+fn agent_display_color(agent: &Agent) -> Color {
+    match agent {
+        Agent::ClaudeCode => Color::Cyan,
+        Agent::Codex => Color::Yellow,
+        Agent::Gemini => Color::Blue,
+        Agent::OpenCode => Color::Magenta,
     }
 }
 
@@ -243,7 +262,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 ///
 /// # Errors
 ///
-/// Returns an error if a `dialoguer` interaction fails.
+/// Returns an error if a TUI interaction fails.
 fn check_and_handle_exit_work(
     workspace_path: &Path,
     agent: &Agent,
@@ -278,20 +297,25 @@ fn cleanup_tmp_workspace_with_git<G: GitOperations>(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let status = git.get_status_porcelain(path)?;
     if !status.trim().is_empty() {
-        eprintln!(
-            "\nWorkspace not deleted: uncommitted changes remain in {}.",
-            path.display()
-        );
+        print_status(
+            "–",
+            Color::DarkGrey,
+            &format!("Workspace not deleted: uncommitted changes remain in {}.", path.display()),
+        )?;
         return Ok(());
     }
 
     let unpushed = git.count_commits_ahead(path, "@{u}").unwrap_or(0);
     if unpushed > 0 {
-        eprintln!(
-            "\nWorkspace not deleted: {} unpushed commit(s) remain in {}.",
-            unpushed,
-            path.display()
-        );
+        print_status(
+            "–",
+            Color::DarkGrey,
+            &format!(
+                "Workspace not deleted: {} unpushed commit(s) remain in {}.",
+                unpushed,
+                path.display()
+            ),
+        )?;
         return Ok(());
     }
 
@@ -301,25 +325,41 @@ fn cleanup_tmp_workspace_with_git<G: GitOperations>(
     };
 
     match result {
-        Ok(()) => eprintln!("\nTemporary workspace deleted: {}", path.display()),
-        Err(e) => eprintln!("\nFailed to delete workspace {}: {}", path.display(), e),
+        Ok(()) => print_status(
+            "✓",
+            Color::Green,
+            &format!("Temporary workspace deleted: {}", path.display()),
+        )?,
+        Err(e) => print_status(
+            "✗",
+            Color::Red,
+            &format!("Failed to delete workspace {}: {}", path.display(), e),
+        )?,
     }
     Ok(())
 }
 
 /// Attempts to rename the auto-generated branch to a descriptive name and reports the outcome.
 fn handle_branch_rename(workspace_path: &Path, agent: &Agent, git: &Git) {
-    eprintln!("\nRenaming branch...");
+    let _ = print_status("→", Color::DarkGrey, "Renaming branch…");
     match GitBranchService::new(agent.clone()).try_rename(workspace_path, git) {
         BranchRenameOutcome::Skipped => {}
         BranchRenameOutcome::Renamed(name) => {
-            eprintln!("Branch renamed to '{}'.", name);
+            let _ = print_status("✓", Color::Green, &format!("Branch renamed to '{}'.", name));
         }
         BranchRenameOutcome::RenameFailed { suggested, error } => {
-            eprintln!("Failed to rename branch to '{}': {}", suggested, error);
+            let _ = print_status(
+                "✗",
+                Color::Red,
+                &format!("Failed to rename branch to '{}': {}", suggested, error),
+            );
         }
         BranchRenameOutcome::SuggestionFailed(e) => {
-            eprintln!("Warning: could not get branch name suggestion: {}", e);
+            let _ = print_status(
+                "⚠",
+                Color::Yellow,
+                &format!("Could not get branch name suggestion: {}", e),
+            );
         }
     }
 }
@@ -330,7 +370,7 @@ fn handle_branch_rename(workspace_path: &Path, agent: &Agent, git: &Git) {
 ///
 /// # Errors
 ///
-/// Returns an error if a `dialoguer` interaction or git status check fails.
+/// Returns an error if a TUI interaction or git status check fails.
 fn handle_commit_flow(
     workspace_path: &Path,
     agent: &Agent,
@@ -341,23 +381,17 @@ fn handle_commit_flow(
         return Ok(false);
     }
 
-    eprintln!("\nUncommitted changes detected:");
+    print_status("–", Color::Yellow, "Uncommitted changes detected:")?;
     for line in status.lines() {
-        eprintln!("  {}", line);
+        print_info(&format!("  {}", line))?;
     }
 
-    let should_commit = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Commit these changes?")
-        .items(["Yes", "No"])
-        .default(0)
-        .interact()?
-        == 0;
-
+    let should_commit = run_confirm("Commit these changes?", true)?;
     if !should_commit {
         return Ok(false);
     }
 
-    eprintln!("Generating commit message suggestion...");
+    print_status("→", Color::DarkGrey, "Generating commit message suggestion…")?;
     let suggestion = git
         .get_changes_summary(workspace_path)
         .ok()
@@ -368,18 +402,16 @@ fn handle_commit_flow(
                 .flatten()
         });
 
-    let theme = ColorfulTheme::default();
-    let mut input = Input::<String>::with_theme(&theme).with_prompt("Commit message");
-    if let Some(ref msg) = suggestion {
-        input = input.with_initial_text(msg);
-    }
-    let message = input.interact_text()?;
+    let message = run_input("Commit message", suggestion.as_deref())?;
+    let Some(message) = message else {
+        return Ok(false);
+    };
 
     match git.commit_all(workspace_path, &message) {
-        Ok(()) => eprintln!("Changes committed."),
+        Ok(()) => print_status("✓", Color::Green, "Changes committed.")?,
         Err(e) => {
-            eprintln!("Failed to commit: {}", e);
-            eprintln!("Skipping push step due to failed commit.");
+            print_status("✗", Color::Red, &format!("Failed to commit: {}", e))?;
+            print_info("Skipping push step due to failed commit.")?;
             return Ok(false);
         }
     }
@@ -387,7 +419,7 @@ fn handle_commit_flow(
     // Verify the commit actually landed before proceeding.
     let post_status = git.get_status_porcelain(workspace_path)?;
     if !post_status.trim().is_empty() {
-        eprintln!("Working tree still has changes after commit; skipping push step.");
+        print_info("Working tree still has changes after commit; skipping push step.")?;
         return Ok(false);
     }
 
@@ -401,14 +433,12 @@ fn handle_commit_flow(
 ///
 /// # Errors
 ///
-/// Returns an error if a `dialoguer` interaction fails.
+/// Returns an error if a TUI interaction fails.
 fn handle_push_confirmation(
     workspace_path: &Path,
     just_committed: bool,
     git: &Git,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Use @{u} to compare against the configured upstream; fall back to 1 if we just committed
-    // but no upstream is configured (new branch with no remote tracking branch yet).
     let unpushed = git
         .count_commits_ahead(workspace_path, "@{u}")
         .unwrap_or(if just_committed { 1 } else { 0 });
@@ -418,19 +448,17 @@ fn handle_push_confirmation(
         return Ok(());
     }
 
-    eprintln!("\nYou have {} unpushed commit(s).", unpushed);
+    print_status(
+        "–",
+        Color::Yellow,
+        &format!("You have {} unpushed commit(s).", unpushed),
+    )?;
 
-    let options = &["Push", "Continue without pushing"];
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("What would you like to do?")
-        .items(options)
-        .default(0)
-        .interact()?;
-
-    if selection == 0 {
+    let should_push = run_confirm("Push changes?", true)?;
+    if should_push {
         match git.push(workspace_path) {
-            Ok(()) => eprintln!("Changes pushed."),
-            Err(e) => eprintln!("Push failed: {}", e),
+            Ok(()) => print_status("✓", Color::Green, "Changes pushed.")?,
+            Err(e) => print_status("✗", Color::Red, &format!("Push failed: {}", e))?,
         }
     }
 
@@ -449,7 +477,11 @@ fn resolve_workspace_type(clone: bool, worktree: bool) -> WorkspaceKind {
     let settings = match SiloConfig::load_settings() {
         Ok(s) => s,
         Err(err) => {
-            eprintln!("Warning: failed to load settings.json: {}", err);
+            let _ = print_status(
+                "⚠",
+                Color::Yellow,
+                &format!("Failed to load settings.json: {}", err),
+            );
             return WorkspaceKind::Worktree;
         }
     };
