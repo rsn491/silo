@@ -129,31 +129,10 @@ fn extract_agent_type(args: &str) -> Option<Agent> {
 mod tests {
     use super::*;
     use crate::infra::git::{GitWorkspaceInfo, MockGitOperations};
+    use crate::infra::system_process::MockProcessOperations;
     use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
     use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
-
-    // Mock ProcessOperations.
-    struct MockProcess {
-        processes: Vec<(u32, String)>,
-        cwds: Vec<(u32, PathBuf)>,
-    }
-
-    impl ProcessOperations for MockProcess {
-        fn find_processes_by_names(
-            &self,
-            _names: &[&str],
-        ) -> Result<Vec<(u32, String)>, ProcessError> {
-            Ok(self.processes.clone())
-        }
-
-        fn get_process_cwd(&self, pid: u32) -> Result<PathBuf, ProcessError> {
-            self.cwds
-                .iter()
-                .find(|(p, _)| *p == pid)
-                .map(|(_, path)| path.clone())
-                .ok_or_else(|| ProcessError::CommandFailed("Process not found".to_string()))
-        }
-    }
+    use mockall::predicate;
 
     #[test]
     fn test_list_running_agents_in_worktrees() {
@@ -202,16 +181,23 @@ mod tests {
             GitCheckoutWorkspace::new(checkout_mock),
         );
 
-        let mock_process = MockProcess {
-            processes: vec![
-                (123, "/usr/bin/claude --args".to_string()),
-                (456, "/usr/bin/claude --other".to_string()),
-            ],
-            cwds: vec![
-                (123, PathBuf::from("/repo/worktree1")),
-                (456, PathBuf::from("/repo/worktree2")),
-            ],
-        };
+        let mut mock_process = MockProcessOperations::new();
+        mock_process
+            .expect_find_processes_by_names()
+            .return_once(|_| {
+                Ok(vec![
+                    (123, "/usr/bin/claude --args".to_string()),
+                    (456, "/usr/bin/claude --other".to_string()),
+                ])
+            });
+        mock_process
+            .expect_get_process_cwd()
+            .with(predicate::eq(123u32))
+            .return_once(|_| Ok(PathBuf::from("/repo/worktree1")));
+        mock_process
+            .expect_get_process_cwd()
+            .with(predicate::eq(456u32))
+            .return_once(|_| Ok(PathBuf::from("/repo/worktree2")));
 
         let service = AgentListService::new(workspace_manager, mock_process);
 
@@ -272,10 +258,14 @@ mod tests {
             GitCheckoutWorkspace::new(checkout_mock),
         );
 
-        let mock_process = MockProcess {
-            processes: vec![(123, "/usr/bin/claude --args".to_string())],
-            cwds: vec![(123, PathBuf::from("/other/directory"))],
-        };
+        let mut mock_process = MockProcessOperations::new();
+        mock_process
+            .expect_find_processes_by_names()
+            .return_once(|_| Ok(vec![(123, "/usr/bin/claude --args".to_string())]));
+        mock_process
+            .expect_get_process_cwd()
+            .with(predicate::eq(123u32))
+            .return_once(|_| Ok(PathBuf::from("/other/directory")));
 
         let service = AgentListService::new(workspace_manager, mock_process);
 
@@ -330,14 +320,24 @@ mod tests {
             GitCheckoutWorkspace::new(checkout_mock),
         );
 
-        let mock_process = MockProcess {
-            processes: vec![
-                (123, "/usr/bin/claude --args".to_string()),
-                (456, "/usr/bin/claude --other".to_string()),
-            ],
-            cwds: vec![(123, PathBuf::from("/repo/worktree1"))],
-            // PID 456 doesn't have a CWD entry, simulating a failure.
-        };
+        let mut mock_process = MockProcessOperations::new();
+        mock_process
+            .expect_find_processes_by_names()
+            .return_once(|_| {
+                Ok(vec![
+                    (123, "/usr/bin/claude --args".to_string()),
+                    (456, "/usr/bin/claude --other".to_string()),
+                ])
+            });
+        mock_process
+            .expect_get_process_cwd()
+            .with(predicate::eq(123u32))
+            .return_once(|_| Ok(PathBuf::from("/repo/worktree1")));
+        // PID 456 doesn't have a CWD entry, simulating a failure.
+        mock_process
+            .expect_get_process_cwd()
+            .with(predicate::eq(456u32))
+            .return_once(|_| Err(ProcessError::CommandFailed("Process not found".to_string())));
 
         let service = AgentListService::new(workspace_manager, mock_process);
 
@@ -368,10 +368,14 @@ mod tests {
             GitWorktreeWorkspace::new(worktree_mock),
             GitCheckoutWorkspace::new(checkout_mock),
         );
-        let mock_process = MockProcess {
-            processes: vec![(123, "/usr/bin/claude --args".to_string())],
-            cwds: vec![(123, PathBuf::from("/repo/worktree1"))],
-        };
+        let mut mock_process = MockProcessOperations::new();
+        mock_process
+            .expect_find_processes_by_names()
+            .return_once(|_| Ok(vec![(123, "/usr/bin/claude --args".to_string())]));
+        mock_process
+            .expect_get_process_cwd()
+            .with(predicate::eq(123u32))
+            .return_once(|_| Ok(PathBuf::from("/repo/worktree1")));
         let service = AgentListService::new(workspace_manager, mock_process);
 
         // Act
@@ -400,10 +404,10 @@ mod tests {
             GitWorktreeWorkspace::new(worktree_mock),
             GitCheckoutWorkspace::new(checkout_mock),
         );
-        let mock_process = MockProcess {
-            processes: vec![],
-            cwds: vec![],
-        };
+        let mut mock_process = MockProcessOperations::new();
+        mock_process
+            .expect_find_processes_by_names()
+            .return_once(|_| Ok(vec![]));
         let service = AgentListService::new(workspace_manager, mock_process);
         let agents = service
             .list_running_agents()
