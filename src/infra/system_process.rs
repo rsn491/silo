@@ -16,12 +16,14 @@ pub enum ProcessError {
 }
 
 /// Trait defining operations for inspecting and finding system processes.
+#[cfg_attr(test, mockall::automock)]
 pub trait ProcessOperations {
     /// Finds processes whose command-line arguments match any of the provided names.
     ///
     /// # Errors
     ///
     /// Returns a [`ProcessError`] if the underlying system command fails.
+    #[cfg_attr(test, mockall::concretize)]
     fn find_processes_by_names(&self, names: &[&str]) -> Result<Vec<(u32, String)>, ProcessError>;
 
     /// Gets the current working directory of a process by its PID.
