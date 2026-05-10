@@ -23,10 +23,7 @@ use ratatui::{
 /// # Errors
 ///
 /// Returns an error if terminal setup or event polling fails.
-pub fn run_confirm(
-    prompt: &str,
-    default_yes: bool,
-) -> Result<bool, Box<dyn std::error::Error>> {
+pub fn run_confirm(prompt: &str, default_yes: bool) -> Result<bool, Box<dyn std::error::Error>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -44,6 +41,7 @@ pub fn run_confirm(
     result
 }
 
+/// Inner event loop for [`run_confirm`].
 fn run_confirm_loop<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     prompt: &str,
@@ -79,11 +77,8 @@ fn run_confirm_loop<B: ratatui::backend::Backend>(
     }
 }
 
-fn draw_confirm(
-    f: &mut ratatui::Frame<'_>,
-    prompt: &str,
-    yes_focused: bool,
-) {
+/// Render the confirmation dialog into the current frame.
+fn draw_confirm(f: &mut ratatui::Frame<'_>, prompt: &str, yes_focused: bool) {
     let area = f.area();
 
     // Centre a small dialog box
@@ -112,10 +107,9 @@ fn draw_confirm(
     f.render_widget(block, dialog_area);
 
     // Prompt text
-    let prompt_widget =
-        Paragraph::new(prompt).alignment(Alignment::Center).style(
-            Style::default().add_modifier(Modifier::BOLD),
-        );
+    let prompt_widget = Paragraph::new(prompt)
+        .alignment(Alignment::Center)
+        .style(Style::default().add_modifier(Modifier::BOLD));
     f.render_widget(prompt_widget, inner[0]);
 
     // Buttons

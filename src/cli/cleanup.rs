@@ -53,10 +53,8 @@ impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
     /// Returns an error if the cleanup operation fails or if user input cannot be read.
     pub fn run(&self, args: CleanupArgs) -> Result<(), Box<dyn std::error::Error>> {
         if !args.yes {
-            let confirmed = run_confirm(
-                "This will remove all inactive worktrees. Continue?",
-                false,
-            )?;
+            let confirmed =
+                run_confirm("This will remove all inactive worktrees. Continue?", false)?;
 
             if !confirmed {
                 print_status("✗", Color::DarkGrey, "Cleanup cancelled.")?;
@@ -123,6 +121,7 @@ impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
     }
 }
 
+/// Formats a human-readable detail string for a workspace (branch or clone label).
 fn workspace_detail(kind: &WorkspaceKind, branch: Option<&str>) -> String {
     match kind {
         WorkspaceKind::Worktree => {

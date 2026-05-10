@@ -28,11 +28,26 @@ impl<G: GitOperations> StatusCommand<G> {
         let statuses = self.workspace_manager.get_all()?;
 
         let cols = vec![
-            Column { header: "ID", width: 24 },
-            Column { header: "BRANCH", width: 28 },
-            Column { header: "COMMITS", width: 7 },
-            Column { header: "CHANGES", width: 7 },
-            Column { header: "LATEST COMMIT", width: 48 },
+            Column {
+                header: "ID",
+                width: 24,
+            },
+            Column {
+                header: "BRANCH",
+                width: 28,
+            },
+            Column {
+                header: "COMMITS",
+                width: 7,
+            },
+            Column {
+                header: "CHANGES",
+                width: 7,
+            },
+            Column {
+                header: "LATEST COMMIT",
+                width: 48,
+            },
         ];
 
         let rows: Vec<Row> = statuses
@@ -71,6 +86,11 @@ impl<G: GitOperations> StatusCommand<G> {
             })
             .collect();
 
-        render_table("Silo Workspaces", &cols, &rows, "No workspaces found (excluding main worktree).")
+        render_table(
+            "Silo Workspaces",
+            &cols,
+            &rows,
+            "No workspaces found (excluding main worktree).",
+        )
     }
 }

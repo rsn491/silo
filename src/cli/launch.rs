@@ -210,11 +210,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 
         match launch_result {
             Ok(workspace_path) => {
-                print_status(
-                    "✓",
-                    Color::Green,
-                    "Agent exited.",
-                )?;
+                print_status("✓", Color::Green, "Agent exited.")?;
                 print_info(&format!(
                     "To resume, cd to the workspace:\n  cd {}",
                     workspace_path.display()
@@ -228,18 +224,30 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                         && let Err(e) =
                             check_and_handle_exit_work(&workspace_path, &agent_for_exit, args.tmp)
                     {
-                        print_status("⚠", Color::Yellow, &format!("Exit work check failed: {}", e))?;
+                        print_status(
+                            "⚠",
+                            Color::Yellow,
+                            &format!("Exit work check failed: {}", e),
+                        )?;
                     }
                     if args.tmp
                         && let Err(e) = cleanup_tmp_workspace(&workspace_path, workspace_kind)
                     {
-                        print_status("⚠", Color::Yellow, &format!("Tmp workspace cleanup failed: {}", e))?;
+                        print_status(
+                            "⚠",
+                            Color::Yellow,
+                            &format!("Tmp workspace cleanup failed: {}", e),
+                        )?;
                     }
                 }
                 Ok(())
             }
             Err(LaunchError::AgentExitError(status)) => {
-                print_status("✗", Color::Red, &format!("Agent failed with exit status: {}", status))?;
+                print_status(
+                    "✗",
+                    Color::Red,
+                    &format!("Agent failed with exit status: {}", status),
+                )?;
                 Err(LaunchError::AgentExitError(status).into())
             }
             Err(e) => Err(e.into()),
@@ -300,7 +308,10 @@ fn cleanup_tmp_workspace_with_git<G: GitOperations>(
         print_status(
             "–",
             Color::DarkGrey,
-            &format!("Workspace not deleted: uncommitted changes remain in {}.", path.display()),
+            &format!(
+                "Workspace not deleted: uncommitted changes remain in {}.",
+                path.display()
+            ),
         )?;
         return Ok(());
     }
@@ -391,7 +402,11 @@ fn handle_commit_flow(
         return Ok(false);
     }
 
-    print_status("→", Color::DarkGrey, "Generating commit message suggestion…")?;
+    print_status(
+        "→",
+        Color::DarkGrey,
+        "Generating commit message suggestion…",
+    )?;
     let suggestion = git
         .get_changes_summary(workspace_path)
         .ok()

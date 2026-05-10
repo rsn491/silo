@@ -7,8 +7,6 @@ use crossterm::{
     style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
 };
 
-use crate::tui::theme;
-
 /// A column definition for [`render_table`].
 pub struct Column {
     /// Header label.
@@ -51,19 +49,9 @@ impl StyledCell {
         Self::colored(text, Color::DarkGrey)
     }
 
-    /// Cell rendered in green.
-    pub fn success(text: impl Into<String>) -> Self {
-        Self::colored(text, Color::Green)
-    }
-
-    /// Cell rendered in yellow.
+    /// Cell rendered in yellow — indicates a warning state.
     pub fn warning(text: impl Into<String>) -> Self {
         Self::colored(text, Color::Yellow)
-    }
-
-    /// Cell rendered in red.
-    pub fn error(text: impl Into<String>) -> Self {
-        Self::colored(text, Color::Red)
     }
 }
 
@@ -124,12 +112,7 @@ pub fn render_table(
         let padded = pad_or_trunc(&col.header.to_uppercase(), col.width);
         execute!(out, Print(padded), Print("  "))?;
     }
-    execute!(
-        out,
-        Print("\n"),
-        ResetColor,
-        SetAttribute(Attribute::Reset),
-    )?;
+    execute!(out, Print("\n"), ResetColor, SetAttribute(Attribute::Reset),)?;
 
     // Separator line
     execute!(out, SetForegroundColor(Color::DarkGrey), Print("  "))?;
@@ -140,7 +123,7 @@ pub fn render_table(
 
     // Data rows
     for (i, row) in rows.iter().enumerate() {
-        // Subtle alternating background via bold/dim toggle
+        // Subtle alternating row via dim attribute on odd rows.
         if i % 2 == 1 {
             execute!(out, SetAttribute(Attribute::Dim))?;
         }
@@ -219,13 +202,12 @@ pub fn print_status(
     Ok(())
 }
 
-/// Print a plain styled line to stderr.
+/// Print a dim info line to stderr (no alternate screen, no raw mode).
 ///
 /// # Errors
 ///
 /// Returns an error if writing to stderr fails.
 pub fn print_info(message: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let _ = theme::DIM; // suppress unused warning
     let mut out = io::stderr();
     execute!(
         out,

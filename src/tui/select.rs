@@ -58,6 +58,7 @@ pub fn run_select(
     result
 }
 
+/// Inner event loop for [`run_select`].
 fn run_select_loop<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     items: &[SelectItem],
@@ -105,6 +106,7 @@ fn run_select_loop<B: ratatui::backend::Backend>(
     }
 }
 
+/// Render the full selector UI into the current frame.
 fn draw_select(
     f: &mut ratatui::Frame<'_>,
     items: &[SelectItem],
@@ -118,9 +120,9 @@ fn draw_select(
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(3),  // prompt box
-            Constraint::Min(3),     // list
-            Constraint::Length(1),  // footer hint
+            Constraint::Length(3), // prompt box
+            Constraint::Min(3),    // list
+            Constraint::Length(1), // footer hint
         ])
         .split(area);
 
@@ -129,6 +131,7 @@ fn draw_select(
     draw_footer(f, chunks[2]);
 }
 
+/// Render the prompt label at the top of the selector.
 fn draw_prompt(f: &mut ratatui::Frame<'_>, area: Rect, prompt: &str) {
     let block = Block::default()
         .borders(Borders::ALL)
@@ -142,12 +145,8 @@ fn draw_prompt(f: &mut ratatui::Frame<'_>, area: Rect, prompt: &str) {
     f.render_widget(paragraph, area);
 }
 
-fn draw_list(
-    f: &mut ratatui::Frame<'_>,
-    area: Rect,
-    items: &[SelectItem],
-    state: &mut ListState,
-) {
+/// Render the scrollable item list with the current selection highlighted.
+fn draw_list(f: &mut ratatui::Frame<'_>, area: Rect, items: &[SelectItem], state: &mut ListState) {
     let list_items: Vec<ListItem> = items
         .iter()
         .map(|item| ListItem::new(Line::from(item.label.as_str())))
@@ -169,22 +168,22 @@ fn draw_list(
 
     f.render_stateful_widget(list, area, state);
 
-    // Show detail line for selected item inside the list area (bottom of block)
-    if let Some(idx) = state.selected() {
-        if let Some(detail) = items[idx].detail.as_deref() {
-            let detail_area = Rect {
-                x: area.x + 2,
-                y: area.y + area.height.saturating_sub(2),
-                width: area.width.saturating_sub(4),
-                height: 1,
-            };
-            let detail_widget =
-                Paragraph::new(detail).style(Style::default().fg(Color::DarkGray));
-            f.render_widget(detail_widget, detail_area);
-        }
+    // Show detail line for selected item inside the list area (bottom of block).
+    if let Some(idx) = state.selected()
+        && let Some(detail) = items[idx].detail.as_deref()
+    {
+        let detail_area = Rect {
+            x: area.x + 2,
+            y: area.y + area.height.saturating_sub(2),
+            width: area.width.saturating_sub(4),
+            height: 1,
+        };
+        let detail_widget = Paragraph::new(detail).style(Style::default().fg(Color::DarkGray));
+        f.render_widget(detail_widget, detail_area);
     }
 }
 
+/// Render the keyboard hint footer.
 fn draw_footer(f: &mut ratatui::Frame<'_>, area: Rect) {
     let hint = Paragraph::new(Line::from(vec![
         Span::styled("↑/↓", Style::default().fg(Color::DarkGray)),

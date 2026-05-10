@@ -44,6 +44,7 @@ pub fn run_input(
     result
 }
 
+/// Inner event loop for [`run_input`].
 #[allow(clippy::too_many_lines)]
 fn run_input_loop<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
@@ -117,12 +118,8 @@ fn run_input_loop<B: ratatui::backend::Backend>(
     }
 }
 
-fn draw_input(
-    f: &mut ratatui::Frame<'_>,
-    prompt: &str,
-    value: &[char],
-    cursor: usize,
-) {
+/// Render the text input dialog into the current frame.
+fn draw_input(f: &mut ratatui::Frame<'_>, prompt: &str, value: &[char], cursor: usize) {
     let area = f.area();
 
     let dialog_height = 7u16;
@@ -156,7 +153,10 @@ fn draw_input(
     // Build text with cursor block
     let text: String = value.iter().collect();
     let before_cursor: String = value[..cursor].iter().collect();
-    let cursor_char: String = value.get(cursor).map(|c| c.to_string()).unwrap_or_else(|| " ".to_string());
+    let cursor_char: String = value
+        .get(cursor)
+        .map(|c| c.to_string())
+        .unwrap_or_else(|| " ".to_string());
     let after_cursor: String = if cursor < value.len() {
         value[cursor + 1..].iter().collect()
     } else {
@@ -167,16 +167,17 @@ fn draw_input(
     let _ = text; // suppress unused warning
     let field_line = Line::from(vec![
         Span::raw(before_cursor),
-        Span::styled(cursor_char, Style::default().bg(Color::Cyan).fg(Color::Black)),
+        Span::styled(
+            cursor_char,
+            Style::default().bg(Color::Cyan).fg(Color::Black),
+        ),
         Span::raw(after_cursor),
     ]);
-    let field = Paragraph::new(field_line)
-        .style(Style::default())
-        .block(
-            Block::default()
-                .borders(Borders::BOTTOM)
-                .border_style(Style::default().fg(Color::DarkGray)),
-        );
+    let field = Paragraph::new(field_line).style(Style::default()).block(
+        Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
     f.render_widget(field, inner[2]);
 
     let hint = Paragraph::new("Enter confirm  Esc cancel  Ctrl+U clear")

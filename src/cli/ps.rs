@@ -57,6 +57,7 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
         result
     }
 
+    /// Inner draw/event loop for the live-updating dashboard.
     fn run_loop<B: ratatui::backend::Backend>(
         &self,
         terminal: &mut Terminal<B>,
@@ -87,6 +88,7 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
     }
 }
 
+/// Returns the display colour for the given agent type.
 fn agent_color(agent: &Agent) -> Color {
     match agent {
         Agent::ClaudeCode => Color::Cyan,
@@ -96,11 +98,8 @@ fn agent_color(agent: &Agent) -> Color {
     }
 }
 
-fn draw_ps(
-    f: &mut ratatui::Frame<'_>,
-    agents: &[RunningAgent],
-    table_state: &mut TableState,
-) {
+/// Render the running-agents dashboard into the current frame.
+fn draw_ps(f: &mut ratatui::Frame<'_>, agents: &[RunningAgent], table_state: &mut TableState) {
     let area = f.area();
 
     let chunks = Layout::default()
@@ -120,7 +119,9 @@ fn draw_ps(
                 Block::default()
                     .title(Span::styled(
                         " Silo — Running Agents ",
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
                     ))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
@@ -129,10 +130,26 @@ fn draw_ps(
         f.render_widget(msg, chunks[0]);
     } else {
         let header = Row::new(vec![
-            Cell::from("PID").style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Cell::from("AGENT").style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Cell::from("BRANCH").style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Cell::from("WORKSPACE").style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Cell::from("PID").style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Cell::from("AGENT").style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Cell::from("BRANCH").style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Cell::from("WORKSPACE").style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ])
         .height(1);
 
@@ -172,7 +189,9 @@ fn draw_ps(
                 Block::default()
                     .title(Span::styled(
                         title,
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
                     ))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
@@ -187,7 +206,10 @@ fn draw_ps(
     let footer = Paragraph::new(Line::from(vec![
         Span::styled("q", Style::default().fg(Color::DarkGray)),
         Span::raw(" quit  "),
-        Span::styled("auto-refreshes every 2s", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            "auto-refreshes every 2s",
+            Style::default().fg(Color::DarkGray),
+        ),
     ]));
     f.render_widget(footer, chunks[1]);
 }

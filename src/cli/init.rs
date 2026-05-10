@@ -43,16 +43,28 @@ impl InitCommand {
     pub fn run(&self, args: InitArgs) -> Result<(), Box<dyn std::error::Error>> {
         match SiloConfig::initialize() {
             Ok(path) => {
-                print_status("✓", Color::Green, "Silo directory initialized successfully.")?;
+                print_status(
+                    "✓",
+                    Color::Green,
+                    "Silo directory initialized successfully.",
+                )?;
                 print_status(
                     "→",
                     Color::Cyan,
                     &format!("Future worktrees will be created in: {}", path.display()),
                 )?;
-                print_status("→", Color::DarkGrey, "Run 'silo launch' to create worktrees.")?;
+                print_status(
+                    "→",
+                    Color::DarkGrey,
+                    "Run 'silo launch' to create worktrees.",
+                )?;
             }
             Err(e) => {
-                print_status("✗", Color::Red, &format!("Error initializing silo directory: {}", e))?;
+                print_status(
+                    "✗",
+                    Color::Red,
+                    &format!("Error initializing silo directory: {}", e),
+                )?;
                 std::process::exit(1);
             }
         }
@@ -65,8 +77,16 @@ impl InitCommand {
             && args.workspace_type.is_none()
             && args.exit_work.is_none()
         {
-            print_status("–", Color::DarkGrey, "Non-interactive init; skipping settings.json.")?;
-            print_status("→", Color::DarkGrey, "Use `silo init --agent <name>` to set the default agent.")?;
+            print_status(
+                "–",
+                Color::DarkGrey,
+                "Non-interactive init; skipping settings.json.",
+            )?;
+            print_status(
+                "→",
+                Color::DarkGrey,
+                "Use `silo init --agent <name>` to set the default agent.",
+            )?;
             return Ok(());
         }
 
@@ -98,12 +118,20 @@ impl InitCommand {
         };
 
         if agent.is_none() && workspace_type.is_none() && exit_work.is_none() {
-            print_status("–", Color::DarkGrey, "No settings selected; skipping settings.json.")?;
+            print_status(
+                "–",
+                Color::DarkGrey,
+                "No settings selected; skipping settings.json.",
+            )?;
             return Ok(());
         }
 
         if settings_path.exists() && is_tty && !confirm_overwrite()? {
-            print_status("–", Color::DarkGrey, "Existing settings.json left unchanged.")?;
+            print_status(
+                "–",
+                Color::DarkGrey,
+                "Existing settings.json left unchanged.",
+            )?;
             return Ok(());
         }
 

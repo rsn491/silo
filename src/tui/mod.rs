@@ -4,7 +4,6 @@ pub mod confirm;
 pub mod input;
 pub mod select;
 pub mod table;
-pub mod theme;
 
 pub use confirm::run_confirm;
 pub use input::run_input;
