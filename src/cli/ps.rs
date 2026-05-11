@@ -5,11 +5,10 @@ use std::time::Duration;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
-    Terminal,
+    Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
@@ -42,16 +41,22 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
     ///
     /// Returns an error if listing running agents or terminal setup fails.
     pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-        enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen)?;
-        let backend = CrosstermBackend::new(stdout);
-        let mut terminal = Terminal::new(backend)?;
+        let agents = self.service.list_running_agents().unwrap_or_default();
+        let height = (agents.len().min(15) + 4) as u16;
 
-        let result = self.run_loop(&mut terminal);
+        enable_raw_mode()?;
+        let stdout = io::stdout();
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::with_options(
+            backend,
+            TerminalOptions {
+                viewport: Viewport::Inline(height.max(5)),
+            },
+        )?;
+
+        let result = self.run_loop(&mut terminal, agents);
 
         disable_raw_mode()?;
-        execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
         terminal.show_cursor()?;
 
         result
@@ -61,8 +66,9 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
     fn run_loop<B: ratatui::backend::Backend>(
         &self,
         terminal: &mut Terminal<B>,
+        initial_agents: Vec<RunningAgent>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut agents = self.service.list_running_agents().unwrap_or_default();
+        let mut agents = initial_agents;
         let mut table_state = TableState::default();
 
         loop {

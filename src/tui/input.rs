@@ -1,14 +1,13 @@
-//! Full-screen text input widget built on ratatui + crossterm.
+//! Inline text input widget built on ratatui + crossterm.
 
 use std::io;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
-    Terminal,
+    Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -27,10 +26,14 @@ pub fn run_input(
     initial: Option<&str>,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let mut terminal = Terminal::with_options(
+        backend,
+        TerminalOptions {
+            viewport: Viewport::Inline(7),
+        },
+    )?;
 
     let mut value: Vec<char> = initial.unwrap_or("").chars().collect();
     let mut cursor = value.len();
@@ -38,7 +41,6 @@ pub fn run_input(
     let result = run_input_loop(&mut terminal, prompt, &mut value, &mut cursor);
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
 
     result

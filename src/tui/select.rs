@@ -1,14 +1,13 @@
-//! Full-screen interactive item selector built on ratatui + crossterm.
+//! Inline interactive item selector built on ratatui + crossterm.
 
 use std::io;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
-    Terminal,
+    Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -41,10 +40,15 @@ pub fn run_select(
     }
 
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let height = (items.len().min(10) + 8) as u16;
+    let mut terminal = Terminal::with_options(
+        backend,
+        TerminalOptions {
+            viewport: Viewport::Inline(height),
+        },
+    )?;
 
     let mut state = ListState::default();
     state.select(Some(default.min(items.len().saturating_sub(1))));
@@ -52,7 +56,6 @@ pub fn run_select(
     let result = run_select_loop(&mut terminal, items, prompt, &mut state);
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
 
     result
