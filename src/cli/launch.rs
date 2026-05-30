@@ -256,7 +256,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
 }
 
 /// Returns a display colour for the given agent type.
-fn agent_display_color(agent: &Agent) -> Color {
+pub(crate) fn agent_display_color(agent: &Agent) -> Color {
     match agent {
         Agent::ClaudeCode => Color::Cyan,
         Agent::Codex => Color::Yellow,

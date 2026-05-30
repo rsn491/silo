@@ -1,5 +1,7 @@
 //! Logic for the `interactive` command.
 
+use crossterm::style::Color;
+
 use crate::infra::agent::{Agent, AgentMode};
 use crate::infra::git::Git;
 use crate::infra::terminal::ITerm2;
@@ -7,7 +9,7 @@ use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
 use crate::services::git_suggestions_service::GitSuggestionsService;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
-use crate::tui::AppOutcome;
+use crate::tui::{AppOutcome, print_info, print_status};
 
 /// Handler for the `interactive` command.
 pub struct InteractiveCommand;
@@ -50,7 +52,12 @@ fn launch_agent(
     prompt: Option<String>,
     mode: Option<AgentMode>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    eprintln!("Launching {} in worktree...", agent);
+    let agent_color = crate::cli::launch::agent_display_color(&agent);
+    print_status(
+        "→",
+        agent_color,
+        &format!("Launching {} in worktree…", agent),
+    )?;
 
     let git = Git;
     let workspace = GitWorktreeWorkspace::new(git.clone());
@@ -74,14 +81,19 @@ fn launch_agent(
     .launch(prompt, mode)
     {
         Ok(workspace_path) => {
-            eprintln!(
-                "\n\nAgent exited. To resume, cd to the workspace:\n  cd {}",
+            print_status("✓", Color::Green, "Agent exited.")?;
+            print_info(&format!(
+                "To resume, cd to the workspace:\n  cd {}",
                 workspace_path.display()
-            );
+            ))?;
             Ok(())
         }
         Err(LaunchError::AgentExitError(status)) => {
-            eprintln!("\n\nAgent failed with exit status: {}", status);
+            print_status(
+                "✗",
+                Color::Red,
+                &format!("Agent failed with exit status: {}", status),
+            )?;
             Err(LaunchError::AgentExitError(status).into())
         }
         Err(e) => Err(e.into()),
