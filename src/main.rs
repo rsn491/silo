@@ -3,6 +3,7 @@
 mod cli;
 mod infra;
 mod services;
+mod tui;
 
 use clap::{Parser, Subcommand};
 use cli::checkout::{CheckoutArgs, CheckoutCommand};
@@ -10,7 +11,7 @@ use cli::cleanup::{CleanupArgs, CleanupCommand};
 use cli::completions::{CompletionsArgs, CompletionsCommand};
 use cli::init::{InitArgs, InitCommand};
 use cli::launch::{LaunchArgs, LaunchCommand};
-use cli::ps::PsCommand;
+use cli::ps::{PsArgs, PsCommand};
 use cli::status::StatusCommand;
 use infra::git::Git;
 use infra::system_process::SystemProcess;
@@ -36,7 +37,7 @@ pub enum Commands {
     /// Create a new Git worktree and launch an agent in it.
     Launch(LaunchArgs),
     /// List running agents in worktrees of the current repository.
-    Ps,
+    Ps(PsArgs),
     /// Initialize the `.silo` directory in your home directory.
     Init(InitArgs),
     /// Clean up worktrees where no agents are running.
@@ -74,12 +75,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             LaunchCommand::new(Git, terminal, launch_mode).run(args)?;
         }
-        Commands::Ps => {
+        Commands::Ps(args) => {
             PsCommand::new(AgentListService::new(
                 GlobalWorkspaceManager::with_git(Git),
                 SystemProcess,
             ))
-            .run()?;
+            .run(args)?;
         }
         Commands::Init(args) => InitCommand::new().run(args)?,
         Commands::Cleanup(args) => {

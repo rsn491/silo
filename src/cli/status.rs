@@ -1,8 +1,11 @@
 //! Logic for the `status` command.
 
+use crossterm::style::Color;
+
 use crate::infra::git::GitOperations;
 use crate::services::global_workspace_manager::GlobalWorkspaceManager;
 use crate::services::workspace_manager::WorkspaceManager;
+use crate::tui::{Column, Row, StyledCell, render_table};
 
 /// Handler for the `status` command.
 pub struct StatusCommand<G: GitOperations> {
@@ -23,41 +26,71 @@ impl<G: GitOperations> StatusCommand<G> {
     /// Returns an error if workspace status cannot be retrieved.
     pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         let statuses = self.workspace_manager.get_all()?;
-        if statuses.is_empty() {
-            println!("No workspaces found (excluding main worktree).");
-            return Ok(());
-        }
 
-        println!("{:<32} {:<32} LATEST COMMIT", "ID", "BRANCH");
+        let cols = vec![
+            Column {
+                header: "ID",
+                width: 24,
+            },
+            Column {
+                header: "BRANCH",
+                width: 28,
+            },
+            Column {
+                header: "COMMITS",
+                width: 7,
+            },
+            Column {
+                header: "CHANGES",
+                width: 7,
+            },
+            Column {
+                header: "LATEST COMMIT",
+                width: 48,
+            },
+        ];
 
-        for status in &statuses {
-            let id = status
-                .path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("?");
-            let branch = status.branch.as_deref().unwrap_or("(detached)");
-            let commit = status.latest_commit.as_deref().unwrap_or("-");
+        let rows: Vec<Row> = statuses
+            .iter()
+            .map(|s| {
+                let id = s
+                    .path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?")
+                    .to_string();
+                let branch = s.branch.as_deref().unwrap_or("(detached)").to_string();
+                let commit = s.latest_commit.as_deref().unwrap_or("—").to_string();
 
-            println!(
-                "{:<32} {:<32} {}",
-                trunc(id, 32),
-                trunc(branch, 32),
-                trunc(commit, 50)
-            );
-        }
+                let commits_cell = if s.commits_ahead == 0 {
+                    StyledCell::dim("—")
+                } else {
+                    StyledCell::colored(format!("+{}", s.commits_ahead), Color::Blue)
+                };
 
-        Ok(())
-    }
-}
+                let changes_cell = if s.has_uncommitted_changes {
+                    StyledCell::warning("*")
+                } else {
+                    StyledCell::dim("—")
+                };
 
-/// Truncates a string to the specified maximum length, adding an ellipsis if needed.
-fn trunc(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        let mut t: String = s.chars().take(max - 1).collect();
-        t.push('…');
-        t
+                Row {
+                    cells: vec![
+                        StyledCell::plain(id),
+                        StyledCell::plain(branch),
+                        commits_cell,
+                        changes_cell,
+                        StyledCell::dim(commit),
+                    ],
+                }
+            })
+            .collect();
+
+        render_table(
+            "Silo Workspaces",
+            &cols,
+            &rows,
+            "No workspaces found (excluding main worktree).",
+        )
     }
 }

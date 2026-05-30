@@ -31,15 +31,22 @@ multiple-versions = "deny"
 wildcards = "allow"
 highlight = "all"
 skip = [
-    # uuid 1.x requires getrandom 0.2.x; tempfile 3.x requires getrandom 0.3.x
-    { crate = "getrandom", reason = "uuid 1.x and tempfile 3.x require different major versions of getrandom" },
-    # dirs-sys requires windows-sys 0.48.x; dialoguer/console requires 0.59.x
+    # dirs-sys -> redox_users requires thiserror 1.x; ratatui-core -> kasuari requires thiserror 2.x.
+    # No upgrade path without replacing dirs or forking ratatui.
+    { crate = "thiserror", reason = "dirs-sys/redox_users pins thiserror 1.x; ratatui-core/kasuari requires thiserror 2.x" },
+    { crate = "thiserror-impl", reason = "transitive from thiserror major version split" },
+    # dirs-sys -> redox_users requires getrandom 0.2.x; uuid and tempfile require getrandom 0.4.x.
+    { crate = "getrandom", reason = "dirs-sys/redox_users pins getrandom 0.2.x; uuid and tempfile require 0.4.x" },
+    # getrandom 0.4 conditionally depends on both wasip2 (wit-bindgen 0.57) and wasip3 (wit-bindgen 0.51).
+    { crate = "wit-bindgen", reason = "getrandom 0.4 pulls in wasip2 (wit-bindgen 0.57) and wasip3 (wit-bindgen 0.51) simultaneously" },
+    # dirs-sys requires windows-sys 0.48.x; clap/crossterm/rustix require 0.59.x+.
     # All windows-* sub-crates are duplicated for the same reason.
-    { crate = "windows-sys", reason = "dirs-sys requires windows-sys 0.48.x while dialoguer/console requires 0.59.x" },
+    { crate = "windows-sys", reason = "dirs-sys requires windows-sys 0.48.x while clap/crossterm/rustix require a newer version" },
     { crate = "windows-targets", reason = "transitive duplicate from windows-sys version split" },
     { crate = "windows_aarch64_gnullvm", reason = "transitive duplicate from windows-sys version split" },
     { crate = "windows_aarch64_msvc", reason = "transitive duplicate from windows-sys version split" },
     { crate = "windows_i686_gnu", reason = "transitive duplicate from windows-sys version split" },
+    { crate = "windows_i686_gnullvm", reason = "transitive duplicate from windows-sys version split" },
     { crate = "windows_i686_msvc", reason = "transitive duplicate from windows-sys version split" },
     { crate = "windows_x86_64_gnu", reason = "transitive duplicate from windows-sys version split" },
     { crate = "windows_x86_64_gnullvm", reason = "transitive duplicate from windows-sys version split" },

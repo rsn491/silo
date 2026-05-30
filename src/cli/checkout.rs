@@ -3,11 +3,11 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use dialoguer::Select;
 
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::services::global_workspace_manager::GlobalWorkspaceManager;
 use crate::services::workspace_manager::WorkspaceManager;
+use crate::tui::{SelectItem, pad_or_trunc, run_select};
 
 /// Arguments for the `checkout` command.
 #[derive(Parser, Debug)]
@@ -78,37 +78,45 @@ fn find_by_id(
     }
 }
 
-/// Presents an interactive arrow-key list of workspaces and returns the selected path.
+/// Presents an interactive ratatui list of workspaces and returns the selected path.
 ///
 /// # Errors
 ///
-/// Returns an error if the terminal interaction fails. Exits with code 1 if the user
-/// cancels without making a selection.
+/// Returns an error if the terminal interaction fails. Exits with code 1 if the user cancels.
 fn select_interactively(
     workspaces: &[GitWorkspaceInfo],
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let items: Vec<String> = workspaces
+    let items: Vec<SelectItem> = workspaces
         .iter()
         .map(|w| {
             let id = w.path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
             let branch = w.branch.as_deref().unwrap_or("(detached)");
-            let commit = w.latest_commit.as_deref().unwrap_or("-");
-            format!(
-                "{:<32}  {:<32}  {}",
-                trunc(id, 32),
-                trunc(branch, 32),
-                trunc(commit, 50)
-            )
+            let commit = w.latest_commit.as_deref().unwrap_or("—");
+            let label = format!(
+                "{}  {}  {}",
+                pad_or_trunc(id, 24),
+                pad_or_trunc(branch, 28),
+                pad_or_trunc(commit, 40),
+            );
+            let mut detail_parts = vec![];
+            if w.has_uncommitted_changes {
+                detail_parts.push("uncommitted changes");
+            }
+            if w.commits_ahead > 0 {
+                detail_parts.push(&*Box::leak(
+                    format!("{} commit(s) ahead", w.commits_ahead).into_boxed_str(),
+                ));
+            }
+            let detail = if detail_parts.is_empty() {
+                None
+            } else {
+                Some(detail_parts.join(" · "))
+            };
+            SelectItem { label, detail }
         })
         .collect();
 
-    let selection = Select::new()
-        .with_prompt("Select a workspace")
-        .items(&items)
-        .default(0)
-        .interact_opt()?;
-
-    match selection {
+    match run_select("Select a workspace", &items, 0)? {
         Some(idx) => Ok(workspaces[idx].path.clone()),
         None => {
             eprintln!("No workspace selected.");
@@ -119,21 +127,44 @@ fn select_interactively(
 
 /// Spawns the user's shell with its working directory set to the given workspace path.
 ///
-/// The current process waits for the shell to exit. When the user exits the new shell,
-/// control returns to their original session.
-///
 /// # Errors
 ///
 /// Returns an error if the shell process cannot be spawned.
-/// Truncates a string to the specified maximum length, adding an ellipsis if needed.
-fn trunc(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        let mut t: String = s.chars().take(max - 1).collect();
-        t.push('…');
-        t
+fn spawn_shell_in(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    use crossterm::{
+        execute,
+        style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
+    };
+    let mut out = std::io::stderr();
+    execute!(
+        out,
+        SetForegroundColor(Color::Cyan),
+        SetAttribute(Attribute::Bold),
+        Print("Switching to workspace: "),
+        ResetColor,
+        SetAttribute(Attribute::Reset),
+        Print(path.display().to_string()),
+        Print("\n"),
+    )?;
+    execute!(
+        out,
+        SetForegroundColor(Color::DarkGrey),
+        Print("Type 'exit' to return to your previous session.\n"),
+        ResetColor,
+    )?;
+
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    let status = std::process::Command::new(&shell)
+        .current_dir(path)
+        .status()?;
+
+    if let Some(code) = status.code()
+        && code != 0
+    {
+        std::process::exit(code);
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -182,24 +213,4 @@ mod tests {
         let result = find_by_id(&workspaces, "my-branch").unwrap();
         assert_eq!(result, PathBuf::from("/silo/my-branch"));
     }
-}
-
-/// Spawns an interactive shell in the specified directory.
-fn spawn_shell_in(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-
-    eprintln!("Switching to workspace: {}", path.display());
-    eprintln!("Type 'exit' to return to your previous session.");
-
-    let status = std::process::Command::new(&shell)
-        .current_dir(path)
-        .status()?;
-
-    if let Some(code) = status.code()
-        && code != 0
-    {
-        std::process::exit(code);
-    }
-
-    Ok(())
 }

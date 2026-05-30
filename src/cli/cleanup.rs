@@ -1,8 +1,9 @@
 //! Logic for the `cleanup` command.
 
-use clap::Parser;
-use dialoguer::{Select, theme::ColorfulTheme};
 use std::collections::HashSet;
+
+use clap::Parser;
+use crossterm::style::Color;
 
 use crate::infra::git::GitOperations;
 use crate::infra::system_process::ProcessOperations;
@@ -10,6 +11,7 @@ use crate::services::agent_list_service::AgentListService;
 use crate::services::global_workspace_manager::GlobalWorkspaceManager;
 use crate::services::workspace_kind::WorkspaceKind;
 use crate::services::workspace_manager::WorkspaceManager;
+use crate::tui::{print_status, run_confirm};
 
 /// Arguments for the `cleanup` command.
 #[derive(Parser, Debug)]
@@ -51,18 +53,13 @@ impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
     /// Returns an error if the cleanup operation fails or if user input cannot be read.
     pub fn run(&self, args: CleanupArgs) -> Result<(), Box<dyn std::error::Error>> {
         if !args.yes {
-            let confirmed = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("This will remove all inactive worktrees. Continue?")
-                .items(["Yes", "No"])
-                .default(1)
-                .interact()?
-                == 0;
+            let confirmed =
+                run_confirm("This will remove all inactive worktrees. Continue?", false)?;
 
             if !confirmed {
-                println!("Cleanup cancelled.");
+                print_status("✗", Color::DarkGrey, "Cleanup cancelled.")?;
                 return Ok(());
             }
-            println!();
         }
 
         let active_paths: HashSet<_> = self
@@ -77,48 +74,59 @@ impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
             .cleanup(&active_paths, args.all, args.force)?;
 
         if result.removed.is_empty() && result.failed.is_empty() && result.skipped.is_empty() {
-            println!("No workspaces to clean up.");
+            print_status("–", Color::DarkGrey, "No workspaces to clean up.")?;
             return Ok(());
         }
 
         for ws in &result.removed {
-            let detail = match ws.kind {
-                WorkspaceKind::Worktree => {
-                    format!("branch: {}", ws.branch.as_deref().unwrap_or("(detached)"))
-                }
-                WorkspaceKind::Clone => "checkout clone".to_string(),
-            };
-            println!("  ✓ Removed {} ({})", ws.path.display(), detail);
+            let detail = workspace_detail(&ws.kind, ws.branch.as_deref());
+            print_status(
+                "✓",
+                Color::Green,
+                &format!("Removed {}  ({})", ws.path.display(), detail),
+            )?;
         }
         for ws in &result.failed {
-            println!("  ✗ Failed to remove {}: {}", ws.path.display(), ws.error);
+            print_status(
+                "✗",
+                Color::Red,
+                &format!("Failed to remove {}: {}", ws.path.display(), ws.error),
+            )?;
         }
         for ws in &result.skipped {
-            let detail = match ws.kind {
-                WorkspaceKind::Worktree => {
-                    format!("branch: {}", ws.branch.as_deref().unwrap_or("(detached)"))
-                }
-                WorkspaceKind::Clone => "checkout clone".to_string(),
-            };
-            println!(
-                "  ⚠ Skipped {} ({}, has {} unpushed commit(s)) — use --force to remove anyway",
-                ws.path.display(),
-                detail,
-                ws.commits_ahead
-            );
+            let detail = workspace_detail(&ws.kind, ws.branch.as_deref());
+            print_status(
+                "⚠",
+                Color::Yellow,
+                &format!(
+                    "Skipped {}  ({}, {} unpushed commit(s)) — use --force to remove anyway",
+                    ws.path.display(),
+                    detail,
+                    ws.commits_ahead,
+                ),
+            )?;
         }
 
-        println!("Successfully removed {} workspace(s)", result.removed.len());
+        // Summary line
+        let mut parts = vec![format!("{} removed", result.removed.len())];
         if !result.failed.is_empty() {
-            println!("Failed to remove {} workspace(s)", result.failed.len());
+            parts.push(format!("{} failed", result.failed.len()));
         }
         if !result.skipped.is_empty() {
-            println!(
-                "Skipped {} workspace(s) with unpushed commits",
-                result.skipped.len()
-            );
+            parts.push(format!("{} skipped", result.skipped.len()));
         }
+        print_status("→", Color::Cyan, &parts.join(" · "))?;
 
         Ok(())
+    }
+}
+
+/// Formats a human-readable detail string for a workspace (branch or clone label).
+fn workspace_detail(kind: &WorkspaceKind, branch: Option<&str>) -> String {
+    match kind {
+        WorkspaceKind::Worktree => {
+            format!("branch: {}", branch.unwrap_or("(detached)"))
+        }
+        WorkspaceKind::Clone => "checkout clone".to_string(),
     }
 }
