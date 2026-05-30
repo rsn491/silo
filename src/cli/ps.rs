@@ -4,8 +4,10 @@ use std::io;
 use std::time::Duration;
 
 use crossterm::{
+    cursor,
     event::{self, Event, KeyCode, KeyModifiers},
-    terminal::{disable_raw_mode, enable_raw_mode},
+    execute,
+    terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal, TerminalOptions, Viewport,
@@ -41,57 +43,68 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
     ///
     /// Returns an error if listing running agents or terminal setup fails.
     pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let agents = self.service.list_running_agents().unwrap_or_default();
-        let height = (agents.len().min(15) + 4) as u16;
+        let mut agents = self.service.list_running_agents().unwrap_or_default();
+        let mut height = viewport_height(agents.len());
+        let mut table_state = TableState::default();
 
         enable_raw_mode()?;
-        let stdout = io::stdout();
-        let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::with_options(
-            backend,
+            CrosstermBackend::new(io::stdout()),
             TerminalOptions {
-                viewport: Viewport::Inline(height.max(5)),
+                viewport: Viewport::Inline(height),
             },
         )?;
-
-        let result = self.run_loop(&mut terminal, agents);
-
-        disable_raw_mode()?;
-        terminal.show_cursor()?;
-
-        result
-    }
-
-    /// Inner draw/event loop for the live-updating dashboard.
-    fn run_loop<B: ratatui::backend::Backend>(
-        &self,
-        terminal: &mut Terminal<B>,
-        initial_agents: Vec<RunningAgent>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut agents = initial_agents;
-        let mut table_state = TableState::default();
 
         loop {
             terminal.draw(|f| draw_ps(f, &agents, &mut table_state))?;
 
-            // Poll for key events; refresh data every 2 seconds.
             if event::poll(Duration::from_secs(2))? {
                 if let Event::Key(key) = event::read()? {
                     match (key.code, key.modifiers) {
                         (KeyCode::Char('c'), KeyModifiers::CONTROL)
                         | (KeyCode::Char('q'), _)
-                        | (KeyCode::Esc, _) => break,
+                        | (KeyCode::Esc, _) => {
+                            disable_raw_mode()?;
+                            terminal.show_cursor()?;
+                            println!();
+                            return Ok(());
+                        }
                         _ => {}
                     }
                 }
             } else {
-                // Timeout — refresh agent list.
-                agents = self.service.list_running_agents().unwrap_or_default();
+                let new_agents = self.service.list_running_agents().unwrap_or_default();
+                let new_height = viewport_height(new_agents.len());
+                agents = new_agents;
+
+                if new_height > height {
+                    // The viewport must grow. Clear the old area before recreating
+                    // the terminal so ratatui doesn't scroll and garble old content.
+                    disable_raw_mode()?;
+                    terminal.show_cursor()?;
+                    execute!(
+                        io::stdout(),
+                        cursor::MoveUp(height),
+                        Clear(ClearType::FromCursorDown)
+                    )?;
+                    height = new_height;
+                    enable_raw_mode()?;
+                    terminal = Terminal::with_options(
+                        CrosstermBackend::new(io::stdout()),
+                        TerminalOptions {
+                            viewport: Viewport::Inline(height),
+                        },
+                    )?;
+                }
             }
         }
-
-        Ok(())
     }
+}
+
+/// Calculates the inline viewport height needed for the given number of agents.
+fn viewport_height(agent_count: usize) -> u16 {
+    // +2 borders +1 header +1 footer outside box +4 buffer rows below last agent
+    (agent_count.min(15) + 8).max(8) as u16
 }
 
 /// Returns the display colour for the given agent type.
@@ -211,11 +224,7 @@ fn draw_ps(f: &mut ratatui::Frame<'_>, agents: &[RunningAgent], table_state: &mu
 
     let footer = Paragraph::new(Line::from(vec![
         Span::styled("q", Style::default().fg(Color::DarkGray)),
-        Span::raw(" quit  "),
-        Span::styled(
-            "auto-refreshes every 2s",
-            Style::default().fg(Color::DarkGray),
-        ),
+        Span::raw(" quit"),
     ]));
     f.render_widget(footer, chunks[1]);
 }

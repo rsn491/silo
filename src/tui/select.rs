@@ -3,7 +3,9 @@
 use std::io;
 
 use crossterm::{
+    cursor,
     event::{self, Event, KeyCode, KeyModifiers},
+    execute,
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
@@ -49,6 +51,7 @@ pub fn run_select(
             viewport: Viewport::Inline(height),
         },
     )?;
+    let viewport_top = cursor::position().map(|(_, r)| r).unwrap_or(0);
 
     let mut state = ListState::default();
     state.select(Some(default.min(items.len().saturating_sub(1))));
@@ -57,6 +60,11 @@ pub fn run_select(
 
     disable_raw_mode()?;
     terminal.show_cursor()?;
+    let _ = execute!(
+        io::stdout(),
+        cursor::MoveTo(0, viewport_top.saturating_add(height - 1))
+    );
+    println!();
 
     result
 }

@@ -3,7 +3,9 @@
 use std::io;
 
 use crossterm::{
+    cursor,
     event::{self, Event, KeyCode, KeyModifiers},
+    execute,
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
@@ -28,20 +30,27 @@ pub fn run_input(
     enable_raw_mode()?;
     let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);
+    const HEIGHT: u16 = 7;
     let mut terminal = Terminal::with_options(
         backend,
         TerminalOptions {
-            viewport: Viewport::Inline(7),
+            viewport: Viewport::Inline(HEIGHT),
         },
     )?;
+    let viewport_top = cursor::position().map(|(_, r)| r).unwrap_or(0);
 
     let mut value: Vec<char> = initial.unwrap_or("").chars().collect();
-    let mut cursor = value.len();
+    let mut cursor_pos = value.len();
 
-    let result = run_input_loop(&mut terminal, prompt, &mut value, &mut cursor);
+    let result = run_input_loop(&mut terminal, prompt, &mut value, &mut cursor_pos);
 
     disable_raw_mode()?;
     terminal.show_cursor()?;
+    let _ = execute!(
+        io::stdout(),
+        cursor::MoveTo(0, viewport_top.saturating_add(HEIGHT - 1))
+    );
+    println!();
 
     result
 }
@@ -52,10 +61,10 @@ fn run_input_loop<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     prompt: &str,
     value: &mut Vec<char>,
-    cursor: &mut usize,
+    pos: &mut usize,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     loop {
-        terminal.draw(|f| draw_input(f, prompt, value, *cursor))?;
+        terminal.draw(|f| draw_input(f, prompt, value, *pos))?;
 
         if let Event::Key(key) = event::read()? {
             match (key.code, key.modifiers) {
@@ -68,50 +77,50 @@ fn run_input_loop<B: ratatui::backend::Backend>(
                 }
 
                 (KeyCode::Char('u'), KeyModifiers::CONTROL) => {
-                    value.drain(..*cursor);
-                    *cursor = 0;
+                    value.drain(..*pos);
+                    *pos = 0;
                 }
 
                 (KeyCode::Char('k'), KeyModifiers::CONTROL) => {
-                    value.truncate(*cursor);
+                    value.truncate(*pos);
                 }
 
                 (KeyCode::Char(c), _) => {
-                    value.insert(*cursor, c);
-                    *cursor += 1;
+                    value.insert(*pos, c);
+                    *pos += 1;
                 }
 
                 (KeyCode::Backspace, _) => {
-                    if *cursor > 0 {
-                        *cursor -= 1;
-                        value.remove(*cursor);
+                    if *pos > 0 {
+                        *pos -= 1;
+                        value.remove(*pos);
                     }
                 }
 
                 (KeyCode::Delete, _) => {
-                    if *cursor < value.len() {
-                        value.remove(*cursor);
+                    if *pos < value.len() {
+                        value.remove(*pos);
                     }
                 }
 
                 (KeyCode::Left, _) => {
-                    if *cursor > 0 {
-                        *cursor -= 1;
+                    if *pos > 0 {
+                        *pos -= 1;
                     }
                 }
 
                 (KeyCode::Right, _) => {
-                    if *cursor < value.len() {
-                        *cursor += 1;
+                    if *pos < value.len() {
+                        *pos += 1;
                     }
                 }
 
                 (KeyCode::Home, _) => {
-                    *cursor = 0;
+                    *pos = 0;
                 }
 
                 (KeyCode::End, _) => {
-                    *cursor = value.len();
+                    *pos = value.len();
                 }
 
                 _ => {}
@@ -121,7 +130,7 @@ fn run_input_loop<B: ratatui::backend::Backend>(
 }
 
 /// Render the text input dialog into the current frame.
-fn draw_input(f: &mut ratatui::Frame<'_>, prompt: &str, value: &[char], cursor: usize) {
+fn draw_input(f: &mut ratatui::Frame<'_>, prompt: &str, value: &[char], pos: usize) {
     let area = f.area();
 
     let dialog_height = 7u16;
@@ -154,13 +163,13 @@ fn draw_input(f: &mut ratatui::Frame<'_>, prompt: &str, value: &[char], cursor: 
 
     // Build text with cursor block
     let text: String = value.iter().collect();
-    let before_cursor: String = value[..cursor].iter().collect();
+    let before_cursor: String = value[..pos].iter().collect();
     let cursor_char: String = value
-        .get(cursor)
+        .get(pos)
         .map(|c| c.to_string())
         .unwrap_or_else(|| " ".to_string());
-    let after_cursor: String = if cursor < value.len() {
-        value[cursor + 1..].iter().collect()
+    let after_cursor: String = if pos < value.len() {
+        value[pos + 1..].iter().collect()
     } else {
         String::new()
     };

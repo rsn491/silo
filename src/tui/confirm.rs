@@ -3,7 +3,9 @@
 use std::io;
 
 use crossterm::{
+    cursor,
     event::{self, Event, KeyCode, KeyModifiers},
+    execute,
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
@@ -26,12 +28,15 @@ pub fn run_confirm(prompt: &str, default_yes: bool) -> Result<bool, Box<dyn std:
     enable_raw_mode()?;
     let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);
+    const HEIGHT: u16 = 7;
     let mut terminal = Terminal::with_options(
         backend,
         TerminalOptions {
-            viewport: Viewport::Inline(7),
+            viewport: Viewport::Inline(HEIGHT),
         },
     )?;
+    // Capture viewport top row before the first draw so we can restore cursor on exit.
+    let viewport_top = cursor::position().map(|(_, r)| r).unwrap_or(0);
 
     let mut yes_focused = default_yes;
 
@@ -39,6 +44,13 @@ pub fn run_confirm(prompt: &str, default_yes: bool) -> Result<bool, Box<dyn std:
 
     disable_raw_mode()?;
     terminal.show_cursor()?;
+    // Move to the last row of the viewport then newline so the shell prompt
+    // appears below the widget instead of overwriting its bottom line.
+    let _ = execute!(
+        io::stdout(),
+        cursor::MoveTo(0, viewport_top.saturating_add(HEIGHT - 1))
+    );
+    println!();
 
     result
 }
@@ -87,7 +99,7 @@ fn draw_confirm(f: &mut ratatui::Frame<'_>, prompt: &str, yes_focused: bool) {
     let dialog_height = 7u16;
     let dialog_width = (area.width / 2).max(50).min(area.width);
     let dialog_x = (area.width.saturating_sub(dialog_width)) / 2;
-    let dialog_y = (area.height.saturating_sub(dialog_height)) / 2;
+    let dialog_y = area.y + (area.height.saturating_sub(dialog_height)) / 2;
     let dialog_area = Rect::new(dialog_x, dialog_y, dialog_width, dialog_height);
 
     let inner = Layout::default()
