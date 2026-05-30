@@ -60,7 +60,10 @@ fn run_confirm_loop<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     prompt: &str,
     yes_focused: &mut bool,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> Result<bool, Box<dyn std::error::Error>>
+where
+    B::Error: 'static,
+{
     loop {
         terminal.draw(|f| draw_confirm(f, prompt, *yes_focused))?;
 

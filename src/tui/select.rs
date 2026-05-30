@@ -75,7 +75,10 @@ fn run_select_loop<B: ratatui::backend::Backend>(
     items: &[SelectItem],
     prompt: &str,
     state: &mut ListState,
-) -> Result<Option<usize>, Box<dyn std::error::Error>> {
+) -> Result<Option<usize>, Box<dyn std::error::Error>>
+where
+    B::Error: 'static,
+{
     loop {
         terminal.draw(|f| draw_select(f, items, prompt, state))?;
 

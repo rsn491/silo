@@ -3,6 +3,8 @@
 use std::io;
 use std::time::Duration;
 
+use clap::Args;
+
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyModifiers},
@@ -23,6 +25,14 @@ use crate::infra::git::GitOperations;
 use crate::infra::system_process::ProcessOperations;
 use crate::services::agent_list_service::{AgentListService, RunningAgent};
 
+/// Arguments for the `ps` subcommand.
+#[derive(Args)]
+pub struct PsArgs {
+    /// Print agents as plain text and exit without entering the interactive TUI.
+    #[arg(long)]
+    pub plain: bool,
+}
+
 /// Handler for the `ps` command.
 pub struct PsCommand<G: GitOperations + Clone, P: ProcessOperations> {
     /// Service for enumerating running agents.
@@ -35,14 +45,19 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
         Self { service }
     }
 
-    /// Executes the `ps` operation, showing a live-updating dashboard of running agents.
+    /// Executes the `ps` operation.
     ///
-    /// Press `q` or `Ctrl-C` to exit.
+    /// In plain mode, prints agents as a fixed-width table and exits immediately.
+    /// Otherwise shows a live-updating TUI dashboard; press `q` or `Ctrl-C` to exit.
     ///
     /// # Errors
     ///
     /// Returns an error if listing running agents or terminal setup fails.
-    pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run(&self, args: PsArgs) -> Result<(), Box<dyn std::error::Error>> {
+        if args.plain {
+            return self.run_plain();
+        }
+
         let mut agents = self.service.list_running_agents().unwrap_or_default();
         let mut height = viewport_height(agents.len());
         let mut table_state = TableState::default();
@@ -57,7 +72,6 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
 
         loop {
             terminal.draw(|f| draw_ps(f, &agents, &mut table_state))?;
-
             if event::poll(Duration::from_secs(2))? {
                 if let Event::Key(key) = event::read()? {
                     match (key.code, key.modifiers) {
@@ -98,6 +112,35 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
                 }
             }
         }
+    }
+
+    /// Prints agents as a fixed-width plain-text table and returns.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if listing running agents fails.
+    fn run_plain(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let agents = self.service.list_running_agents().unwrap_or_default();
+        if agents.is_empty() {
+            println!("No running agents found in this repository's workspaces.");
+            return Ok(());
+        }
+        println!("{:<8} {:<12} {:<28} WORKSPACE", "PID", "AGENT", "BRANCH");
+        for a in &agents {
+            let agent_name = a
+                .agent_type
+                .as_ref()
+                .map(|ag| ag.to_string())
+                .unwrap_or_else(|| "(unknown)".to_string());
+            println!(
+                "{:<8} {:<12} {:<28} {}",
+                a.pid,
+                agent_name,
+                a.branch.as_deref().unwrap_or("(detached)"),
+                a.path.display(),
+            );
+        }
+        Ok(())
     }
 }
 

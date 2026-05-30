@@ -60,7 +60,7 @@ fn test_launch_and_ps() {
     let start = std::time::Instant::now();
     let ps_stdout = loop {
         let output = Command::new(&silo_bin)
-            .arg("ps")
+            .args(["ps", "--plain"])
             .current_dir(&repo_dir)
             .env("HOME", &home_dir)
             .output()

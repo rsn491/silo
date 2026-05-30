@@ -62,7 +62,10 @@ fn run_input_loop<B: ratatui::backend::Backend>(
     prompt: &str,
     value: &mut Vec<char>,
     pos: &mut usize,
-) -> Result<Option<String>, Box<dyn std::error::Error>> {
+) -> Result<Option<String>, Box<dyn std::error::Error>>
+where
+    B::Error: 'static,
+{
     loop {
         terminal.draw(|f| draw_input(f, prompt, value, *pos))?;
 
