@@ -62,8 +62,16 @@ fn launch_agent(
         .unwrap_or(Ok(None))
         .unwrap_or_default();
 
-    match AgentLauncher::<_, ITerm2>::new(workspace, None, LaunchMode::ExecReplace, agent, branch, false, None)
-        .launch(prompt, mode)
+    match AgentLauncher::<_, ITerm2>::new(
+        workspace,
+        None,
+        LaunchMode::ExecReplace,
+        agent,
+        branch,
+        false,
+        None,
+    )
+    .launch(prompt, mode)
     {
         Ok(workspace_path) => {
             eprintln!(
