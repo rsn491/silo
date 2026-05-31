@@ -4,12 +4,15 @@ use crossterm::style::Color;
 
 use crate::infra::agent::{Agent, AgentMode};
 use crate::infra::git::Git;
+use crate::infra::system_process::SystemProcess;
 use crate::infra::terminal::ITerm2;
 use crate::services::agent_launcher::{AgentLauncher, LaunchError, LaunchMode};
+use crate::services::agent_list_service::AgentListService;
 use crate::services::git_suggestions_service::GitSuggestionsService;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
+use crate::services::global_workspace_manager::GlobalWorkspaceManager;
 use crate::services::silo_config::SiloConfig;
-use crate::tui::{AppOutcome, print_info, print_status};
+use crate::tui::{AgentRow, AppOutcome, print_info, print_status};
 
 /// Handler for the `interactive` command.
 pub struct InteractiveCommand;
@@ -27,8 +30,36 @@ impl InteractiveCommand {
     /// Returns an error if the TUI fails to initialise or if the agent cannot be launched.
     pub fn run(self) -> Result<(), Box<dyn std::error::Error>> {
         let default_agent = resolve_default_agent();
+        let service = AgentListService::new(GlobalWorkspaceManager::with_git(Git), SystemProcess);
+        let get_agents = move || {
+            service
+                .list_running_agents()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|a| {
+                    let color = match a.agent_type.as_ref() {
+                        Some(Agent::ClaudeCode) => ratatui::style::Color::Cyan,
+                        Some(Agent::Codex) => ratatui::style::Color::Yellow,
+                        Some(Agent::Gemini) => ratatui::style::Color::Blue,
+                        Some(Agent::OpenCode) => ratatui::style::Color::Magenta,
+                        None => ratatui::style::Color::White,
+                    };
+                    AgentRow {
+                        pid: a.pid,
+                        name: a
+                            .agent_type
+                            .as_ref()
+                            .map(|ag| ag.to_string())
+                            .unwrap_or_else(|| "(unknown)".to_string()),
+                        color,
+                        branch: a.branch.unwrap_or_else(|| "(detached)".to_string()),
+                        workspace: a.path.display().to_string(),
+                    }
+                })
+                .collect()
+        };
 
-        match crate::tui::run(default_agent)? {
+        match crate::tui::run(default_agent, get_agents)? {
             AppOutcome::Quit => Ok(()),
             AppOutcome::Launch {
                 agent,

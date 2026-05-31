@@ -1,6 +1,7 @@
 //! Inline interactive agent launcher TUI built on ratatui.
 
 use std::io;
+use std::time::Duration;
 
 use ratatui::crossterm::event::{
     self, Event, KeyCode, KeyEvent, KeyModifiers, KeyboardEnhancementFlags,
@@ -13,11 +14,25 @@ use ratatui::crossterm::terminal::{
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table};
 use ratatui::{Frame, Terminal, backend::CrosstermBackend};
 use strum::IntoEnumIterator;
 
 use crate::infra::agent::{Agent, AgentMode};
+
+/// A single running agent entry to display above the prompt.
+pub struct AgentRow {
+    /// Process ID of the running agent.
+    pub pid: u32,
+    /// Human-readable agent type name (e.g. "ClaudeCode").
+    pub name: String,
+    /// Accent colour for this agent type in the TUI table.
+    pub color: Color,
+    /// Git branch the agent is working on.
+    pub branch: String,
+    /// Filesystem path of the agent's workspace.
+    pub workspace: String,
+}
 
 /// The result returned when the TUI event loop exits.
 #[derive(Debug)]
@@ -51,11 +66,15 @@ struct App {
     cursor: usize,
     /// When `Some`, the event loop should stop with this outcome.
     outcome: Option<AppOutcome>,
+    /// Currently running agents (refreshed every ~2 seconds).
+    running_agents: Vec<AgentRow>,
+    /// Incremented every 100 ms to drive spinner animation.
+    tick: u64,
 }
 
 impl App {
     /// Creates a new `App` starting with the given agent selected.
-    fn new(default_agent: Agent) -> Self {
+    fn new(default_agent: Agent, running_agents: Vec<AgentRow>) -> Self {
         let agents: Vec<Agent> = Agent::iter().collect();
         let agent_index = agents.iter().position(|a| a == &default_agent).unwrap_or(0);
         Self {
@@ -66,6 +85,8 @@ impl App {
             prompt: String::new(),
             cursor: 0,
             outcome: None,
+            running_agents,
+            tick: 0,
         }
     }
 
@@ -168,13 +189,20 @@ impl App {
 fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
 
+    // Height for the agents panel: borders + header + rows (cap at 5), or 3 if empty.
+    let agents_height = if app.running_agents.is_empty() {
+        3u16
+    } else {
+        (2 + 1 + app.running_agents.len().min(5)) as u16
+    };
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // title
-            Constraint::Length(3), // agent + mode status
-            Constraint::Min(5),    // prompt input
-            Constraint::Length(3), // keybinding help bar
+            Constraint::Length(3),             // title
+            Constraint::Length(agents_height), // running agents panel
+            Constraint::Min(5),                // launch input
+            Constraint::Length(3),             // keybinding help bar
         ])
         .split(area);
 
@@ -188,30 +216,96 @@ fn draw(frame: &mut Frame, app: &App) {
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(title, chunks[0]);
 
-    // ── Status: agent + mode ───────────────────────────────────────────────
-    let mode_color = match app.mode {
-        AgentMode::Code => Color::Green,
-        AgentMode::Plan => Color::Yellow,
-    };
-    let status_line = Line::from(vec![
-        Span::raw("  Agent: "),
-        Span::styled(
-            app.agent.to_string(),
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("        Mode: "),
-        Span::styled(
-            format!("[{}]", app.mode.display_name()),
-            Style::default().fg(mode_color).add_modifier(Modifier::BOLD),
-        ),
-    ]);
-    let status =
-        Paragraph::new(status_line).block(Block::default().borders(Borders::ALL).title("Settings"));
-    frame.render_widget(status, chunks[1]);
+    // ── Running agents panel ───────────────────────────────────────────────
+    const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let spinner_frame = SPINNER[(app.tick as usize) % SPINNER.len()];
 
-    // ── Prompt input ───────────────────────────────────────────────────────
+    if app.running_agents.is_empty() {
+        let empty_msg = Paragraph::new(Span::styled(
+            "No running agents",
+            Style::default().fg(Color::DarkGray),
+        ))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::DarkGray))
+                .title(Span::styled(
+                    " Agents ",
+                    Style::default().fg(Color::DarkGray),
+                )),
+        );
+        frame.render_widget(empty_msg, chunks[1]);
+    } else {
+        let count = app.running_agents.len();
+        let header = Row::new(vec![
+            Cell::from(""),
+            Cell::from("PID").style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Cell::from("AGENT").style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Cell::from("BRANCH").style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Cell::from("WORKSPACE").style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])
+        .height(1);
+
+        let rows: Vec<Row> = app
+            .running_agents
+            .iter()
+            .map(|a| {
+                Row::new(vec![
+                    Cell::from(spinner_frame).style(Style::default().fg(Color::Green)),
+                    Cell::from(a.pid.to_string()),
+                    Cell::from(a.name.clone()).style(Style::default().fg(a.color)),
+                    Cell::from(a.branch.clone()),
+                    Cell::from(a.workspace.clone()),
+                ])
+            })
+            .collect();
+
+        let title = format!(" Agents ({}) ", count);
+        let table = Table::new(
+            rows,
+            [
+                Constraint::Length(1),
+                Constraint::Length(8),
+                Constraint::Length(12),
+                Constraint::Length(24),
+                Constraint::Min(10),
+            ],
+        )
+        .header(header)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Cyan))
+                .title(Span::styled(
+                    title,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+        )
+        .column_spacing(1);
+        frame.render_widget(table, chunks[1]);
+    }
+
+    // ── Launch input ───────────────────────────────────────────────────────
     let prompt_chars: Vec<char> = app.prompt.chars().collect();
     // Split prompt into lines, tracking which line/col the cursor is on.
     let mut lines: Vec<Line> = Vec::new();
@@ -276,8 +370,27 @@ fn draw(frame: &mut Frame, app: &App) {
         spans.append(&mut first.spans);
         *first = Line::from(spans);
     }
+    let mode_color = match app.mode {
+        AgentMode::Code => Color::Green,
+        AgentMode::Plan => Color::Yellow,
+    };
+    let launch_title = Line::from(vec![
+        Span::raw(" Launch  "),
+        Span::styled(
+            app.agent.to_string(),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  "),
+        Span::styled(
+            format!("[{}]", app.mode.display_name()),
+            Style::default().fg(mode_color).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+    ]);
     let prompt_widget =
-        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title("Prompt"));
+        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(launch_title));
     frame.render_widget(prompt_widget, chunks[2]);
 
     // ── Help bar ───────────────────────────────────────────────────────────
@@ -299,6 +412,9 @@ fn draw(frame: &mut Frame, app: &App) {
 
 /// Runs the interactive TUI event loop and returns the user's choice.
 ///
+/// `get_agents` is called once at startup and then every ~2 seconds to refresh
+/// the running agents panel shown above the prompt.
+///
 /// The terminal is always restored to its original state before this function
 /// returns, even when an error occurs.
 ///
@@ -306,7 +422,7 @@ fn draw(frame: &mut Frame, app: &App) {
 ///
 /// Returns an [`io::Error`] if the terminal cannot be initialised or if a
 /// read/write error occurs during event processing.
-pub fn run(default_agent: Agent) -> io::Result<AppOutcome> {
+pub fn run(default_agent: Agent, get_agents: impl Fn() -> Vec<AgentRow>) -> io::Result<AppOutcome> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -322,8 +438,8 @@ pub fn run(default_agent: Agent) -> io::Result<AppOutcome> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(default_agent);
-    let loop_result = run_event_loop(&mut terminal, &mut app);
+    let mut app = App::new(default_agent, get_agents());
+    let loop_result = run_event_loop(&mut terminal, &mut app, get_agents);
 
     // Restore terminal regardless of whether the loop succeeded.
     let _ = disable_raw_mode();
@@ -338,9 +454,11 @@ pub fn run(default_agent: Agent) -> io::Result<AppOutcome> {
 }
 
 /// The inner event loop: draws the frame then blocks until a key arrives.
+/// Polls every 100 ms to animate the spinner; refreshes running agents every ~2 s.
 fn run_event_loop<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     app: &mut App,
+    get_agents: impl Fn() -> Vec<AgentRow>,
 ) -> io::Result<()>
 where
     io::Error: From<B::Error>,
@@ -348,8 +466,15 @@ where
     loop {
         terminal.draw(|f| draw(f, app))?;
 
-        if let Event::Key(key) = event::read()? {
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+        {
             app.handle_key(key);
+        }
+
+        app.tick = app.tick.wrapping_add(1);
+        if app.tick.is_multiple_of(20) {
+            app.running_agents = get_agents();
         }
 
         if app.should_exit() {
