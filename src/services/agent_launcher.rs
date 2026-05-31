@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::infra::agent::Agent;
+use crate::infra::agent::{Agent, AgentMode, PromptError, RunningMode};
 use crate::infra::git_error::GitError;
 use crate::infra::terminal::{Terminal, TerminalError};
 use crate::services::workspace_lock::WorkspaceLock;
@@ -37,6 +37,15 @@ pub enum LaunchError {
 impl From<TerminalError> for LaunchError {
     fn from(err: TerminalError) -> Self {
         LaunchError::AgentSpawnError(err.to_string())
+    }
+}
+
+impl From<PromptError> for LaunchError {
+    fn from(err: PromptError) -> Self {
+        match err {
+            PromptError::ExitStatus(status) => LaunchError::AgentExitError(status),
+            e => LaunchError::AgentSpawnError(e.to_string()),
+        }
     }
 }
 
@@ -89,19 +98,16 @@ where
     }
 
     /// Internal method to launch the agent in the specified workspace directory.
-    fn launch_in_workspace(&self, workspace_path: &std::path::Path) -> Result<(), LaunchError> {
-        let status = self
-            .agent
-            .process()
-            .current_dir(workspace_path)
-            .status()
-            .map_err(|e| LaunchError::AgentSpawnError(e.to_string()))?;
-
-        if status.success() {
-            Ok(())
-        } else {
-            Err(LaunchError::AgentExitError(status))
-        }
+    fn launch_in_workspace(
+        &self,
+        workspace_path: &std::path::Path,
+        prompt: Option<&str>,
+        mode: Option<AgentMode>,
+    ) -> Result<(), LaunchError> {
+        self.agent
+            .run(prompt, mode, RunningMode::Foreground, Some(workspace_path))
+            .map(|_| ())
+            .map_err(LaunchError::from)
     }
 
     /// Executes the launch process: creates the workspace and then launches the agent.
@@ -119,7 +125,11 @@ where
     ///
     /// Returns [`LaunchError`] if workspace creation, lock acquisition, or
     /// agent spawning fails.
-    pub fn launch(&self) -> Result<std::path::PathBuf, LaunchError> {
+    pub fn launch(
+        &self,
+        prompt: Option<String>,
+        mode: Option<AgentMode>,
+    ) -> Result<std::path::PathBuf, LaunchError> {
         // Step 1: Create (or locate) workspace.
         let workspace_path = if let Some(path) = self.override_path.clone() {
             path
@@ -135,7 +145,7 @@ where
         // Step 3: Launch agent in the workspace.
         match self.launch_mode {
             LaunchMode::ExecReplace => {
-                let result = self.launch_in_workspace(&workspace_path);
+                let result = self.launch_in_workspace(&workspace_path, prompt.as_deref(), mode);
                 // Agent has exited; release the lock so the workspace can be reused.
                 lock.release();
                 result?;
@@ -149,7 +159,8 @@ where
                 match terminal.open_tab(&workspace_path, &self.agent) {
                     Ok(()) => {}
                     Err(_e) => {
-                        let result = self.launch_in_workspace(&workspace_path);
+                        let result =
+                            self.launch_in_workspace(&workspace_path, prompt.as_deref(), mode);
                         lock.release();
                         result?;
                     }

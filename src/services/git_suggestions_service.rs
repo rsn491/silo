@@ -1,6 +1,8 @@
 //! Service for generating descriptive git branch names via an AI agent.
 
-use crate::infra::agent::Agent;
+use crate::infra::agent::{Agent, RunningMode};
+use crate::infra::git::GitOperations;
+use uuid::Uuid;
 
 /// Generates descriptive git branch name suggestions by prompting an AI agent in headless mode.
 pub struct GitSuggestionsService {
@@ -15,10 +17,15 @@ impl GitSuggestionsService {
     }
 
     /// Prompts the agent in headless mode with the git changes and returns a sanitized branch name.
+    /// If the suggested name already exists, appends a UUID suffix.
     ///
     /// Returns `Ok(None)` if the agent output is empty or unsanitizable, and `Err` if the agent
     /// call itself fails.
-    pub fn suggest_branch_name(&self, changes: &str) -> Result<Option<String>, String> {
+    pub fn suggest_branch_name<G: GitOperations>(
+        &self,
+        changes: &str,
+        git: &G,
+    ) -> Result<Option<String>, String> {
         let prompt = format!(
             "Based on the following git changes, suggest a concise, descriptive git branch name.\n\
              Rules:\n\
@@ -32,7 +39,49 @@ impl GitSuggestionsService {
             changes
         );
 
-        let raw = self.agent.prompt(&prompt).map_err(|e| e.to_string())?;
+        let suggested = self.prompt_and_sanitize(&prompt)?;
+        match suggested {
+            None => Ok(None),
+            Some(name) => Ok(Some(self.ensure_unique_branch_name(name, git)?)),
+        }
+    }
+
+    /// Prompts the agent with a user description and returns a sanitized branch name.
+    /// If the suggested name already exists, appends a UUID suffix.
+    ///
+    /// Returns `Ok(None)` if the agent output is empty or unsanitizable, and `Err` if the agent
+    /// call itself fails.
+    pub fn suggest_branch_name_from_prompt<G: GitOperations>(
+        &self,
+        initial_prompt: &str,
+        git: &G,
+    ) -> Result<Option<String>, String> {
+        let prompt = format!(
+            "Based on the following description, suggest a concise, descriptive git branch name.\n\
+             Rules:\n\
+             - Lowercase letters and hyphens only (kebab-case)\n\
+             - 2–5 words maximum\n\
+             - Describes the work to be done\n\
+             - No prefixes like 'feature/' or 'fix/'\n\
+             - Output ONLY the branch name on a single line, nothing else\n\n\
+             Description:\n{}\n\n\
+             Branch name:",
+            initial_prompt
+        );
+
+        let suggested = self.prompt_and_sanitize(&prompt)?;
+        match suggested {
+            None => Ok(None),
+            Some(name) => Ok(Some(self.ensure_unique_branch_name(name, git)?)),
+        }
+    }
+
+    /// Prompts the agent and returns the first sanitized kebab-case line.
+    fn prompt_and_sanitize(&self, prompt: &str) -> Result<Option<String>, String> {
+        let raw = self
+            .agent
+            .run(Some(prompt), None, RunningMode::Background, None)
+            .map_err(|e| e.to_string())?;
         Ok(sanitize_branch_name(&raw))
     }
 
@@ -52,7 +101,10 @@ impl GitSuggestionsService {
             changes
         );
 
-        let raw = self.agent.prompt(&prompt).map_err(|e| e.to_string())?;
+        let raw = self
+            .agent
+            .run(Some(&prompt), None, RunningMode::Background, None)
+            .map_err(|e| e.to_string())?;
 
         let trimmed = raw
             .lines()
@@ -65,6 +117,19 @@ impl GitSuggestionsService {
             Ok(None)
         } else {
             Ok(Some(trimmed))
+        }
+    }
+
+    /// Appends a UUID suffix if the suggested branch name already exists.
+    fn ensure_unique_branch_name<G: GitOperations>(
+        &self,
+        name: String,
+        git: &G,
+    ) -> Result<String, String> {
+        match git.branch_exists(&name) {
+            Ok(true) => Ok(format!("{}-{}", name, Uuid::new_v4())),
+            Ok(false) => Ok(name),
+            Err(e) => Err(e.to_string()),
         }
     }
 }

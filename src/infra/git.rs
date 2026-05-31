@@ -183,6 +183,13 @@ pub trait GitOperations {
     ///
     /// Returns `false` if there is no upstream, or the command fails.
     fn is_fully_pushed(&self, path: &Path) -> bool;
+
+    /// Returns `true` if a local branch with the given name exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the command fails unexpectedly.
+    fn branch_exists(&self, branch: &str) -> Result<bool, GitError>;
 }
 
 /// Default fallback remote branch used when the remote HEAD cannot be determined.
@@ -619,6 +626,23 @@ impl GitOperations for Git {
                 count == 0
             }
             _ => false,
+        }
+    }
+
+    fn branch_exists(&self, branch: &str) -> Result<bool, GitError> {
+        let output = Command::new("git")
+            .args(["show-ref", "--verify", "--quiet"])
+            .arg(format!("refs/heads/{}", branch))
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        match output.status.code() {
+            Some(0) => Ok(true),
+            Some(1) => Ok(false),
+            _ => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(GitError::CommandFailed(stderr.to_string()))
+            }
         }
     }
 }

@@ -78,7 +78,7 @@ impl GitBranchService {
             Ok(c) if !c.trim().is_empty() => c,
             _ => return BranchRenameOutcome::Skipped,
         };
-        match GitSuggestionsService::new(self.agent.clone()).suggest_branch_name(&changes) {
+        match GitSuggestionsService::new(self.agent.clone()).suggest_branch_name(&changes, git) {
             Err(e) => BranchRenameOutcome::SuggestionFailed(e),
             Ok(None) => BranchRenameOutcome::Skipped,
             Ok(Some(suggested)) => match git.rename_branch(workspace_path, &suggested) {
