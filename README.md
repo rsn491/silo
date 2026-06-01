@@ -32,7 +32,7 @@ silo launch [--agent <agent>] [--branch <branch>] [--worktree|--clone] [--reuse]
 
 | Flag | Description |
 |------|-------------|
-| `--agent <agent>` | Agent to launch: `claude` (default), `opencode`, `codex`, `gemini` |
+| `--agent <agent>` | Agent to launch: `claude` (default), `opencode`, `codex`, `gemini`, `droid` |
 | `--branch <branch>` | Custom branch name (default: auto-generated) |
 | `--worktree` | Use a Git worktree (default) |
 | `--clone` | Use a full local Git clone instead |
@@ -102,6 +102,7 @@ Silo requires the following to be installed:
   - [OpenCode](https://opencode.ai)
   - [Codex](https://openai.com/index/openai-codex/)
   - [Gemini CLI](https://geminicli.com)
+  - [Droid](https://factory.ai)
 
 ## Development
 

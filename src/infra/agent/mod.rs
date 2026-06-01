@@ -2,6 +2,7 @@
 
 mod claude_code_agent;
 mod codex_agent;
+mod droid_agent;
 mod gemini;
 mod open_code_agent;
 
@@ -12,6 +13,7 @@ use thiserror::Error;
 
 use claude_code_agent::ClaudeCodeAgent;
 use codex_agent::CodexAgent;
+use droid_agent::DroidAgent;
 use gemini::GeminiAgent;
 use open_code_agent::OpenCodeAgent;
 
@@ -77,6 +79,11 @@ pub enum Agent {
     #[clap(name = "gemini")]
     #[serde(rename = "gemini")]
     Gemini,
+    /// The Droid agent from factory.ai.
+    #[strum(serialize = "droid")]
+    #[clap(name = "droid")]
+    #[serde(rename = "droid")]
+    Droid,
 }
 
 impl Agent {
@@ -87,6 +94,7 @@ impl Agent {
             Agent::OpenCode => &OpenCodeAgent,
             Agent::Codex => &CodexAgent,
             Agent::Gemini => &GeminiAgent,
+            Agent::Droid => &DroidAgent,
         }
     }
 
@@ -103,6 +111,7 @@ impl Agent {
     /// - OpenCode: `-p`
     /// - Codex: `-q`
     /// - Gemini: `-p`
+    /// - Droid: `-p`
     ///
     /// # Errors
     ///
@@ -164,7 +173,7 @@ mod tests {
     fn test_all_names_are_canonical() {
         assert_eq!(
             Agent::all_names(),
-            vec!["claude", "opencode", "codex", "gemini"]
+            vec!["claude", "opencode", "codex", "gemini", "droid"]
         );
     }
 
@@ -174,6 +183,7 @@ mod tests {
         assert_eq!(Agent::try_from_str("opencode"), Some(Agent::OpenCode));
         assert_eq!(Agent::try_from_str("codex"), Some(Agent::Codex));
         assert_eq!(Agent::try_from_str("gemini"), Some(Agent::Gemini));
+        assert_eq!(Agent::try_from_str("droid"), Some(Agent::Droid));
     }
 
     #[test]
@@ -185,7 +195,7 @@ mod tests {
     fn test_all_command_names_are_canonical() {
         assert_eq!(
             Agent::all_command_names(),
-            vec!["claude", "opencode", "codex", "gemini"]
+            vec!["claude", "opencode", "codex", "gemini", "droid"]
         );
     }
 
@@ -201,6 +211,7 @@ mod tests {
         );
         assert_eq!(Agent::try_from_command_name("codex"), Some(Agent::Codex));
         assert_eq!(Agent::try_from_command_name("gemini"), Some(Agent::Gemini));
+        assert_eq!(Agent::try_from_command_name("droid"), Some(Agent::Droid));
     }
 
     #[test]
@@ -208,5 +219,6 @@ mod tests {
         assert_eq!(Agent::ClaudeCode.command_name(), "claude");
         assert_eq!(Agent::OpenCode.command_name(), "opencode");
         assert_eq!(Agent::Codex.command_name(), "codex");
+        assert_eq!(Agent::Droid.command_name(), "droid");
     }
 }
