@@ -6,6 +6,14 @@ Isolated workspace manager for parallel agentic development. Silo lets you launc
 
 ## Installation
 
+**Homebrew** (macOS / Linux):
+
+```sh
+brew install rsn491/silo/silo
+```
+
+**Shell installer** (macOS / Linux / Windows):
+
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/silo/releases/latest/download/silo-installer.sh | sh
 ```
