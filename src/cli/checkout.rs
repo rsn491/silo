@@ -98,14 +98,12 @@ fn select_interactively(
                 pad_or_trunc(branch, 28),
                 pad_or_trunc(commit, 40),
             );
-            let mut detail_parts = vec![];
+            let mut detail_parts: Vec<String> = vec![];
             if w.has_uncommitted_changes {
-                detail_parts.push("uncommitted changes");
+                detail_parts.push("uncommitted changes".to_string());
             }
             if w.commits_ahead > 0 {
-                detail_parts.push(&*Box::leak(
-                    format!("{} commit(s) ahead", w.commits_ahead).into_boxed_str(),
-                ));
+                detail_parts.push(format!("{} commit(s) ahead", w.commits_ahead));
             }
             let detail = if detail_parts.is_empty() {
                 None
