@@ -262,6 +262,7 @@ fn agent_display_color(agent: &Agent) -> Color {
         Agent::Codex => Color::Yellow,
         Agent::Gemini => Color::Blue,
         Agent::OpenCode => Color::Magenta,
+        Agent::Droid => Color::Green,
     }
 }
 

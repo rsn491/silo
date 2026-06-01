@@ -157,6 +157,7 @@ fn agent_color(agent: &Agent) -> Color {
         Agent::Codex => Color::Yellow,
         Agent::Gemini => Color::Blue,
         Agent::OpenCode => Color::Magenta,
+        Agent::Droid => Color::Green,
     }
 }
 
