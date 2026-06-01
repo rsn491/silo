@@ -13,7 +13,7 @@ impl AgentCommand for DroidAgent {
     }
 
     fn prompt(&self, message: &str) -> Result<String, PromptError> {
-        let output = Command::new("droid").args(["-p", message]).output()?;
+        let output = Command::new("droid").args(["exec", message]).output()?;
         if !output.status.success() {
             return Err(PromptError::Failed(
                 String::from_utf8_lossy(&output.stderr).trim().to_string(),
