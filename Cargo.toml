@@ -1,6 +1,6 @@
 [package]
 name = "silo"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 rust-version = "1.93.0"
 publish = false
