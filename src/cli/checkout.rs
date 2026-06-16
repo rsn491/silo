@@ -110,7 +110,7 @@ fn select_interactively(
             } else {
                 Some(detail_parts.join(" · "))
             };
-            SelectItem { label, detail }
+            SelectItem { label, detail, icon: None }
         })
         .collect();
 

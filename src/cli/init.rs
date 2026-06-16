@@ -158,6 +158,7 @@ impl InitCommand {
 
 /// Prompts the user to choose a default AI agent.
 fn prompt_for_agent() -> Result<Option<Agent>, Box<dyn std::error::Error>> {
+    use crate::infra::agent::icons::preview_icon;
     use strum::IntoEnumIterator;
 
     let agents: Vec<Agent> = Agent::iter().collect();
@@ -166,11 +167,13 @@ fn prompt_for_agent() -> Result<Option<Agent>, Box<dyn std::error::Error>> {
         .map(|a| SelectItem {
             label: format!("{} {}", a.icon(), a),
             detail: None,
+            icon: Some(preview_icon(a)),
         })
         .collect();
     items.push(SelectItem {
         label: "Skip".to_string(),
         detail: Some("Leave agent setting unchanged".to_string()),
+        icon: None,
     });
 
     match run_select("Choose default agent", &items, 0)? {
@@ -185,14 +188,17 @@ fn prompt_for_workspace_type() -> Result<Option<WorkspaceKind>, Box<dyn std::err
         SelectItem {
             label: "worktree (default)".to_string(),
             detail: Some("Faster; shares git objects with the main repo".to_string()),
+            icon: None,
         },
         SelectItem {
             label: "clone".to_string(),
             detail: Some("Fully isolated; uses more disk space".to_string()),
+            icon: None,
         },
         SelectItem {
             label: "Skip".to_string(),
             detail: Some("Leave workspace type setting unchanged".to_string()),
+            icon: None,
         },
     ];
 
@@ -209,14 +215,17 @@ fn prompt_for_exit_work() -> Result<Option<bool>, Box<dyn std::error::Error>> {
         SelectItem {
             label: "Yes (default)".to_string(),
             detail: Some("Prompt to commit and push when the agent exits".to_string()),
+            icon: None,
         },
         SelectItem {
             label: "No".to_string(),
             detail: Some("Skip commit/push prompts on agent exit".to_string()),
+            icon: None,
         },
         SelectItem {
             label: "Skip".to_string(),
             detail: Some("Leave this setting unchanged".to_string()),
+            icon: None,
         },
     ];
 

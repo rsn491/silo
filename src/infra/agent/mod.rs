@@ -5,6 +5,7 @@ mod codex_agent;
 mod droid_agent;
 mod gemini;
 mod open_code_agent;
+pub mod icons;
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};

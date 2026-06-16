@@ -13,9 +13,11 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
 };
+
+use crate::infra::agent::icons::PREVIEW_CHAR_W;
 
 /// A single item shown in the selector list.
 pub struct SelectItem {
@@ -23,6 +25,8 @@ pub struct SelectItem {
     pub label: String,
     /// Optional detail line shown below the selected item.
     pub detail: Option<String>,
+    /// Optional brand icon displayed in a side panel when this item is highlighted.
+    pub icon: Option<Vec<Line<'static>>>,
 }
 
 /// Show an interactive full-screen selector and return the chosen index.
@@ -128,21 +132,32 @@ fn draw_select(
     state: &mut ListState,
 ) {
     let area = f.area();
+    let has_icons = items.iter().any(|i| i.icon.is_some());
 
-    // Layout: prompt row, list, footer hint
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
             Constraint::Length(3), // prompt box
-            Constraint::Min(3),    // list
+            Constraint::Min(3),    // body
             Constraint::Length(1), // footer hint
         ])
         .split(area);
 
     draw_prompt(f, chunks[0], prompt);
-    draw_list(f, chunks[1], items, state);
     draw_footer(f, chunks[2]);
+
+    if has_icons {
+        let icon_panel_w = PREVIEW_CHAR_W + 4; // icon width + border padding
+        let body = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(16), Constraint::Length(icon_panel_w)])
+            .split(chunks[1]);
+        draw_list(f, body[0], items, state);
+        draw_icon_panel(f, body[1], items, state);
+    } else {
+        draw_list(f, chunks[1], items, state);
+    }
 }
 
 /// Render the prompt label at the top of the selector.
@@ -194,6 +209,42 @@ fn draw_list(f: &mut ratatui::Frame<'_>, area: Rect, items: &[SelectItem], state
         };
         let detail_widget = Paragraph::new(detail).style(Style::default().fg(Color::DarkGray));
         f.render_widget(detail_widget, detail_area);
+    }
+}
+
+/// Render the icon side panel showing the currently-selected agent's brand logo.
+fn draw_icon_panel(
+    f: &mut ratatui::Frame<'_>,
+    area: Rect,
+    items: &[SelectItem],
+    state: &ListState,
+) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::DarkGray));
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let icon_lines = state
+        .selected()
+        .and_then(|idx| items.get(idx))
+        .and_then(|item| item.icon.as_ref());
+
+    if let Some(lines) = icon_lines {
+        let icon_h = lines.len() as u16;
+        let top = inner.y.saturating_add(inner.height.saturating_sub(icon_h) / 2);
+        let left = inner
+            .x
+            .saturating_add(inner.width.saturating_sub(PREVIEW_CHAR_W) / 2);
+        let icon_area = Rect {
+            x: left,
+            y: top,
+            width: PREVIEW_CHAR_W.min(inner.width),
+            height: icon_h.min(inner.height),
+        };
+        f.render_widget(Paragraph::new(Text::from(lines.clone())), icon_area);
     }
 }
 

@@ -16,11 +16,14 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState},
 };
 
 use crate::infra::agent::Agent;
+use crate::infra::agent::icons::{
+    ICON_CHAR_H, ICON_CHAR_W, agent_icon_index, all_table_icons,
+};
 use crate::infra::git::GitOperations;
 use crate::infra::system_process::ProcessOperations;
 use crate::services::agent_list_service::{AgentListService, RunningAgent};
@@ -58,6 +61,7 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
             return self.run_plain();
         }
 
+        let icons = all_table_icons();
         let mut agents = self.service.list_running_agents().unwrap_or_default();
         let mut height = viewport_height(agents.len());
         let mut table_state = TableState::default();
@@ -71,7 +75,7 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
         )?;
 
         loop {
-            terminal.draw(|f| draw_ps(f, &agents, &mut table_state))?;
+            terminal.draw(|f| draw_ps(f, &agents, &mut table_state, &icons))?;
             if event::poll(Duration::from_secs(2))? {
                 if let Event::Key(key) = event::read()? {
                     match (key.code, key.modifiers) {
@@ -146,8 +150,9 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
 
 /// Calculates the inline viewport height needed for the given number of agents.
 fn viewport_height(agent_count: usize) -> u16 {
-    // +2 borders +1 header +1 footer outside box +4 buffer rows below last agent
-    (agent_count.min(15) + 8).max(8) as u16
+    // Each data row is ICON_CHAR_H rows tall. Add borders (2), header (1), footer (1), buffer (4).
+    let data_rows = (agent_count.min(15) as u16) * ICON_CHAR_H;
+    (data_rows + 8).max(8 + ICON_CHAR_H)
 }
 
 /// Returns the display colour for the given agent type.
@@ -162,7 +167,12 @@ fn agent_color(agent: &Agent) -> Color {
 }
 
 /// Render the running-agents dashboard into the current frame.
-fn draw_ps(f: &mut ratatui::Frame<'_>, agents: &[RunningAgent], table_state: &mut TableState) {
+fn draw_ps(
+    f: &mut ratatui::Frame<'_>,
+    agents: &[RunningAgent],
+    table_state: &mut TableState,
+    icons: &[Vec<Line<'static>>; 5],
+) {
     let area = f.area();
 
     let chunks = Layout::default()
@@ -193,6 +203,7 @@ fn draw_ps(f: &mut ratatui::Frame<'_>, agents: &[RunningAgent], table_state: &mu
         f.render_widget(msg, chunks[0]);
     } else {
         let header = Row::new(vec![
+            Cell::from("").style(Style::default()),
             Cell::from("PID").style(
                 Style::default()
                     .fg(Color::Cyan)
@@ -224,23 +235,39 @@ fn draw_ps(f: &mut ratatui::Frame<'_>, agents: &[RunningAgent], table_state: &mu
                     .as_ref()
                     .map(agent_color)
                     .unwrap_or(Color::White);
-                let agent_display = a
+                let agent_name = a
                     .agent_type
                     .as_ref()
-                    .map(|ag| format!("{} {}", ag.icon(), ag))
+                    .map(|ag| ag.to_string())
                     .unwrap_or_else(|| "(unknown)".to_string());
+
+                let icon_text: Text<'_> = a
+                    .agent_type
+                    .as_ref()
+                    .map(|at| Text::from(icons[agent_icon_index(at)].clone()))
+                    .unwrap_or_else(|| {
+                        Text::from(
+                            (0..ICON_CHAR_H)
+                                .map(|_| Line::default())
+                                .collect::<Vec<_>>(),
+                        )
+                    });
+
                 Row::new(vec![
+                    Cell::from(icon_text),
                     Cell::from(a.pid.to_string()),
-                    Cell::from(agent_display).style(Style::default().fg(color)),
+                    Cell::from(agent_name).style(Style::default().fg(color)),
                     Cell::from(a.branch.as_deref().unwrap_or("(detached)").to_string()),
                     Cell::from(a.path.display().to_string()),
                 ])
+                .height(ICON_CHAR_H)
             })
             .collect();
 
         let widths = [
+            Constraint::Length(ICON_CHAR_W),
             Constraint::Length(8),
-            Constraint::Length(15),
+            Constraint::Length(12),
             Constraint::Length(28),
             Constraint::Min(20),
         ];
