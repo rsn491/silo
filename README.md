@@ -37,8 +37,8 @@ silo launch [--agent <agent>] [--branch <branch>] [--worktree|--clone] [--reuse]
 | `--worktree` | Use a Git worktree (default) |
 | `--clone` | Use a full local Git clone instead |
 | `--reuse` | Reuse an existing inactive workspace if available |
-| `--tab` | Open in a new terminal tab (iTerm2) |
-| `--split-pane` | Open in a vertical split pane (iTerm2) |
+| `--tab` | Open in a new terminal tab (iTerm2, kitty, WezTerm; opens a new window on Ghostty) |
+| `--split-pane` | Open in a vertical split pane (iTerm2, kitty, WezTerm; not supported on Ghostty) |
 
 When the agent exits, silo detects uncommitted changes and offers to commit, suggest a branch name, and push.
 
