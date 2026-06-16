@@ -125,17 +125,17 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
             println!("No running agents found in this repository's workspaces.");
             return Ok(());
         }
-        println!("{:<8} {:<12} {:<28} WORKSPACE", "PID", "AGENT", "BRANCH");
+        println!("{:<8} {:<15} {:<28} WORKSPACE", "PID", "AGENT", "BRANCH");
         for a in &agents {
-            let agent_name = a
+            let agent_display = a
                 .agent_type
                 .as_ref()
-                .map(|ag| ag.to_string())
+                .map(|ag| format!("{} {}", ag.icon(), ag))
                 .unwrap_or_else(|| "(unknown)".to_string());
             println!(
-                "{:<8} {:<12} {:<28} {}",
+                "{:<8} {:<15} {:<28} {}",
                 a.pid,
-                agent_name,
+                agent_display,
                 a.branch.as_deref().unwrap_or("(detached)"),
                 a.path.display(),
             );
@@ -224,14 +224,14 @@ fn draw_ps(f: &mut ratatui::Frame<'_>, agents: &[RunningAgent], table_state: &mu
                     .as_ref()
                     .map(agent_color)
                     .unwrap_or(Color::White);
-                let agent_name = a
+                let agent_display = a
                     .agent_type
                     .as_ref()
-                    .map(|ag| ag.to_string())
+                    .map(|ag| format!("{} {}", ag.icon(), ag))
                     .unwrap_or_else(|| "(unknown)".to_string());
                 Row::new(vec![
                     Cell::from(a.pid.to_string()),
-                    Cell::from(agent_name).style(Style::default().fg(color)),
+                    Cell::from(agent_display).style(Style::default().fg(color)),
                     Cell::from(a.branch.as_deref().unwrap_or("(detached)").to_string()),
                     Cell::from(a.path.display().to_string()),
                 ])
@@ -240,7 +240,7 @@ fn draw_ps(f: &mut ratatui::Frame<'_>, agents: &[RunningAgent], table_state: &mu
 
         let widths = [
             Constraint::Length(8),
-            Constraint::Length(12),
+            Constraint::Length(15),
             Constraint::Length(28),
             Constraint::Min(20),
         ];

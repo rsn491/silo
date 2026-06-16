@@ -148,6 +148,17 @@ impl Agent {
         s.parse().ok()
     }
 
+    /// Returns an emoji icon representing this agent's brand.
+    pub fn icon(&self) -> &'static str {
+        match self {
+            Agent::ClaudeCode => "🤖",
+            Agent::OpenCode => "⚡",
+            Agent::Codex => "📖",
+            Agent::Gemini => "✨",
+            Agent::Droid => "🦾",
+        }
+    }
+
     /// Attempts to find an agent by its command name.
     pub fn try_from_command_name(s: &str) -> Option<Self> {
         use strum::IntoEnumIterator;

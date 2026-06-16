@@ -158,11 +158,13 @@ impl InitCommand {
 
 /// Prompts the user to choose a default AI agent.
 fn prompt_for_agent() -> Result<Option<Agent>, Box<dyn std::error::Error>> {
-    let names = Agent::all_names();
-    let mut items: Vec<SelectItem> = names
+    use strum::IntoEnumIterator;
+
+    let agents: Vec<Agent> = Agent::iter().collect();
+    let mut items: Vec<SelectItem> = agents
         .iter()
-        .map(|n| SelectItem {
-            label: n.to_string(),
+        .map(|a| SelectItem {
+            label: format!("{} {}", a.icon(), a),
             detail: None,
         })
         .collect();
@@ -172,7 +174,7 @@ fn prompt_for_agent() -> Result<Option<Agent>, Box<dyn std::error::Error>> {
     });
 
     match run_select("Choose default agent", &items, 0)? {
-        Some(i) if i < names.len() => Ok(Agent::try_from_str(names[i]).map(Some).unwrap_or(None)),
+        Some(i) if i < agents.len() => Ok(Some(agents[i].clone())),
         _ => Ok(None),
     }
 }
