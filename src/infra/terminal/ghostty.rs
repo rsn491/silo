@@ -1,7 +1,8 @@
 //! Ghostty terminal implementation.
 //!
-//! Ghostty exposes no AppleScript dictionary and no remote-control CLI, so the only
-//! clean, robust way to launch an agent is to open a new window via the `open` CLI.
+//! Ghostty exposes no scripting API for splitting panes, but since v1.3.0 it ships a
+//! `ghostty +new-window` CLI action that opens a new window in the running instance.
+//! This works on both macOS and Linux and assumes `ghostty` is on `$PATH`.
 //! `--tab` therefore opens a new Ghostty window; `--split-pane` is not supported.
 
 use std::path::Path;
@@ -19,16 +20,16 @@ impl Terminal for Ghostty {
     ///
     /// # Errors
     ///
-    /// Returns [`TerminalError::TabOpenFailed`] if the `open` command fails.
+    /// Returns [`TerminalError::TabOpenFailed`] if the `ghostty` command fails.
     fn open_tab(&self, worktree_path: &Path, agent: &Agent) -> Result<(), TerminalError> {
         let shell = login_shell();
-        let args = build_open_window_args(
+        let args = build_new_window_args(
             &worktree_path.display().to_string(),
             agent.command_name(),
             &shell,
         );
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        run_command("open", &arg_refs).map_err(TerminalError::TabOpenFailed)
+        run_command("ghostty", &arg_refs).map_err(TerminalError::TabOpenFailed)
     }
 
     /// Ghostty has no programmatic split-pane support, so this is unsupported.
@@ -45,15 +46,15 @@ impl Terminal for Ghostty {
     }
 }
 
-/// Builds the `open -na Ghostty --args …` argument vector for a new window.
+/// Builds the `ghostty +new-window …` argument vector for a new window.
 ///
-/// Ghostty runs the command via `-e`; the command is a login shell that re-execs
-/// after the agent exits so the window stays open.
-fn build_open_window_args(cwd: &str, command: &str, shell: &str) -> Vec<String> {
+/// `--working-directory` is always passed explicitly: omitting it makes Ghostty
+/// auto-append the cwd, which corrupts the `-e` command on v1.3.0. Everything after
+/// `-e` is the command to run — a login shell that re-execs after the agent exits so
+/// the window stays open.
+fn build_new_window_args(cwd: &str, command: &str, shell: &str) -> Vec<String> {
     vec![
-        "-na".to_string(),
-        "Ghostty".to_string(),
-        "--args".to_string(),
+        "+new-window".to_string(),
         format!("--working-directory={}", cwd),
         "-e".to_string(),
         shell.to_string(),
@@ -67,14 +68,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_open_window_args_contains_working_directory_and_command() {
+    fn test_build_new_window_args_contains_working_directory_and_command() {
         // Act
-        let args = build_open_window_args("/home/user/ws", "claude", "/bin/zsh");
+        let args = build_new_window_args("/home/user/ws", "claude", "/bin/zsh");
 
         // Assert
-        assert!(args.contains(&"Ghostty".to_string()));
+        assert!(args.contains(&"+new-window".to_string()));
         assert!(args.contains(&"--working-directory=/home/user/ws".to_string()));
         assert!(args.iter().any(|a| a == "claude; exec /bin/zsh"));
+    }
+
+    #[test]
+    fn test_build_new_window_args_passes_working_directory_before_command() {
+        // Assert — --working-directory must precede -e, otherwise Ghostty's cwd
+        // auto-detection corrupts the -e command (v1.3.0 bug).
+        let args = build_new_window_args("/ws", "claude", "/bin/zsh");
+        let wd = args
+            .iter()
+            .position(|a| a.starts_with("--working-directory"))
+            .expect("working-directory arg present");
+        let e = args.iter().position(|a| a == "-e").expect("-e arg present");
+        assert!(wd < e, "--working-directory must come before -e");
     }
 
     #[test]
