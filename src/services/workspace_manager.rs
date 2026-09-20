@@ -265,13 +265,27 @@ mod tests {
 /// Finds a workspace whose current branch matches `branch`.
 ///
 /// Returns `None` if no workspace with that branch exists or if listing workspaces fails.
-pub fn find_workspace_by_branch<W: WorkspaceManager>(manager: &W, branch: &str) -> Option<PathBuf> {
+pub fn find_workspace_by_branch<W: WorkspaceManager>(
+    manager: &W,
+    branch: &str,
+    scope: WorkspaceListingScope,
+) -> Option<PathBuf> {
     manager
-        .get_all()
+        .get_all(scope)
         .ok()?
         .into_iter()
         .find(|ws| ws.branch.as_deref() == Some(branch))
         .map(|ws| ws.path)
+}
+
+/// Controls whether workspace discovery includes the repository from which Silo
+/// workspaces were created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceListingScope {
+    /// Only isolated workspaces managed by Silo.
+    ManagedOnly,
+    /// Managed workspaces plus the original repository.
+    ManagedAndOriginal,
 }
 
 /// Trait for managing and inspecting existing workspaces.
@@ -288,10 +302,10 @@ pub trait WorkspaceManager {
         force: bool,
     ) -> Result<CleanupResult, CleanupError>;
 
-    /// Returns all workspaces.
+    /// Returns workspaces in the requested discovery scope.
     ///
     /// # Errors
     ///
     /// Returns [`GitError`] if listing workspaces fails.
-    fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, GitError>;
+    fn get_all(&self, scope: WorkspaceListingScope) -> Result<Vec<GitWorkspaceInfo>, GitError>;
 }

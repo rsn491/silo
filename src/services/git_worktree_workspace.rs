@@ -7,8 +7,8 @@ use super::agent_launcher::LaunchError;
 use super::silo_config::SiloConfig;
 use super::workspace_manager::{
     CleanupError, CleanupResult, FailedWorkspace, GitStatus, RemovedWorkspace, SkippedWorkspace,
-    StatusError, WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote,
-    reuse_inactive_workspace,
+    StatusError, WorkspaceFactory, WorkspaceListingScope, WorkspaceManager,
+    commits_ahead_of_remote, reuse_inactive_workspace,
 };
 use super::workspace_utils::{generate_workspace_path, parse_uncommitted_changes};
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
@@ -24,6 +24,12 @@ impl<G: GitOperations> GitWorktreeWorkspace<G> {
     /// Creates a new `GitWorktreeWorkspace` with the specified Git operations.
     pub fn new(git: G) -> Self {
         Self { git }
+    }
+
+    /// Returns whether a path is a full clone managed below Silo's directory.
+    fn is_silo_clone(path: &std::path::Path) -> bool {
+        SiloConfig::get_silo_dir().is_some_and(|silo| path.starts_with(silo))
+            && path.join(".git").is_dir()
     }
 
     /// Retrieves the Git status for a specific worktree.
@@ -80,7 +86,9 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
     /// Returns [`LaunchError`] if worktree creation fails.
     fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError> {
         if reuse {
-            let all = self.get_all().map_err(LaunchError::Git)?;
+            let all = self
+                .get_all(WorkspaceListingScope::ManagedOnly)
+                .map_err(LaunchError::Git)?;
             if let Some(path) = reuse_inactive_workspace(&self.git, all, branch.clone())? {
                 return Ok(path);
             }
@@ -114,12 +122,13 @@ impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
     ) -> Result<CleanupResult, CleanupError> {
         let all_worktrees = self.git.list_worktrees()?;
         let repo_root = self.git.get_repo_root()?;
+        let primary_worktree = all_worktrees.first().map(|worktree| worktree.path.clone());
         let silo_dir = SiloConfig::get_silo_dir();
 
         let candidates: Vec<_> = all_worktrees
             .iter()
             .filter(|wt| {
-                if wt.path == repo_root {
+                if wt.path == repo_root || Some(&wt.path) == primary_worktree.as_ref() {
                     return false;
                 }
                 if active_paths.contains(&wt.path) {
@@ -169,14 +178,33 @@ impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
     }
 
     /// Returns all Git worktrees.
-    fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, crate::infra::git_error::GitError> {
+    fn get_all(
+        &self,
+        scope: WorkspaceListingScope,
+    ) -> Result<Vec<GitWorkspaceInfo>, crate::infra::git_error::GitError> {
         let worktrees = self.git.list_worktrees()?;
         let mut result = Vec::new();
 
         for (index, wt) in worktrees.into_iter().enumerate() {
-            if index == 0 {
+            if index == 0 && scope == WorkspaceListingScope::ManagedOnly {
                 continue;
             }
+
+            let wt = if index == 0 && Self::is_silo_clone(&wt.path) {
+                let Some(origin) = self.git.get_local_origin(&wt.path).ok().flatten() else {
+                    continue;
+                };
+                let Some(primary) = self.git.get_primary_worktree(&origin).ok() else {
+                    continue;
+                };
+                GitWorkspaceInfo {
+                    branch: self.git.get_current_branch(&primary)?,
+                    path: primary,
+                    ..Default::default()
+                }
+            } else {
+                wt
+            };
 
             let path = wt.path.clone();
             let branch = wt.branch.clone();
@@ -203,6 +231,7 @@ impl<G: GitOperations> WorkspaceManager for GitWorktreeWorkspace<G> {
 mod tests {
     use super::*;
     use crate::infra::git::{GitWorkspaceInfo, MockGitOperations};
+    use std::path::Path;
 
     #[test]
     fn test_create_workspace() {
@@ -471,7 +500,7 @@ mod tests {
 
         // Act
         let all = workspace
-            .get_all()
+            .get_all(WorkspaceListingScope::ManagedOnly)
             .expect("get_all should succeed with mock data");
 
         // Assert
@@ -480,6 +509,66 @@ mod tests {
         assert_eq!(all[0].path, worktree1_path);
         assert!(all[0].has_uncommitted_changes);
         assert_eq!(all[0].commits_ahead, 2);
+    }
+
+    #[test]
+    fn test_get_all_inclusive_adds_main_with_status() {
+        let repo_root = PathBuf::from("/repo");
+        let worktree_path = PathBuf::from("/worktree");
+        let worktrees = vec![
+            GitWorkspaceInfo {
+                path: repo_root.clone(),
+                branch: Some("main".to_string()),
+                ..Default::default()
+            },
+            GitWorkspaceInfo {
+                path: worktree_path.clone(),
+                branch: Some("feature".to_string()),
+                ..Default::default()
+            },
+        ];
+
+        let root_for_status = repo_root.clone();
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_list_worktrees()
+            .return_once(move || Ok(worktrees));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_get_status_porcelain()
+            .returning(move |path| {
+                Ok(if path == root_for_status {
+                    " M README.md".to_string()
+                } else {
+                    String::new()
+                })
+            });
+        mock_git.expect_count_commits_ahead().returning(|path, _| {
+            if path == Path::new("/repo") {
+                Ok(1)
+            } else {
+                Ok(0)
+            }
+        });
+        mock_git
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
+        mock_git
+            .expect_get_latest_commit()
+            .returning(|_| Ok(Some("abc1234 summary".to_string())));
+
+        let all = GitWorktreeWorkspace::new(mock_git)
+            .get_all(WorkspaceListingScope::ManagedAndOriginal)
+            .expect("inclusive listing should succeed");
+
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].path, repo_root);
+        assert_eq!(all[0].branch.as_deref(), Some("main"));
+        assert!(all[0].has_uncommitted_changes);
+        assert_eq!(all[0].commits_ahead, 1);
+        assert_eq!(all[0].latest_commit.as_deref(), Some("abc1234 summary"));
     }
 
     #[test]
@@ -537,7 +626,7 @@ mod tests {
 
         // Act
         let all = workspace
-            .get_all()
+            .get_all(WorkspaceListingScope::ManagedOnly)
             .expect("get_all should succeed with mock data");
 
         // Assert

@@ -7,7 +7,7 @@ use crate::infra::git::GitOperations;
 use crate::infra::git_error::GitError;
 use crate::infra::system_process::{ProcessError, ProcessOperations};
 use crate::services::global_workspace_manager::GlobalWorkspaceManager;
-use crate::services::workspace_manager::WorkspaceManager;
+use crate::services::workspace_manager::{WorkspaceListingScope, WorkspaceManager};
 use strum::IntoEnumIterator;
 use thiserror::Error;
 
@@ -35,7 +35,7 @@ pub enum ListError {
     Process(#[from] ProcessError),
 }
 
-/// Service for identifying running AI agents within Silo-managed workspaces.
+/// Service for identifying running AI agents within known repository workspaces.
 pub struct AgentListService<G: GitOperations, P: ProcessOperations> {
     /// Workspace manager providing the list of known workspaces.
     workspace_manager: GlobalWorkspaceManager<G>,
@@ -58,7 +58,9 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
     ///
     /// Returns [`ListError`] if Git or process information cannot be retrieved.
     pub fn list_running_agents(&self) -> Result<Vec<RunningAgent>, ListError> {
-        let workspaces = self.workspace_manager.get_all()?;
+        let workspaces = self
+            .workspace_manager
+            .get_all(WorkspaceListingScope::ManagedAndOriginal)?;
         let processes = self
             .process
             .find_processes_by_names(&Agent::all_command_names())?;
@@ -72,25 +74,28 @@ impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
                 }
             };
 
-            for workspace in &workspaces {
-                if cwd.starts_with(&workspace.path) {
-                    let agent_type = extract_agent_type(&args);
+            // A managed workspace may be nested below the original repository,
+            // so associate the process with the most specific matching path.
+            if let Some(workspace) = workspaces
+                .iter()
+                .filter(|workspace| cwd.starts_with(&workspace.path))
+                .max_by_key(|workspace| workspace.path.components().count())
+            {
+                let agent_type = extract_agent_type(&args);
 
-                    // Deduplicate: skip if we already have an agent of this type in this workspace.
-                    if agents.iter().any(|a: &RunningAgent| {
-                        a.path == workspace.path && a.agent_type == agent_type
-                    }) {
-                        break;
-                    }
-
-                    agents.push(RunningAgent {
-                        pid,
-                        agent_type,
-                        path: workspace.path.clone(),
-                        branch: workspace.branch.clone(),
-                    });
-                    break;
+                if agents
+                    .iter()
+                    .any(|a: &RunningAgent| a.path == workspace.path && a.agent_type == agent_type)
+                {
+                    continue;
                 }
+
+                agents.push(RunningAgent {
+                    pid,
+                    agent_type,
+                    path: workspace.path.clone(),
+                    branch: workspace.branch.clone(),
+                });
             }
         }
 
@@ -217,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn test_list_running_agents_outside_worktrees() {
+    fn test_list_running_agents_in_original_subdirectory_but_not_outside_repository() {
         // Arrange
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(|| {
@@ -261,10 +266,19 @@ mod tests {
         let mut mock_process = MockProcessOperations::new();
         mock_process
             .expect_find_processes_by_names()
-            .return_once(|_| Ok(vec![(123, "/usr/bin/claude --args".to_string())]));
+            .return_once(|_| {
+                Ok(vec![
+                    (123, "/usr/bin/claude --args".to_string()),
+                    (456, "/usr/bin/codex --args".to_string()),
+                ])
+            });
         mock_process
             .expect_get_process_cwd()
             .with(predicate::eq(123u32))
+            .return_once(|_| Ok(PathBuf::from("/repo/docs")));
+        mock_process
+            .expect_get_process_cwd()
+            .with(predicate::eq(456u32))
             .return_once(|_| Ok(PathBuf::from("/other/directory")));
 
         let service = AgentListService::new(workspace_manager, mock_process);
@@ -275,7 +289,10 @@ mod tests {
             .expect("list_running_agents should succeed with mock data");
 
         // Assert
-        assert_eq!(agents.len(), 0);
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].pid, 123);
+        assert_eq!(agents[0].path, PathBuf::from("/repo"));
+        assert_eq!(agents[0].branch.as_deref(), Some("main"));
     }
 
     #[test]
@@ -388,7 +405,7 @@ mod tests {
 
         // Act - No processes.
         let mut worktree_mock = MockGitOperations::new();
-        // Only main repo entry — skipped by get_all, so no workspaces returned
+        // Only the original repository entry, and no processes.
         worktree_mock.expect_list_worktrees().return_once(|| {
             Ok(vec![GitWorkspaceInfo {
                 path: PathBuf::from("/repo"),
@@ -396,6 +413,21 @@ mod tests {
                 ..Default::default()
             }])
         });
+        worktree_mock
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        worktree_mock
+            .expect_get_status_porcelain()
+            .returning(|_| Ok(String::new()));
+        worktree_mock
+            .expect_count_commits_ahead()
+            .returning(|_, _| Ok(0));
+        worktree_mock
+            .expect_count_commits_behind()
+            .returning(|_, _| Ok(0));
+        worktree_mock
+            .expect_get_latest_commit()
+            .returning(|_| Ok(None));
         let mut checkout_mock = MockGitOperations::new();
         checkout_mock
             .expect_get_project_name()

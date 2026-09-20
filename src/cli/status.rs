@@ -4,7 +4,7 @@ use crossterm::style::Color;
 
 use crate::infra::git::GitOperations;
 use crate::services::global_workspace_manager::GlobalWorkspaceManager;
-use crate::services::workspace_manager::WorkspaceManager;
+use crate::services::workspace_manager::{WorkspaceListingScope, WorkspaceManager};
 use crate::tui::{Column, Row, StyledCell, render_table};
 
 /// Handler for the `status` command.
@@ -25,7 +25,9 @@ impl<G: GitOperations> StatusCommand<G> {
     ///
     /// Returns an error if workspace status cannot be retrieved.
     pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let statuses = self.workspace_manager.get_all()?;
+        let statuses = self
+            .workspace_manager
+            .get_all(WorkspaceListingScope::ManagedAndOriginal)?;
 
         let cols = vec![
             Column {
@@ -86,11 +88,6 @@ impl<G: GitOperations> StatusCommand<G> {
             })
             .collect();
 
-        render_table(
-            "Silo Workspaces",
-            &cols,
-            &rows,
-            "No workspaces found (excluding main worktree).",
-        )
+        render_table("Silo Workspaces", &cols, &rows, "No workspaces found.")
     }
 }

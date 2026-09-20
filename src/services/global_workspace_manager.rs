@@ -7,7 +7,9 @@ use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::infra::git_error::GitError;
 use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
 use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
-use crate::services::workspace_manager::{CleanupError, CleanupResult, WorkspaceManager};
+use crate::services::workspace_manager::{
+    CleanupError, CleanupResult, WorkspaceListingScope, WorkspaceManager,
+};
 
 /// Orchestrates workspace operations across both Git worktrees and local checkouts.
 pub struct GlobalWorkspaceManager<G: GitOperations> {
@@ -67,12 +69,44 @@ impl<G: GitOperations> WorkspaceManager for GlobalWorkspaceManager<G> {
     /// # Errors
     ///
     /// Returns [`GitError`] if listing workspaces fails for either manager.
-    fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
-        Ok([
-            self.worktree_workspaces.get_all()?,
-            self.checkout_workspaces.get_all()?,
-        ]
-        .concat())
+    fn get_all(&self, scope: WorkspaceListingScope) -> Result<Vec<GitWorkspaceInfo>, GitError> {
+        let mut result = self.worktree_workspaces.get_all(scope)?;
+        let mut checkouts = self
+            .checkout_workspaces
+            .get_all(WorkspaceListingScope::ManagedOnly)?;
+
+        // When the primary worktree is itself one of Silo's clones, its local
+        // origin—not the clone—is the original repository.
+        let running_in_managed_clone = scope == WorkspaceListingScope::ManagedAndOriginal
+            && result.first().is_some_and(|primary| {
+                let primary_path = primary
+                    .path
+                    .canonicalize()
+                    .unwrap_or_else(|_| primary.path.clone());
+                checkouts.iter().any(|checkout| {
+                    checkout
+                        .path
+                        .canonicalize()
+                        .unwrap_or_else(|_| checkout.path.clone())
+                        == primary_path
+                })
+            });
+        if running_in_managed_clone {
+            checkouts = self
+                .checkout_workspaces
+                .get_all(WorkspaceListingScope::ManagedAndOriginal)?;
+        }
+        result.extend(checkouts);
+
+        let mut seen = HashSet::new();
+        result.retain(|workspace| {
+            let normalized = workspace
+                .path
+                .canonicalize()
+                .unwrap_or_else(|_| workspace.path.clone());
+            seen.insert(normalized)
+        });
+        Ok(result)
     }
 }
 
@@ -134,7 +168,7 @@ mod tests {
 
         // Act
         let all = service
-            .get_all()
+            .get_all(WorkspaceListingScope::ManagedOnly)
             .expect("get_all should succeed with mock data");
 
         // Assert
@@ -198,7 +232,7 @@ mod tests {
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
         // Act
-        let result = service.get_all();
+        let result = service.get_all(WorkspaceListingScope::ManagedOnly);
 
         // Assert
         assert!(
@@ -283,7 +317,7 @@ mod tests {
 
         // Act
         let all = service
-            .get_all()
+            .get_all(WorkspaceListingScope::ManagedOnly)
             .expect("get_all should succeed with mock data");
 
         // Assert

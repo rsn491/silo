@@ -16,11 +16,14 @@ use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
 use crate::services::silo_config::SiloConfig;
 use crate::services::workspace_kind::WorkspaceKind;
 use crate::services::workspace_lock::WorkspaceLock;
-use crate::services::workspace_manager::{WorkspaceManager, find_workspace_by_branch};
+use crate::services::workspace_manager::{
+    WorkspaceListingScope, WorkspaceManager, find_workspace_by_branch,
+};
 use crate::tui::{print_info, print_status, run_confirm, run_input};
 
 /// Arguments for the `launch` command.
 #[derive(Parser, Debug)]
+#[cfg_attr(test, derive(Default))]
 pub struct LaunchArgs {
     /// Custom branch name (default: worktree name).
     #[arg(long)]
@@ -98,10 +101,11 @@ impl<G: GitOperations> WorkspaceManager for WorkspaceBackend<G> {
 
     fn get_all(
         &self,
+        scope: WorkspaceListingScope,
     ) -> Result<Vec<crate::infra::git::GitWorkspaceInfo>, crate::infra::git_error::GitError> {
         match self {
-            WorkspaceBackend::Worktree(w) => w.get_all(),
-            WorkspaceBackend::Clone(w) => w.get_all(),
+            WorkspaceBackend::Worktree(w) => w.get_all(scope),
+            WorkspaceBackend::Clone(w) => w.get_all(scope),
         }
     }
 }
@@ -166,8 +170,17 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
             }
         };
 
+        let mut selected_original = false;
         let override_path: Option<PathBuf> = if let Some(branch_name) = &args.branch {
-            if let Some(existing_path) = find_workspace_by_branch(&workspace, branch_name) {
+            if let Some(existing_path) = find_workspace_by_branch(
+                &workspace,
+                branch_name,
+                WorkspaceListingScope::ManagedAndOriginal,
+            ) {
+                selected_original = workspace_is_original(
+                    &existing_path,
+                    &workspace.get_all(WorkspaceListingScope::ManagedOnly)?,
+                );
                 if WorkspaceLock::is_locked(&existing_path) {
                     return Err(format!(
                         "an agent is already running in workspace '{}' at {}",
@@ -230,7 +243,7 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
                             &format!("Exit work check failed: {}", e),
                         )?;
                     }
-                    if args.tmp
+                    if should_cleanup_tmp(args.tmp, selected_original)
                         && let Err(e) = cleanup_tmp_workspace(&workspace_path, workspace_kind)
                     {
                         print_status(
@@ -253,6 +266,23 @@ impl<G: GitOperations, T: Terminal> LaunchCommand<G, T> {
             Err(e) => Err(e.into()),
         }
     }
+}
+
+/// Returns whether `path` is outside the managed-only workspace set.
+fn workspace_is_original(path: &Path, managed: &[crate::infra::git::GitWorkspaceInfo]) -> bool {
+    let normalized = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    !managed.iter().any(|workspace| {
+        workspace
+            .path
+            .canonicalize()
+            .unwrap_or_else(|_| workspace.path.clone())
+            == normalized
+    })
+}
+
+/// Returns whether temporary-workspace cleanup is safe to run.
+fn should_cleanup_tmp(is_tmp: bool, selected_original: bool) -> bool {
+    is_tmp && !selected_original
 }
 
 /// Returns a display colour for the given agent type.
@@ -555,24 +585,27 @@ fn shell_quote(s: &str) -> String {
 }
 
 #[cfg(test)]
-impl Default for LaunchArgs {
-    fn default() -> Self {
-        Self {
-            branch: None,
-            tab: false,
-            split_pane: false,
-            agent: None,
-            clone: false,
-            worktree: false,
-            reuse: false,
-            tmp: false,
-        }
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tmp_cleanup_is_suppressed_for_original_repository() {
+        assert!(!should_cleanup_tmp(true, true));
+        assert!(should_cleanup_tmp(true, false));
+        assert!(!should_cleanup_tmp(false, false));
+    }
+
+    #[test]
+    fn original_repository_is_not_considered_managed_for_reuse() {
+        let original = PathBuf::from("/source/project");
+        let managed = vec![crate::infra::git::GitWorkspaceInfo {
+            path: PathBuf::from("/silo/project-12345678"),
+            ..Default::default()
+        }];
+
+        assert!(workspace_is_original(&original, &managed));
+        assert!(!workspace_is_original(&managed[0].path, &managed));
+    }
 
     #[test]
     fn test_shell_quote_simple_string() {
