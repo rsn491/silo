@@ -1,17 +1,17 @@
-//! Lock-file mechanism for marking a workspace as in use.
+//! Lock-file mechanism for serializing launches into a workspace.
 //!
 //! A `silo.lock` file inside the workspace directory signals that an agent
-//! is currently running there.  The lock is acquired atomically; if it
-//! already exists **and** the owning process is still alive, acquisition
-//! fails.
+//! launch is currently in progress there. The lock is acquired atomically and
+//! released automatically when its guard is dropped.
 //!
-//! The lock file contains the PID of the owning process as a decimal string.
+//! The lock file contains the PID and a process-local acquisition identifier.
 //! On acquire, if a lock file already exists but its PID is no longer alive
 //! (i.e. the previous agent crashed), the stale lock is silently reclaimed.
 
 use std::fs::OpenOptions;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use thiserror::Error;
 
@@ -20,13 +20,14 @@ use crate::infra::system_process::pid_is_alive;
 /// Name of the lock file placed inside each workspace directory.
 const LOCK_FILE_NAME: &str = "silo.lock";
 
+/// Generates distinct ownership identifiers for acquisitions in this process.
+static NEXT_LOCK_ID: AtomicU64 = AtomicU64::new(1);
+
 /// Errors that can occur when managing a workspace lock.
 #[derive(Debug, Error)]
 pub enum LockError {
-    /// The workspace is already locked by a live agent process.
-    #[error(
-        "workspace is already locked by PID {pid}: {path}\nRemove the lock file to continue: rm {path}"
-    )]
+    /// The workspace already has a launch in progress.
+    #[error("workspace launch is already in progress under PID {pid}: {path}")]
     AlreadyLocked {
         /// Path to the lock file.
         path: PathBuf,
@@ -42,6 +43,32 @@ pub enum LockError {
 pub struct WorkspaceLock {
     /// Absolute path to the `silo.lock` file inside the workspace.
     path: PathBuf,
+}
+
+/// Ownership guard for an acquired workspace launch lock.
+///
+/// Only successful acquisition can create this guard, so a failed contender
+/// can never remove another launcher's lock. The file is removed on drop.
+#[must_use = "the lock is released when its guard is dropped"]
+#[derive(Debug)]
+pub struct WorkspaceLockGuard {
+    /// Path owned by this successful acquisition.
+    path: PathBuf,
+    /// Exact contents written by this acquisition.
+    owner: String,
+}
+
+impl Drop for WorkspaceLockGuard {
+    fn drop(&mut self) {
+        if std::fs::read_to_string(&self.path).ok().as_deref() != Some(self.owner.as_str()) {
+            return;
+        }
+        if let Err(e) = std::fs::remove_file(&self.path)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            log::warn!("failed to release workspace lock {:?}: {}", self.path, e);
+        }
+    }
 }
 
 impl WorkspaceLock {
@@ -67,7 +94,7 @@ impl WorkspaceLock {
     /// # Errors
     ///
     /// Returns [`LockError`] if the lock cannot be acquired.
-    pub fn try_acquire(&self) -> Result<(), LockError> {
+    pub fn try_acquire(&self) -> Result<WorkspaceLockGuard, LockError> {
         loop {
             match OpenOptions::new()
                 .write(true)
@@ -75,9 +102,22 @@ impl WorkspaceLock {
                 .open(&self.path)
             {
                 Ok(mut file) => {
-                    // Write our PID so future acquirers can detect stale locks.
-                    let _ = write!(file, "{}", std::process::id());
-                    return Ok(());
+                    let owner = format!(
+                        "{}:{}",
+                        std::process::id(),
+                        NEXT_LOCK_ID.fetch_add(1, Ordering::Relaxed)
+                    );
+                    // Record the PID for stale detection and a unique identifier
+                    // so this guard only removes the lock it acquired.
+                    if let Err(e) = write!(file, "{owner}") {
+                        drop(file);
+                        let _ = std::fs::remove_file(&self.path);
+                        return Err(LockError::Io(e));
+                    }
+                    return Ok(WorkspaceLockGuard {
+                        path: self.path.clone(),
+                        owner,
+                    });
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                     match read_pid_from_lock(&self.path) {
@@ -99,18 +139,6 @@ impl WorkspaceLock {
                 }
                 Err(e) => return Err(LockError::Io(e)),
             }
-        }
-    }
-
-    /// Releases the lock by deleting the lock file.
-    ///
-    /// If the file was already removed the workspace is effectively unlocked
-    /// regardless, but unexpected I/O errors are logged as warnings.
-    pub fn release(&self) {
-        if let Err(e) = std::fs::remove_file(&self.path)
-            && e.kind() != std::io::ErrorKind::NotFound
-        {
-            log::warn!("failed to release workspace lock {:?}: {}", self.path, e);
         }
     }
 
@@ -141,7 +169,7 @@ impl WorkspaceLock {
 fn read_pid_from_lock(path: &Path) -> Option<u32> {
     std::fs::read_to_string(path)
         .ok()
-        .and_then(|s| s.trim().parse().ok())
+        .and_then(|s| s.trim().split(':').next()?.parse().ok())
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +193,8 @@ mod tests {
         let lock = WorkspaceLock::new(dir.path());
 
         // Act
-        lock.try_acquire()
+        let _guard = lock
+            .try_acquire()
             .expect("should acquire lock on fresh directory");
 
         // Assert
@@ -176,16 +205,12 @@ mod tests {
     fn lock_file_contains_current_pid() {
         // Arrange
         let dir = tmp();
-        WorkspaceLock::new(dir.path())
+        let _guard = WorkspaceLock::new(dir.path())
             .try_acquire()
             .expect("should acquire lock on fresh directory");
 
         // Act
-        let contents =
-            fs::read_to_string(dir.path().join(LOCK_FILE_NAME)).expect("failed to read lock file");
-        let stored_pid: u32 = contents
-            .trim()
-            .parse()
+        let stored_pid = read_pid_from_lock(&dir.path().join(LOCK_FILE_NAME))
             .expect("lock file should contain a PID");
 
         // Assert
@@ -199,7 +224,7 @@ mod tests {
         assert!(!WorkspaceLock::is_locked(dir.path()));
 
         // Act
-        WorkspaceLock::new(dir.path())
+        let _guard = WorkspaceLock::new(dir.path())
             .try_acquire()
             .expect("should acquire lock on fresh directory");
 
@@ -211,7 +236,7 @@ mod tests {
     fn acquire_fails_when_already_locked_by_live_pid() {
         // Arrange
         let dir = tmp();
-        WorkspaceLock::new(dir.path())
+        let _guard = WorkspaceLock::new(dir.path())
             .try_acquire()
             .expect("should acquire lock on fresh directory");
 
@@ -220,6 +245,7 @@ mod tests {
 
         // Assert
         assert!(matches!(err, LockError::AlreadyLocked { .. }));
+        assert!(dir.path().join(LOCK_FILE_NAME).exists());
     }
 
     #[test]
@@ -227,25 +253,12 @@ mod tests {
         // Arrange
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
-        lock.try_acquire()
+        let guard = lock
+            .try_acquire()
             .expect("should acquire lock on fresh directory");
 
         // Act
-        lock.release();
-
-        // Assert
-        assert!(!dir.path().join(LOCK_FILE_NAME).exists());
-    }
-
-    #[test]
-    fn release_is_idempotent() {
-        // Arrange
-        let dir = tmp();
-        let lock = WorkspaceLock::new(dir.path());
-
-        // Act
-        lock.release(); // no lock file — should not panic
-        lock.release();
+        drop(guard);
 
         // Assert
         assert!(!dir.path().join(LOCK_FILE_NAME).exists());
@@ -256,15 +269,16 @@ mod tests {
         // Arrange
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
-        lock.try_acquire()
+        let guard = lock
+            .try_acquire()
             .expect("should acquire lock on fresh directory");
-        lock.release();
+        drop(guard);
 
         // Act
-        let result = lock.try_acquire();
+        let _guard = lock.try_acquire().expect("should reacquire released lock");
 
         // Assert
-        assert!(result.is_ok());
+        assert!(dir.path().join(LOCK_FILE_NAME).exists());
     }
 
     /// Simulate a crashed agent: write a lock file with a PID that is
@@ -279,16 +293,12 @@ mod tests {
         fs::write(dir.path().join(LOCK_FILE_NAME), b"0").expect("failed to write lock file");
 
         // Act
-        WorkspaceLock::new(dir.path())
+        let _guard = WorkspaceLock::new(dir.path())
             .try_acquire()
             .expect("should reclaim stale lock");
 
         // Assert
-        let contents =
-            fs::read_to_string(dir.path().join(LOCK_FILE_NAME)).expect("failed to read lock file");
-        let stored_pid: u32 = contents
-            .trim()
-            .parse()
+        let stored_pid = read_pid_from_lock(&dir.path().join(LOCK_FILE_NAME))
             .expect("lock file should contain a PID");
         assert_eq!(stored_pid, std::process::id());
     }
@@ -316,5 +326,17 @@ mod tests {
 
         // Act / Assert
         assert!(WorkspaceLock::is_locked(dir.path()));
+    }
+
+    #[test]
+    fn guard_does_not_remove_a_replacement_lock() {
+        let dir = tmp();
+        let guard = WorkspaceLock::new(dir.path()).try_acquire().unwrap();
+        let path = dir.path().join(LOCK_FILE_NAME);
+        fs::write(&path, "replacement").unwrap();
+
+        drop(guard);
+
+        assert_eq!(fs::read_to_string(path).unwrap(), "replacement");
     }
 }

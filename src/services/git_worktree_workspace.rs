@@ -84,12 +84,19 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
     /// # Errors
     ///
     /// Returns [`LaunchError`] if worktree creation fails.
-    fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError> {
+    fn create(
+        &self,
+        branch: Option<String>,
+        reuse: bool,
+        active_paths: &HashSet<PathBuf>,
+    ) -> Result<PathBuf, LaunchError> {
         if reuse {
             let all = self
                 .get_all(WorkspaceListingScope::ManagedOnly)
                 .map_err(LaunchError::Git)?;
-            if let Some(path) = reuse_inactive_workspace(&self.git, all, branch.clone())? {
+            if let Some(path) =
+                reuse_inactive_workspace(&self.git, all, branch.clone(), active_paths)?
+            {
                 return Ok(path);
             }
         }
@@ -244,7 +251,7 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act
-        let result = workspace.create(None, false);
+        let result = workspace.create(None, false, &HashSet::new());
 
         // Assert
         assert!(result.is_ok());
