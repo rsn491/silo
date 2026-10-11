@@ -34,15 +34,15 @@ pub struct Cli {
 /// Supported subcommands for Silo.
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Create a new Git worktree and launch an agent in it.
+    /// Create or select a workspace and launch an agent in it.
     Launch(LaunchArgs),
-    /// List running agents in worktrees of the current repository.
+    /// List running agents in all workspaces of the current repository.
     Ps(PsArgs),
     /// Initialize the `.silo` directory in your home directory.
     Init(InitArgs),
-    /// Clean up worktrees where no agents are running.
+    /// Clean up managed workspaces where no agents are running.
     Cleanup(CleanupArgs),
-    /// Show status of all worktrees inside the workspace root directory.
+    /// Show status of the original repository and its managed workspaces.
     Status,
     /// Generate shell completion scripts.
     Completions(CompletionsArgs),

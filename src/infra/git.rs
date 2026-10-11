@@ -51,6 +51,13 @@ pub trait GitOperations {
     /// Returns [`GitError::CommandFailed`] if the `git worktree list` command fails.
     fn list_worktrees(&self) -> Result<Vec<GitWorkspaceInfo>, GitError>;
 
+    /// Returns the local filesystem path configured as `origin` for `repository_path`.
+    /// Non-local remotes and missing origins return `Ok(None)`.
+    fn get_local_origin(&self, repository_path: &Path) -> Result<Option<PathBuf>, GitError>;
+
+    /// Returns the primary worktree for the repository containing `repository_path`.
+    fn get_primary_worktree(&self, repository_path: &Path) -> Result<PathBuf, GitError>;
+
     /// Forcefully removes a Git worktree at the specified path.
     ///
     /// # Errors
@@ -270,6 +277,62 @@ impl GitOperations for Git {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(parse_worktree_list(&stdout))
+    }
+
+    fn get_local_origin(&self, repository_path: &Path) -> Result<Option<PathBuf>, GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(repository_path)
+            .args(["remote", "get-url", "origin"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            return Ok(None);
+        }
+
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let path = if let Some(path) = value.strip_prefix("file://") {
+            PathBuf::from(path)
+        } else {
+            let candidate = PathBuf::from(&value);
+            if !candidate.is_absolute() && (value.contains("://") || value.contains(':')) {
+                return Ok(None);
+            }
+            if candidate.is_absolute() {
+                candidate
+            } else {
+                repository_path.join(candidate)
+            }
+        };
+
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        Ok(Some(path.canonicalize().unwrap_or(path)))
+    }
+
+    fn get_primary_worktree(&self, repository_path: &Path) -> Result<PathBuf, GitError> {
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(repository_path)
+            .args(["worktree", "list", "--porcelain"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.trim().to_string()));
+        }
+
+        parse_worktree_list(&String::from_utf8_lossy(&output.stdout))
+            .into_iter()
+            .next()
+            .map(|workspace| workspace.path)
+            .ok_or_else(|| {
+                GitError::CommandFailed("repository has no primary worktree".to_string())
+            })
     }
 
     fn remove_worktree(&self, path: &Path) -> Result<(), GitError> {

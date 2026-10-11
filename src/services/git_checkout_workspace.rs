@@ -7,7 +7,8 @@ use super::agent_launcher::LaunchError;
 use super::silo_config::SiloConfig;
 use super::workspace_manager::{
     CleanupError, CleanupResult, FailedWorkspace, RemovedWorkspace, SkippedWorkspace,
-    WorkspaceFactory, WorkspaceManager, commits_ahead_of_remote, reuse_inactive_workspace,
+    WorkspaceFactory, WorkspaceListingScope, WorkspaceManager, commits_ahead_of_remote,
+    reuse_inactive_workspace,
 };
 use super::workspace_utils::{generate_workspace_path, parse_uncommitted_changes};
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
@@ -25,6 +26,50 @@ impl<G: GitOperations> GitCheckoutWorkspace<G> {
     pub fn new(git: G) -> Self {
         Self { git }
     }
+
+    /// Resolves the original repository for the current checkout context.
+    fn resolve_original(&self, checkout_dirs: &[PathBuf]) -> Option<PathBuf> {
+        let repository_root = self.git.get_repo_root().ok()?;
+        let normalized_root = repository_root
+            .canonicalize()
+            .unwrap_or_else(|_| repository_root.clone());
+        let source = if checkout_dirs
+            .iter()
+            .any(|path| path.canonicalize().unwrap_or_else(|_| path.clone()) == normalized_root)
+        {
+            self.git.get_local_origin(&repository_root).ok().flatten()?
+        } else {
+            repository_root
+        };
+        self.git.get_primary_worktree(&source).ok()
+    }
+
+    /// Collects status information for a repository path.
+    fn workspace_info(
+        &self,
+        path: PathBuf,
+        base_branch: &str,
+    ) -> Result<GitWorkspaceInfo, GitError> {
+        let branch = self.git.get_current_branch(&path)?;
+        let status_output = self.git.get_status_porcelain(&path)?;
+        let (has_uncommitted_changes, _) = parse_uncommitted_changes(&status_output);
+        let commits_ahead = self
+            .git
+            .count_commits_ahead(&path, base_branch)
+            .unwrap_or_else(|error| {
+                log::warn!("could not count commits ahead for {:?}: {}", path, error);
+                0
+            });
+        let latest_commit = self.git.get_latest_commit(&path).ok().flatten();
+
+        Ok(GitWorkspaceInfo {
+            path,
+            branch,
+            has_uncommitted_changes,
+            commits_ahead,
+            latest_commit,
+        })
+    }
 }
 
 impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
@@ -35,7 +80,9 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
     /// Returns [`LaunchError`] if cloning or checking out the branch fails.
     fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError> {
         if reuse {
-            let all = self.get_all().map_err(LaunchError::Git)?;
+            let all = self
+                .get_all(WorkspaceListingScope::ManagedOnly)
+                .map_err(LaunchError::Git)?;
             if let Some(path) = reuse_inactive_workspace(&self.git, all, branch.clone())? {
                 return Ok(path);
             }
@@ -63,42 +110,30 @@ impl<G: GitOperations> WorkspaceManager for GitCheckoutWorkspace<G> {
     /// # Errors
     ///
     /// Returns [`GitError`] if the Silo directory cannot be determined or project name fails.
-    fn get_all(&self) -> Result<Vec<GitWorkspaceInfo>, GitError> {
+    fn get_all(&self, scope: WorkspaceListingScope) -> Result<Vec<GitWorkspaceInfo>, GitError> {
         let project_prefix = format!("{}-", self.git.get_project_name()?);
-        let silo_dir = match SiloConfig::get_silo_dir() {
-            Some(d) => d,
-            None => return Ok(vec![]),
-        };
-        let checkout_dirs = find_checkout_dirs(&silo_dir, &project_prefix, &HashSet::new());
+        let checkout_dirs = SiloConfig::get_silo_dir()
+            .map(|silo_dir| find_checkout_dirs(&silo_dir, &project_prefix, &HashSet::new()))
+            .unwrap_or_default();
 
-        if checkout_dirs.is_empty() {
-            return Ok(vec![]);
+        if checkout_dirs.is_empty() && scope == WorkspaceListingScope::ManagedOnly {
+            return Ok(Vec::new());
         }
 
         let base_branch = self.git.get_default_remote_branch()?;
         let mut result = Vec::new();
 
-        for path in checkout_dirs {
-            let branch = self.git.get_current_branch(&path)?;
-            let status_output = self.git.get_status_porcelain(&path)?;
-            let (has_uncommitted_changes, _) = parse_uncommitted_changes(&status_output);
-            let commits_ahead = self
-                .git
-                .count_commits_ahead(&path, &base_branch)
-                .unwrap_or_else(|e| {
-                    log::warn!("could not count commits ahead for {:?}: {}", path, e);
-                    0
-                });
+        for path in &checkout_dirs {
+            result.push(self.workspace_info(path.clone(), &base_branch)?);
+        }
 
-            let latest_commit = self.git.get_latest_commit(&path).ok().flatten();
-
-            result.push(GitWorkspaceInfo {
-                path,
-                branch,
-                has_uncommitted_changes,
-                commits_ahead,
-                latest_commit,
-            });
+        if scope == WorkspaceListingScope::ManagedAndOriginal
+            && let Some(original_path) = self.resolve_original(&checkout_dirs)
+            && !result
+                .iter()
+                .any(|workspace| workspace.path == original_path)
+        {
+            result.push(self.workspace_info(original_path, &base_branch)?);
         }
 
         Ok(result)
@@ -256,6 +291,71 @@ mod tests {
         assert!(result.is_ok());
         let path = result.expect("workspace creation should succeed");
         assert!(path.to_string_lossy().contains("my-project"));
+    }
+
+    #[test]
+    fn resolve_original_uses_local_origin_for_managed_clone() {
+        let clone_path = PathBuf::from("/silo/project-12345678");
+        let source_path = PathBuf::from("/source/project");
+        let primary_path = PathBuf::from("/source/project-primary");
+        let mut mock_git = MockGitOperations::new();
+        let clone_for_root = clone_path.clone();
+        mock_git
+            .expect_get_repo_root()
+            .return_once(move || Ok(clone_for_root));
+        let source_for_origin = source_path.clone();
+        mock_git
+            .expect_get_local_origin()
+            .with(mockall::predicate::eq(clone_path.clone()))
+            .return_once(move |_| Ok(Some(source_for_origin)));
+        let primary_for_result = primary_path.clone();
+        mock_git
+            .expect_get_primary_worktree()
+            .with(mockall::predicate::eq(source_path))
+            .return_once(move |_| Ok(primary_for_result));
+
+        let resolved =
+            GitCheckoutWorkspace::new(mock_git).resolve_original(std::slice::from_ref(&clone_path));
+
+        assert_eq!(resolved, Some(primary_path));
+    }
+
+    #[test]
+    fn resolve_original_omits_unresolvable_clone_origin() {
+        let clone_path = PathBuf::from("/silo/project-12345678");
+        let mut mock_git = MockGitOperations::new();
+        let clone_for_root = clone_path.clone();
+        mock_git
+            .expect_get_repo_root()
+            .return_once(move || Ok(clone_for_root));
+        mock_git.expect_get_local_origin().return_once(|_| Ok(None));
+        mock_git.expect_get_primary_worktree().never();
+
+        let resolved =
+            GitCheckoutWorkspace::new(mock_git).resolve_original(std::slice::from_ref(&clone_path));
+
+        assert_eq!(resolved, None);
+    }
+
+    #[test]
+    fn resolve_original_normalizes_regular_repo_to_primary_worktree() {
+        let linked_path = PathBuf::from("/worktrees/feature");
+        let primary_path = PathBuf::from("/source/project");
+        let mut mock_git = MockGitOperations::new();
+        let linked_for_root = linked_path.clone();
+        mock_git
+            .expect_get_repo_root()
+            .return_once(move || Ok(linked_for_root));
+        mock_git.expect_get_local_origin().never();
+        let primary_for_result = primary_path.clone();
+        mock_git
+            .expect_get_primary_worktree()
+            .with(mockall::predicate::eq(linked_path))
+            .return_once(move |_| Ok(primary_for_result));
+
+        let resolved = GitCheckoutWorkspace::new(mock_git).resolve_original(&[]);
+
+        assert_eq!(resolved, Some(primary_path));
     }
 
     #[test]

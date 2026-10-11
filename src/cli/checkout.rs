@@ -6,7 +6,7 @@ use clap::Parser;
 
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
 use crate::services::global_workspace_manager::GlobalWorkspaceManager;
-use crate::services::workspace_manager::WorkspaceManager;
+use crate::services::workspace_manager::{WorkspaceListingScope, WorkspaceManager};
 use crate::tui::{SelectItem, pad_or_trunc, run_select};
 
 /// Arguments for the `checkout` command.
@@ -36,7 +36,9 @@ impl<G: GitOperations> CheckoutCommand<G> {
     ///
     /// Returns an error if workspace listing, user selection, or shell spawning fails.
     pub fn run(self, args: CheckoutArgs) -> Result<(), Box<dyn std::error::Error>> {
-        let workspaces = self.workspace_manager.get_all()?;
+        let workspaces = self
+            .workspace_manager
+            .get_all(WorkspaceListingScope::ManagedAndOriginal)?;
 
         if workspaces.is_empty() {
             eprintln!("No workspaces found.");
