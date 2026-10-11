@@ -122,9 +122,11 @@ pub fn reuse_inactive_workspace<G: GitOperations>(
     git: &G,
     workspaces: Vec<GitWorkspaceInfo>,
     branch: Option<String>,
+    active_paths: &HashSet<PathBuf>,
 ) -> Result<Option<PathBuf>, LaunchError> {
     let inactive = workspaces.into_iter().find(|ws| {
-        !WorkspaceLock::is_locked(&ws.path)
+        !active_paths.contains(&ws.path)
+            && !WorkspaceLock::is_locked(&ws.path)
             && !ws.has_uncommitted_changes
             && (ws.commits_ahead == 0 || git.is_fully_pushed(&ws.path))
     });
@@ -161,10 +163,16 @@ pub trait WorkspaceFactory {
     /// # Errors
     ///
     /// Returns [`LaunchError`] if workspace creation fails.
-    fn create(&self, branch: Option<String>, reuse: bool) -> Result<PathBuf, LaunchError>;
+    fn create(
+        &self,
+        branch: Option<String>,
+        reuse: bool,
+        active_paths: &HashSet<PathBuf>,
+    ) -> Result<PathBuf, LaunchError>;
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use crate::infra::git::MockGitOperations;
@@ -195,7 +203,12 @@ mod tests {
         mock.expect_checkout_new_branch_from()
             .returning(|_, _, _| Ok(()));
 
-        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        let result = reuse_inactive_workspace(
+            &mock,
+            vec![ws],
+            Some("new-branch".to_string()),
+            &HashSet::new(),
+        );
         assert!(result.unwrap().is_some());
     }
 
@@ -214,7 +227,12 @@ mod tests {
         mock.expect_checkout_new_branch_from()
             .returning(|_, _, _| Ok(()));
 
-        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        let result = reuse_inactive_workspace(
+            &mock,
+            vec![ws],
+            Some("new-branch".to_string()),
+            &HashSet::new(),
+        );
         assert!(result.unwrap().is_some());
     }
 
@@ -227,7 +245,12 @@ mod tests {
         mock.expect_is_fully_pushed().once().returning(|_| false);
         mock.expect_get_project_name().never();
 
-        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        let result = reuse_inactive_workspace(
+            &mock,
+            vec![ws],
+            Some("new-branch".to_string()),
+            &HashSet::new(),
+        );
         assert!(result.unwrap().is_none());
     }
 
@@ -235,12 +258,17 @@ mod tests {
     fn reuse_skips_locked_workspace() {
         let tmp = tempfile::tempdir().unwrap();
         let lock = WorkspaceLock::new(tmp.path());
-        lock.try_acquire().unwrap();
+        let _guard = lock.try_acquire().unwrap();
 
         let ws = make_workspace(&tmp, 0);
         let mock = MockGitOperations::new();
 
-        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        let result = reuse_inactive_workspace(
+            &mock,
+            vec![ws],
+            Some("new-branch".to_string()),
+            &HashSet::new(),
+        );
         assert!(result.unwrap().is_none());
     }
 
@@ -257,7 +285,29 @@ mod tests {
 
         let mock = MockGitOperations::new();
 
-        let result = reuse_inactive_workspace(&mock, vec![ws], Some("new-branch".to_string()));
+        let result = reuse_inactive_workspace(
+            &mock,
+            vec![ws],
+            Some("new-branch".to_string()),
+            &HashSet::new(),
+        );
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn reuse_skips_process_active_workspace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ws = make_workspace(&tmp, 0);
+        let active_paths = HashSet::from([tmp.path().to_path_buf()]);
+        let mock = MockGitOperations::new();
+
+        let result = reuse_inactive_workspace(
+            &mock,
+            vec![ws],
+            Some("new-branch".to_string()),
+            &active_paths,
+        );
+
         assert!(result.unwrap().is_none());
     }
 }
