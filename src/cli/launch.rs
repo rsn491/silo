@@ -208,7 +208,7 @@ impl<G: GitOperations + Clone, T: Terminal, P: ProcessOperations> LaunchCommand<
             );
             if active_paths.contains(&existing_path) {
                 return Err(format!(
-                    "an agent is already running in workspace '{}' at {}",
+                    "An agent is already running in workspace '{}' at {}",
                     branch_name,
                     existing_path.display()
                 )
@@ -216,7 +216,7 @@ impl<G: GitOperations + Clone, T: Terminal, P: ProcessOperations> LaunchCommand<
             }
             if WorkspaceLock::is_locked(&existing_path) {
                 return Err(format!(
-                    "a launch is already in progress for workspace '{}' at {}",
+                    "A launch is already in progress for workspace '{}' at {}",
                     branch_name,
                     existing_path.display()
                 )
