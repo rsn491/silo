@@ -24,6 +24,7 @@ use services::silo_config::SiloConfig;
 /// The main CLI structure for Silo.
 #[derive(Parser)]
 #[command(name = "silo")]
+#[command(version)]
 #[command(about = "A CLI tool for managing isolated Claude workspaces")]
 pub struct Cli {
     /// The subcommand to execute.
