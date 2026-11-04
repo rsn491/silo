@@ -1,5 +1,11 @@
 # silo
 
+[![CI](https://github.com/rsn491/silo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsn491/silo/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/rsn491/silo/branch/main/graph/badge.svg)](https://codecov.io/gh/rsn491/silo)
+[![Release](https://img.shields.io/github/v/release/rsn491/silo)](https://github.com/rsn491/silo/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![MSRV](https://img.shields.io/badge/rustc-1.93.0+-orange.svg)](https://www.rust-lang.org)
+
 Isolated workspace manager for parallel agentic development. Silo lets you launch multiple AI agents — like Claude Code, Codex, and OpenCode — to work simultaneously on the same repository, each in its own isolated Git worktree or clone.
 
 <kbd><img title="Silo launch" src="docs/silo_launch.gif"></kbd><br/>
