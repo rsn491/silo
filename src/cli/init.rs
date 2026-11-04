@@ -294,17 +294,19 @@ mod tests {
 
     #[test]
     fn non_interactive_without_args_skips_settings() {
+        // Given
         let (_dir, path) = settings_file();
-
+        // When
         InitCommand::new(MockPrompt::new())
             .configure(no_args(), false, &path)
             .unwrap();
-
+        // Then
         assert!(!path.exists());
     }
 
     #[test]
     fn non_interactive_args_are_saved_and_merged() {
+        // Given
         let (_dir, path) = settings_file();
         SiloConfig::save_settings_to_path(
             &path,
@@ -320,12 +322,12 @@ mod tests {
             exit_work: Some(false),
             ..no_args()
         };
-
         InitCommand::new(MockPrompt::new())
             .configure(args, false, &path)
             .unwrap();
-
+        // When
         let settings = read(&path);
+        // Then
         assert_eq!(settings.agent, Some(Agent::Gemini));
         assert_eq!(settings.workspace_type, Some(WorkspaceKind::Clone));
         assert_eq!(settings.exit_work, Some(false));
@@ -333,18 +335,19 @@ mod tests {
 
     #[test]
     fn interactive_prompts_choose_every_setting() {
+        // Given
         let (_dir, path) = settings_file();
         let codex_index = Agent::all_names()
             .iter()
             .position(|n| *n == "codex")
             .unwrap();
         let prompt = selecting([Some(codex_index), Some(1), Some(1)]);
-
         InitCommand::new(prompt)
             .configure(no_args(), true, &path)
             .unwrap();
-
+        // When
         let settings = read(&path);
+        // Then
         assert_eq!(settings.agent, Some(Agent::Codex));
         assert_eq!(settings.workspace_type, Some(WorkspaceKind::Clone));
         assert_eq!(settings.exit_work, Some(false));
@@ -352,14 +355,15 @@ mod tests {
 
     #[test]
     fn interactive_default_choices() {
+        // Given
         let (_dir, path) = settings_file();
         let prompt = selecting([Some(0), Some(0), Some(0)]);
-
         InitCommand::new(prompt)
             .configure(no_args(), true, &path)
             .unwrap();
-
+        // When
         let settings = read(&path);
+        // Then
         assert_eq!(settings.agent, Some(Agent::ClaudeCode));
         assert_eq!(settings.workspace_type, Some(WorkspaceKind::Worktree));
         assert_eq!(settings.exit_work, Some(true));
@@ -367,27 +371,28 @@ mod tests {
 
     #[test]
     fn interactive_skip_everything_writes_nothing() {
+        // Given
         let (_dir, path) = settings_file();
         let skip_agent = Agent::all_names().len();
         let prompt = selecting([Some(skip_agent), Some(2), None]);
-
+        // When
         InitCommand::new(prompt)
             .configure(no_args(), true, &path)
             .unwrap();
-
+        // Then
         assert!(!path.exists());
     }
 
     #[test]
-    fn interactive_existing_file_requires_confirmation() {
+    fn interactive_existing_file_is_left_alone_when_overwrite_declined() {
+        // Given
         let (_dir, path) = settings_file();
         SiloConfig::save_settings_to_path(&path, &SiloSettings::default()).unwrap();
-        let args = || InitArgs {
+        let args = InitArgs {
             agent: Some(Agent::Droid),
             workspace_type: Some(WorkspaceKind::Worktree),
             exit_work: Some(true),
         };
-
         let mut declining = MockPrompt::new();
         declining
             .expect_confirm()
@@ -396,47 +401,71 @@ mod tests {
                 assert!(!default_yes);
                 Ok(false)
             });
-        InitCommand::new(declining)
-            .configure(args(), true, &path)
-            .unwrap();
-        assert_eq!(read(&path).agent, None);
 
+        // When
+        InitCommand::new(declining)
+            .configure(args, true, &path)
+            .unwrap();
+
+        // Then
+        assert_eq!(read(&path).agent, None);
+    }
+
+    #[test]
+    fn interactive_existing_file_is_overwritten_when_confirmed() {
+        // Given
+        let (_dir, path) = settings_file();
+        SiloConfig::save_settings_to_path(&path, &SiloSettings::default()).unwrap();
+        let args = InitArgs {
+            agent: Some(Agent::Droid),
+            workspace_type: Some(WorkspaceKind::Worktree),
+            exit_work: Some(true),
+        };
         let mut accepting = MockPrompt::new();
         accepting
             .expect_confirm()
             .times(1)
             .returning(|_, _| Ok(true));
+
+        // When
         InitCommand::new(accepting)
-            .configure(args(), true, &path)
+            .configure(args, true, &path)
             .unwrap();
+
+        // Then
         assert_eq!(read(&path).agent, Some(Agent::Droid));
     }
 
     #[test]
     fn prompt_errors_are_propagated() {
+        // Given
         let (_dir, path) = settings_file();
         let mut prompt = MockPrompt::new();
         prompt
             .expect_select()
             .returning(|_, _, _| Err("terminal gone".into()));
-
         let result = InitCommand::new(prompt).configure(no_args(), true, &path);
-
-        assert_eq!(result.unwrap_err().to_string(), "terminal gone");
+        // When
+        let actual = result.unwrap_err().to_string();
+        // Then
+        assert_eq!(actual, "terminal gone");
     }
 
     #[test]
     fn run_initializes_silo_directory_non_interactively() {
+        // Given
         // Without args this never writes settings: non-interactively it skips them, and
         // when the test runs with a TTY on stdin every prompt answers "skip".
         let mut prompt = MockPrompt::new();
         prompt.expect_select().returning(|_, _, _| Ok(None));
         let settings_path = SiloConfig::get_settings_path().unwrap();
         let before = std::fs::read(&settings_path).ok();
-
         let result = InitCommand::new(prompt).run(no_args());
-
-        assert!(result.is_ok());
-        assert_eq!(std::fs::read(&settings_path).ok(), before);
+        // When
+        let actual_1 = result.is_ok();
+        let actual_2 = std::fs::read(&settings_path).ok();
+        // Then
+        assert!(actual_1);
+        assert_eq!(actual_2, before);
     }
 }

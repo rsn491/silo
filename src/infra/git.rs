@@ -812,31 +812,37 @@ mod tests {
 
     #[test]
     fn test_extract_project_name_https() {
-        assert_eq!(
-            extract_project_name_from_url("https://github.com/user/myrepo.git"),
-            Some("myrepo".to_string())
-        );
+        // Given
+        // (no setup needed)
+        // When
+        let actual = extract_project_name_from_url("https://github.com/user/myrepo.git");
+        // Then
+        assert_eq!(actual, Some("myrepo".to_string()));
     }
 
     #[test]
     fn test_extract_project_name_ssh() {
-        assert_eq!(
-            extract_project_name_from_url("git@github.com:user/myrepo.git"),
-            Some("myrepo".to_string())
-        );
+        // Given
+        // (no setup needed)
+        // When
+        let actual = extract_project_name_from_url("git@github.com:user/myrepo.git");
+        // Then
+        assert_eq!(actual, Some("myrepo".to_string()));
     }
 
     #[test]
     fn test_extract_project_name_no_git_suffix() {
-        assert_eq!(
-            extract_project_name_from_url("https://github.com/user/myrepo"),
-            Some("myrepo".to_string())
-        );
+        // Given
+        // (no setup needed)
+        // When
+        let actual = extract_project_name_from_url("https://github.com/user/myrepo");
+        // Then
+        assert_eq!(actual, Some("myrepo".to_string()));
     }
 
     #[test]
     fn test_parse_worktree_list_multiple_worktrees() {
-        // Arrange
+        // Given
         let output = "\
 worktree /path/to/main
 HEAD abc123def456
@@ -848,10 +854,10 @@ branch refs/heads/feature-branch
 
 ";
 
-        // Act
+        // When
         let worktrees = parse_worktree_list(output);
 
-        // Assert
+        // Then
         assert_eq!(worktrees.len(), 2);
         assert_eq!(worktrees[0].path, PathBuf::from("/path/to/main"));
         assert_eq!(worktrees[0].branch, Some("main".to_string()));
@@ -861,7 +867,7 @@ branch refs/heads/feature-branch
 
     #[test]
     fn test_parse_worktree_list_detached_head() {
-        // Arrange
+        // Given
         let output = "\
 worktree /path/to/detached
 HEAD abc123def456
@@ -869,10 +875,10 @@ detached
 
 ";
 
-        // Act
+        // When
         let worktrees = parse_worktree_list(output);
 
-        // Assert
+        // Then
         assert_eq!(worktrees.len(), 1);
         assert_eq!(worktrees[0].path, PathBuf::from("/path/to/detached"));
         assert_eq!(worktrees[0].branch, None);
@@ -880,22 +886,25 @@ detached
 
     #[test]
     fn test_parse_worktree_list_empty_output() {
+        // Given
         let output = "";
+        // When
         let worktrees = parse_worktree_list(output);
+        // Then
         assert_eq!(worktrees.len(), 0);
     }
 
     #[test]
     fn test_parse_worktree_list_no_trailing_newline() {
-        // Arrange
+        // Given
         let output = "worktree /path/to/main
 HEAD abc123def456
 branch refs/heads/main";
 
-        // Act
+        // When
         let worktrees = parse_worktree_list(output);
 
-        // Assert
+        // Then
         assert_eq!(worktrees.len(), 1);
         assert_eq!(worktrees[0].path, PathBuf::from("/path/to/main"));
         assert_eq!(worktrees[0].branch, Some("main".to_string()));
@@ -932,6 +941,7 @@ mod branch_name_tests {
 
     #[test]
     fn test_validate_branch_name_accepts_valid_names() {
+        // Given
         let valid = [
             "main",
             "feature/my-branch",
@@ -941,17 +951,22 @@ mod branch_name_tests {
             "UPPER/lower_123",
             "a",
         ];
-        for name in valid {
-            assert!(
-                validate_branch_name(name).is_ok(),
-                "should accept {:?}",
-                name
-            );
+
+        // When
+        let results: Vec<_> = valid
+            .iter()
+            .map(|name| validate_branch_name(name))
+            .collect();
+
+        // Then
+        for (name, result) in valid.iter().zip(results) {
+            assert!(result.is_ok(), "should accept {:?}", name);
         }
     }
 
     #[test]
     fn test_validate_branch_name_rejects_injection_attempts() {
+        // Given
         let invalid = [
             "feature'; do shell script \"rm -rf ~\"",
             "branch$(whoami)",
@@ -961,12 +976,16 @@ mod branch_name_tests {
             "branch!bang",
             "",
         ];
-        for name in invalid {
-            assert!(
-                validate_branch_name(name).is_err(),
-                "should reject {:?}",
-                name
-            );
+
+        // When
+        let results: Vec<_> = invalid
+            .iter()
+            .map(|name| validate_branch_name(name))
+            .collect();
+
+        // Then
+        for (name, result) in invalid.iter().zip(results) {
+            assert!(result.is_err(), "should reject {:?}", name);
         }
     }
 }
@@ -1101,79 +1120,109 @@ mod git_cli_tests {
 
     #[test]
     fn get_repo_root_returns_top_level_from_subdirectory() {
+        // Given
         let repo = TestRepo::new();
         let sub = repo.work.join("nested");
         fs::create_dir_all(&sub).unwrap();
-
+        // When
         let root = Git::in_dir(&sub).get_repo_root().unwrap();
-
+        // Then
         assert_eq!(root, repo.work);
     }
 
     #[test]
     fn get_repo_root_fails_outside_repository() {
+        // Given
         let dir = not_a_repo();
-
+        // When
         let result = Git::in_dir(dir.path()).get_repo_root();
-
+        // Then
         assert!(matches!(result, Err(GitError::NotAGitRepo)));
     }
 
     #[test]
     fn get_project_name_uses_origin_url() {
+        // Given
         let repo = TestRepo::new();
-
-        assert_eq!(repo.git().get_project_name().unwrap(), repo.project);
+        // When
+        let actual = repo.git().get_project_name().unwrap();
+        // Then
+        assert_eq!(actual, repo.project);
     }
 
     #[test]
     fn get_project_name_falls_back_to_directory_name() {
+        // Given
         let (_tmp, path) = standalone_repo();
-
+        // When
         let name = Git::in_dir(&path).get_project_name().unwrap();
-
+        // Then
         assert_eq!(name, path.file_name().unwrap().to_str().unwrap());
     }
 
     #[test]
     fn get_project_name_fails_outside_repository() {
+        // Given
+        // (no setup needed)
+        // When
         let dir = not_a_repo();
-
+        // Then
         assert!(Git::in_dir(dir.path()).get_project_name().is_err());
     }
 
     #[test]
     fn extract_project_name_rejects_empty_url() {
-        assert_eq!(extract_project_name_from_url(""), None);
+        // Given
+        // (no setup needed)
+        // When
+        let actual = extract_project_name_from_url("");
+        // Then
+        assert_eq!(actual, None);
     }
 
     #[test]
-    fn create_list_and_remove_worktree() {
+    fn create_and_list_worktree() {
+        // Given
         let repo = TestRepo::new();
         let git = repo.git();
         let wt_path = repo.sibling("wt-feature");
 
+        // When
         git.create_worktree(&wt_path, "feature").unwrap();
         let worktrees = git.list_worktrees().unwrap();
 
+        // Then
         assert_eq!(worktrees.len(), 2);
         assert_eq!(worktrees[0].path, repo.work);
         assert_eq!(worktrees[1].branch.as_deref(), Some("feature"));
         assert_eq!(git.get_primary_worktree(&wt_path).unwrap(), repo.work);
+    }
 
+    #[test]
+    fn remove_worktree_deletes_directory_and_registration() {
+        // Given
+        let repo = TestRepo::new();
+        let git = repo.git();
+        let wt_path = repo.sibling("wt-feature");
+        git.create_worktree(&wt_path, "feature").unwrap();
+
+        // When
         git.remove_worktree(&wt_path).unwrap();
+
+        // Then
         assert_eq!(git.list_worktrees().unwrap().len(), 1);
         assert!(!wt_path.exists());
     }
 
     #[test]
     fn create_worktree_checks_out_existing_branch() {
+        // Given
         let repo = TestRepo::new();
         run_git(&repo.work, &["branch", "existing"]);
         let wt_path = repo.sibling("wt-existing");
-
+        // When
         repo.git().create_worktree(&wt_path, "existing").unwrap();
-
+        // Then
         assert_eq!(
             run_git(&wt_path, &["rev-parse", "--abbrev-ref", "HEAD"]),
             "existing"
@@ -1182,26 +1231,31 @@ mod git_cli_tests {
 
     #[test]
     fn create_worktree_fails_when_branch_checked_out_elsewhere() {
+        // Given
         let repo = TestRepo::new();
-
+        // When
         let result = repo.git().create_worktree(&repo.sibling("wt-main"), "main");
-
+        // Then
         assert!(matches!(result, Err(GitError::WorktreeCreationFailed(_))));
     }
 
     #[test]
     fn create_worktree_fails_outside_repository() {
+        // Given
         let dir = not_a_repo();
-
+        // When
         let result = Git::in_dir(dir.path()).create_worktree(&dir.path().join("wt"), "branch");
-
+        // Then
         assert!(matches!(result, Err(GitError::WorktreeCreationFailed(_))));
     }
 
     #[test]
     fn list_worktrees_fails_outside_repository() {
+        // Given
+        // (no setup needed)
+        // When
         let dir = not_a_repo();
-
+        // Then
         assert!(matches!(
             Git::in_dir(dir.path()).list_worktrees(),
             Err(GitError::CommandFailed(_))
@@ -1210,97 +1264,122 @@ mod git_cli_tests {
 
     #[test]
     fn get_primary_worktree_fails_outside_repository() {
+        // Given
+        // (no setup needed)
+        // When
         let dir = not_a_repo();
-
+        // Then
         assert!(Git::new().get_primary_worktree(dir.path()).is_err());
     }
 
     #[test]
     fn remove_worktree_fails_for_unknown_path() {
+        // Given
         let repo = TestRepo::new();
-
+        // When
         let result = repo.git().remove_worktree(&repo.sibling("missing"));
-
+        // Then
         assert!(matches!(result, Err(GitError::WorktreeRemovalFailed(_))));
     }
 
     #[test]
     fn get_local_origin_resolves_absolute_path() {
+        // Given
         let repo = TestRepo::new();
 
+        // When
         let origin = Git::new().get_local_origin(&repo.work).unwrap();
 
+        // Then
         assert_eq!(origin, Some(repo.origin.clone()));
     }
 
     #[test]
-    fn get_local_origin_resolves_relative_and_file_urls() {
+    fn get_local_origin_resolves_relative_path() {
+        // Given
         let repo = TestRepo::new();
-        let git = Git::new();
+        let relative = format!("../{}.git", repo.project);
+        run_git(&repo.work, &["remote", "set-url", "origin", &relative]);
 
-        run_git(
-            &repo.work,
-            &[
-                "remote",
-                "set-url",
-                "origin",
-                &format!("../{}.git", repo.project),
-            ],
-        );
-        assert_eq!(
-            git.get_local_origin(&repo.work).unwrap(),
-            Some(repo.origin.clone())
-        );
+        // When
+        let origin = Git::new().get_local_origin(&repo.work).unwrap();
 
-        let file_url = format!("file://{}", repo.origin.display());
-        run_git(&repo.work, &["remote", "set-url", "origin", &file_url]);
-        assert_eq!(
-            git.get_local_origin(&repo.work).unwrap(),
-            Some(repo.origin.clone())
-        );
+        // Then
+        assert_eq!(origin, Some(repo.origin.clone()));
     }
 
     #[test]
-    fn get_local_origin_ignores_remote_and_missing_origins() {
+    fn get_local_origin_resolves_file_url() {
+        // Given
         let repo = TestRepo::new();
-        let git = Git::new();
+        let file_url = format!("file://{}", repo.origin.display());
+        run_git(&repo.work, &["remote", "set-url", "origin", &file_url]);
 
-        run_git(
-            &repo.work,
-            &[
-                "remote",
-                "set-url",
-                "origin",
-                "git@github.com:user/repo.git",
-            ],
-        );
-        assert_eq!(git.get_local_origin(&repo.work).unwrap(), None);
+        // When
+        let origin = Git::new().get_local_origin(&repo.work).unwrap();
 
+        // Then
+        assert_eq!(origin, Some(repo.origin.clone()));
+    }
+
+    #[test]
+    fn get_local_origin_ignores_remote_url() {
+        // Given
+        let repo = TestRepo::new();
+        let remote = "git@github.com:user/repo.git";
+        run_git(&repo.work, &["remote", "set-url", "origin", remote]);
+
+        // When
+        let origin = Git::new().get_local_origin(&repo.work).unwrap();
+
+        // Then
+        assert_eq!(origin, None);
+    }
+
+    #[test]
+    fn get_local_origin_ignores_missing_path() {
+        // Given
+        let repo = TestRepo::new();
         let missing = repo.sibling("does-not-exist.git");
-        run_git(
-            &repo.work,
-            &["remote", "set-url", "origin", missing.to_str().unwrap()],
-        );
-        assert_eq!(git.get_local_origin(&repo.work).unwrap(), None);
+        let missing = missing.to_str().unwrap();
+        run_git(&repo.work, &["remote", "set-url", "origin", missing]);
 
+        // When
+        let origin = Git::new().get_local_origin(&repo.work).unwrap();
+
+        // Then
+        assert_eq!(origin, None);
+    }
+
+    #[test]
+    fn get_local_origin_is_none_without_origin_remote() {
+        // Given
         let (_tmp, standalone) = standalone_repo();
-        assert_eq!(git.get_local_origin(&standalone).unwrap(), None);
+
+        // When
+        let origin = Git::new().get_local_origin(&standalone).unwrap();
+
+        // Then
+        assert_eq!(origin, None);
     }
 
     #[test]
     fn get_default_remote_branch_reads_origin_head() {
+        // Given
         let repo = TestRepo::new();
-
-        assert_eq!(
-            repo.git().get_default_remote_branch().unwrap(),
-            "origin/main"
-        );
+        // When
+        let actual = repo.git().get_default_remote_branch().unwrap();
+        // Then
+        assert_eq!(actual, "origin/main");
     }
 
     #[test]
     fn get_default_remote_branch_falls_back_without_origin_head() {
+        // Given
+        // (no setup needed)
+        // When
         let (_tmp, path) = standalone_repo();
-
+        // Then
         assert_eq!(
             Git::in_dir(&path).get_default_remote_branch().unwrap(),
             DEFAULT_REMOTE_BRANCH
@@ -1308,91 +1387,139 @@ mod git_cli_tests {
     }
 
     #[test]
-    fn status_and_commit_flow() {
+    fn status_is_empty_for_clean_repository() {
+        // Given
+        let repo = TestRepo::new();
+
+        // When
+        let status = Git::new().get_status_porcelain(&repo.work).unwrap();
+
+        // Then
+        assert_eq!(status, "");
+    }
+
+    #[test]
+    fn status_lists_untracked_files() {
+        // Given
+        let repo = TestRepo::new();
+        fs::write(repo.work.join("new.txt"), "new\n").unwrap();
+
+        // When
+        let status = Git::new().get_status_porcelain(&repo.work).unwrap();
+
+        // Then
+        assert!(status.contains("new.txt"));
+    }
+
+    #[test]
+    fn commit_all_commits_untracked_files() {
+        // Given
         let repo = TestRepo::new();
         let git = Git::new();
-        assert_eq!(git.get_status_porcelain(&repo.work).unwrap(), "");
-
         fs::write(repo.work.join("new.txt"), "new\n").unwrap();
-        let status = git.get_status_porcelain(&repo.work).unwrap();
-        assert!(status.contains("new.txt"));
 
+        // When
         git.commit_all(&repo.work, "add new file").unwrap();
+
+        // Then
         assert_eq!(git.get_status_porcelain(&repo.work).unwrap(), "");
-        assert!(
-            git.get_latest_commit(&repo.work)
-                .unwrap()
-                .unwrap()
-                .ends_with("add new file")
-        );
+        let latest = git.get_latest_commit(&repo.work).unwrap().unwrap();
+        assert!(latest.ends_with("add new file"));
     }
 
     #[test]
     fn status_fails_for_missing_directory() {
+        // Given
         let repo = TestRepo::new();
-
         let result = Git::new().get_status_porcelain(&repo.sibling("missing"));
-
-        assert!(matches!(result, Err(GitError::CommandFailed(_))));
+        // When
+        let actual = matches!(result, Err(GitError::CommandFailed(_)));
+        // Then
+        assert!(actual);
     }
 
     #[test]
     fn commit_all_fails_when_nothing_to_commit() {
+        // Given
         let repo = TestRepo::new();
-
         let result = Git::new().commit_all(&repo.work, "empty");
-
-        assert!(matches!(result, Err(GitError::CommitFailed(_))));
+        // When
+        let actual = matches!(result, Err(GitError::CommitFailed(_)));
+        // Then
+        assert!(actual);
     }
 
     #[test]
     fn stage_all_fails_for_missing_directory() {
+        // Given
         let repo = TestRepo::new();
-
         let result = Git::new().stage_all(&repo.sibling("missing"));
-
-        assert!(matches!(result, Err(GitError::CommitFailed(_))));
+        // When
+        let actual = matches!(result, Err(GitError::CommitFailed(_)));
+        // Then
+        assert!(actual);
     }
 
     #[test]
-    fn count_commits_ahead_and_behind() {
+    fn count_commits_ahead_of_base() {
+        // Given
         let repo = TestRepo::new();
-        let git = Git::new();
         commit_file(&repo.work, "a.txt", "a\n");
         commit_file(&repo.work, "b.txt", "b\n");
 
-        assert_eq!(
-            git.count_commits_ahead(&repo.work, "origin/main").unwrap(),
-            2
-        );
-        assert_eq!(
-            git.count_commits_behind(&repo.work, "origin/main").unwrap(),
-            0
-        );
+        // When
+        let ahead = Git::new()
+            .count_commits_ahead(&repo.work, "origin/main")
+            .unwrap();
+        let behind = Git::new()
+            .count_commits_behind(&repo.work, "origin/main")
+            .unwrap();
 
+        // Then
+        assert_eq!(ahead, 2);
+        assert_eq!(behind, 0);
+    }
+
+    #[test]
+    fn count_commits_behind_base() {
+        // Given
+        let repo = TestRepo::new();
+        commit_file(&repo.work, "a.txt", "a\n");
+        commit_file(&repo.work, "b.txt", "b\n");
         run_git(&repo.work, &["checkout", "-q", "origin/main"]);
-        assert_eq!(git.count_commits_ahead(&repo.work, "main").unwrap(), 0);
-        assert_eq!(git.count_commits_behind(&repo.work, "main").unwrap(), 2);
+
+        // When
+        let ahead = Git::new().count_commits_ahead(&repo.work, "main").unwrap();
+        let behind = Git::new().count_commits_behind(&repo.work, "main").unwrap();
+
+        // Then
+        assert_eq!(ahead, 0);
+        assert_eq!(behind, 2);
     }
 
     #[test]
     fn count_commits_fails_for_unknown_base() {
+        // Given
         let repo = TestRepo::new();
         let git = Git::new();
-
-        assert!(git.count_commits_ahead(&repo.work, "nope/nope").is_err());
-        assert!(git.count_commits_behind(&repo.work, "nope/nope").is_err());
+        // When
+        let actual_1 = git.count_commits_ahead(&repo.work, "nope/nope").is_err();
+        let actual_2 = git.count_commits_behind(&repo.work, "nope/nope").is_err();
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
     }
 
     #[test]
     fn clone_local_and_fetch() {
+        // Given
         let repo = TestRepo::new();
         let git = Git::new();
         let dest = repo.sibling("clone");
-
         git.clone_local(&repo.origin, &dest).unwrap();
+        // When
         git.fetch_remote(&dest).unwrap();
-
+        // Then
         assert!(dest.join("README.md").exists());
         assert!(matches!(
             git.clone_local(&repo.origin, &dest),
@@ -1402,60 +1529,124 @@ mod git_cli_tests {
 
     #[test]
     fn fetch_remote_fails_without_origin() {
+        // Given
+        // (no setup needed)
+        // When
         let (_tmp, path) = standalone_repo();
-
+        // Then
         assert!(Git::new().fetch_remote(&path).is_err());
     }
 
     #[test]
-    fn checkout_new_branch_variants() {
+    fn checkout_new_branch_switches_to_it() {
+        // Given
         let repo = TestRepo::new();
         let git = Git::new();
 
+        // When
         git.checkout_new_branch(&repo.work, "first").unwrap();
-        assert_eq!(
-            git.get_current_branch(&repo.work).unwrap().as_deref(),
-            Some("first")
-        );
-        assert!(git.checkout_new_branch(&repo.work, "first").is_err());
 
+        // Then
+        let current = git.get_current_branch(&repo.work).unwrap();
+        assert_eq!(current.as_deref(), Some("first"));
+    }
+
+    #[test]
+    fn checkout_new_branch_fails_when_branch_exists() {
+        // Given
+        let repo = TestRepo::new();
+        let git = Git::new();
+        git.checkout_new_branch(&repo.work, "first").unwrap();
+
+        // When
+        let result = git.checkout_new_branch(&repo.work, "first");
+
+        // Then
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn checkout_new_branch_from_start_point() {
+        // Given
+        let repo = TestRepo::new();
+        let git = Git::new();
+
+        // When
         git.checkout_new_branch_from(&repo.work, "second", "origin/main")
             .unwrap();
-        assert_eq!(
-            git.get_current_branch(&repo.work).unwrap().as_deref(),
-            Some("second")
-        );
-        assert!(
-            git.checkout_new_branch_from(&repo.work, "third", "missing/ref")
-                .is_err()
-        );
+
+        // Then
+        let current = git.get_current_branch(&repo.work).unwrap();
+        assert_eq!(current.as_deref(), Some("second"));
     }
 
     #[test]
-    fn get_current_branch_handles_detached_and_missing_repos() {
+    fn checkout_new_branch_from_fails_for_unknown_start_point() {
+        // Given
         let repo = TestRepo::new();
-        let git = Git::new();
+
+        // When
+        let result = Git::new().checkout_new_branch_from(&repo.work, "third", "missing/ref");
+
+        // Then
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn get_current_branch_is_none_when_detached() {
+        // Given
+        let repo = TestRepo::new();
         run_git(&repo.work, &["checkout", "-q", "--detach"]);
 
-        assert_eq!(git.get_current_branch(&repo.work).unwrap(), None);
-        let dir = not_a_repo();
-        assert_eq!(git.get_current_branch(dir.path()).unwrap(), None);
+        // When
+        let branch = Git::new().get_current_branch(&repo.work).unwrap();
+
+        // Then
+        assert_eq!(branch, None);
     }
 
     #[test]
-    fn push_with_and_without_upstream() {
+    fn get_current_branch_is_none_outside_repository() {
+        // Given
+        let dir = not_a_repo();
+
+        // When
+        let branch = Git::new().get_current_branch(dir.path()).unwrap();
+
+        // Then
+        assert_eq!(branch, None);
+    }
+
+    #[test]
+    fn push_publishes_commits_to_tracked_upstream() {
+        // Given
         let repo = TestRepo::new();
         let git = Git::new();
-
         commit_file(&repo.work, "pushed.txt", "x\n");
-        assert!(!git.is_fully_pushed(&repo.work));
-        git.push(&repo.work).unwrap();
-        assert!(git.is_fully_pushed(&repo.work));
+        let before = git.is_fully_pushed(&repo.work);
 
+        // When
+        git.push(&repo.work).unwrap();
+
+        // Then
+        assert!(!before);
+        assert!(git.is_fully_pushed(&repo.work));
+    }
+
+    #[test]
+    fn push_sets_upstream_for_new_branch() {
+        // Given
+        let repo = TestRepo::new();
+        let git = Git::new();
         git.checkout_new_branch(&repo.work, "topic").unwrap();
         commit_file(&repo.work, "topic.txt", "y\n");
-        assert!(!git.is_fully_pushed(&repo.work), "no upstream yet");
+        let before = git.is_fully_pushed(&repo.work);
+
+        // When
         git.push(&repo.work).unwrap();
+
+        // Then
+        assert!(!before, "no upstream yet");
         assert!(git.is_fully_pushed(&repo.work));
         assert_eq!(
             run_git(&repo.origin, &["rev-parse", "--verify", "topic"]),
@@ -1465,58 +1656,69 @@ mod git_cli_tests {
 
     #[test]
     fn push_fails_from_detached_head() {
+        // Given
         let repo = TestRepo::new();
         run_git(&repo.work, &["checkout", "-q", "--detach"]);
-
         let result = Git::new().push(&repo.work);
-
-        assert!(matches!(result, Err(GitError::PushFailed(_))));
+        // When
+        let actual = matches!(result, Err(GitError::PushFailed(_)));
+        // Then
+        assert!(actual);
     }
 
     #[test]
     fn push_fails_when_remote_is_unreachable() {
+        // Given
         let repo = TestRepo::new();
         let git = Git::new();
         git.checkout_new_branch(&repo.work, "topic").unwrap();
         let missing = repo.sibling("gone.git");
+        // When
         run_git(
             &repo.work,
             &["remote", "set-url", "origin", missing.to_str().unwrap()],
         );
-
+        // Then
         assert!(matches!(git.push(&repo.work), Err(GitError::PushFailed(_))));
     }
 
     #[test]
     fn get_changes_summary_includes_all_sections() {
+        // Given
         let repo = TestRepo::new();
         fs::write(repo.work.join("README.md"), "changed\n").unwrap();
-
         let summary = Git::new().get_changes_summary(&repo.work).unwrap();
-
-        assert!(summary.contains("Uncommitted changes:"));
-        assert!(summary.contains("Diff stat:"));
-        assert!(summary.contains("Recent commits:"));
+        // When
+        let actual_1 = summary.contains("Uncommitted changes:");
+        let actual_2 = summary.contains("Diff stat:");
+        let actual_3 = summary.contains("Recent commits:");
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
+        assert!(actual_3);
     }
 
     #[test]
     fn get_changes_summary_propagates_status_error() {
+        // Given
         let repo = TestRepo::new();
-
-        assert!(
-            Git::new()
-                .get_changes_summary(&repo.sibling("missing"))
-                .is_err()
-        );
+        // When
+        let actual = Git::new()
+            .get_changes_summary(&repo.sibling("missing"))
+            .is_err();
+        // Then
+        assert!(actual);
     }
 
     #[test]
     fn rename_branch_success_and_failure() {
+        // Given
         let repo = TestRepo::new();
         let git = Git::new();
         run_git(&repo.work, &["branch", "taken"]);
-
+        // When
         git.rename_branch(&repo.work, "renamed").unwrap();
+        // Then
         assert_eq!(
             git.get_current_branch(&repo.work).unwrap().as_deref(),
             Some("renamed")
@@ -1526,9 +1728,11 @@ mod git_cli_tests {
 
     #[test]
     fn get_latest_commit_is_none_without_commits() {
+        // Given
         let tmp = TempDir::new().unwrap();
+        // When
         run_git(tmp.path(), &["init", "-b", "main"]);
-
+        // Then
         assert_eq!(Git::new().get_latest_commit(tmp.path()).unwrap(), None);
     }
 }

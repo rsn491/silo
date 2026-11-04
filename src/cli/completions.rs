@@ -42,12 +42,21 @@ mod tests {
 
     #[test]
     fn generates_script_mentioning_subcommands() {
-        for shell in [Shell::Bash, Shell::Zsh, Shell::Fish] {
-            let mut out = Vec::new();
+        // Given
+        let shells = [Shell::Bash, Shell::Zsh, Shell::Fish];
 
-            CompletionsCommand::new().write_to(CompletionsArgs { shell }, &mut out);
+        // When
+        let scripts: Vec<String> = shells
+            .iter()
+            .map(|shell| {
+                let mut out = Vec::new();
+                CompletionsCommand::new().write_to(CompletionsArgs { shell: *shell }, &mut out);
+                String::from_utf8(out).unwrap()
+            })
+            .collect();
 
-            let script = String::from_utf8(out).unwrap();
+        // Then
+        for (shell, script) in shells.iter().zip(scripts) {
             assert!(script.contains("silo"), "{shell} script names the binary");
             assert!(
                 script.contains("launch"),
@@ -58,6 +67,13 @@ mod tests {
 
     #[test]
     fn cli_definition_is_valid() {
-        crate::Cli::command().debug_assert();
+        // Given
+        let mut command = crate::Cli::command();
+
+        // When
+        command.build();
+
+        // Then — clap panics on invalid definitions; the assertion makes that explicit.
+        command.debug_assert();
     }
 }

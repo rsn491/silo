@@ -188,85 +188,85 @@ mod tests {
 
     #[test]
     fn acquire_creates_lock_file() {
-        // Arrange
+        // Given
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
 
-        // Act
+        // When
         let _guard = lock
             .try_acquire()
             .expect("should acquire lock on fresh directory");
 
-        // Assert
+        // Then
         assert!(dir.path().join(LOCK_FILE_NAME).exists());
     }
 
     #[test]
     fn lock_file_contains_current_pid() {
-        // Arrange
+        // Given
         let dir = tmp();
         let _guard = WorkspaceLock::new(dir.path())
             .try_acquire()
             .expect("should acquire lock on fresh directory");
 
-        // Act
+        // When
         let stored_pid = read_pid_from_lock(&dir.path().join(LOCK_FILE_NAME))
             .expect("lock file should contain a PID");
 
-        // Assert
+        // Then
         assert_eq!(stored_pid, std::process::id());
     }
 
     #[test]
     fn is_locked_reflects_live_process() {
-        // Arrange
+        // Given
         let dir = tmp();
         assert!(!WorkspaceLock::is_locked(dir.path()));
 
-        // Act
+        // When
         let _guard = WorkspaceLock::new(dir.path())
             .try_acquire()
             .expect("should acquire lock on fresh directory");
 
-        // Assert
+        // Then
         assert!(WorkspaceLock::is_locked(dir.path()));
     }
 
     #[test]
     fn acquire_fails_when_already_locked_by_live_pid() {
-        // Arrange
+        // Given
         let dir = tmp();
         let _guard = WorkspaceLock::new(dir.path())
             .try_acquire()
             .expect("should acquire lock on fresh directory");
 
-        // Act
+        // When
         let err = WorkspaceLock::new(dir.path()).try_acquire().unwrap_err();
 
-        // Assert
+        // Then
         assert!(matches!(err, LockError::AlreadyLocked { .. }));
         assert!(dir.path().join(LOCK_FILE_NAME).exists());
     }
 
     #[test]
     fn release_removes_lock_file() {
-        // Arrange
+        // Given
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
         let guard = lock
             .try_acquire()
             .expect("should acquire lock on fresh directory");
 
-        // Act
+        // When
         drop(guard);
 
-        // Assert
+        // Then
         assert!(!dir.path().join(LOCK_FILE_NAME).exists());
     }
 
     #[test]
     fn acquire_after_release_succeeds() {
-        // Arrange
+        // Given
         let dir = tmp();
         let lock = WorkspaceLock::new(dir.path());
         let guard = lock
@@ -274,10 +274,10 @@ mod tests {
             .expect("should acquire lock on fresh directory");
         drop(guard);
 
-        // Act
+        // When
         let _guard = lock.try_acquire().expect("should reacquire released lock");
 
-        // Assert
+        // Then
         assert!(dir.path().join(LOCK_FILE_NAME).exists());
     }
 
@@ -287,17 +287,17 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn stale_lock_is_reclaimed_on_acquire() {
-        // Arrange
+        // Given
         let dir = tmp();
         // Write a lock file with a dead PID.
         fs::write(dir.path().join(LOCK_FILE_NAME), b"0").expect("failed to write lock file");
 
-        // Act
+        // When
         let _guard = WorkspaceLock::new(dir.path())
             .try_acquire()
             .expect("should reclaim stale lock");
 
-        // Assert
+        // Then
         let stored_pid = read_pid_from_lock(&dir.path().join(LOCK_FILE_NAME))
             .expect("lock file should contain a PID");
         assert_eq!(stored_pid, std::process::id());
@@ -307,36 +307,43 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn stale_lock_is_not_reported_as_locked() {
-        // Arrange
+        // Given
         let dir = tmp();
         fs::write(dir.path().join(LOCK_FILE_NAME), b"0").expect("failed to write lock file");
 
-        // Act / Assert
-        assert!(!WorkspaceLock::is_locked(dir.path()));
+        // When
+        let locked = WorkspaceLock::is_locked(dir.path());
+
+        // Then
+        assert!(!locked);
     }
 
     /// A lock file with an unreadable/garbage PID is treated conservatively
     /// as locked (don't accidentally stomp on something we can't identify).
     #[test]
     fn malformed_lock_file_is_treated_as_locked() {
-        // Arrange
+        // Given
         let dir = tmp();
         fs::write(dir.path().join(LOCK_FILE_NAME), b"not-a-pid")
             .expect("failed to write lock file");
 
-        // Act / Assert
-        assert!(WorkspaceLock::is_locked(dir.path()));
+        // When
+        let locked = WorkspaceLock::is_locked(dir.path());
+
+        // Then
+        assert!(locked);
     }
 
     #[test]
     fn guard_does_not_remove_a_replacement_lock() {
+        // Given
         let dir = tmp();
         let guard = WorkspaceLock::new(dir.path()).try_acquire().unwrap();
         let path = dir.path().join(LOCK_FILE_NAME);
         fs::write(&path, "replacement").unwrap();
-
+        // When
         drop(guard);
-
+        // Then
         assert_eq!(fs::read_to_string(path).unwrap(), "replacement");
     }
 }

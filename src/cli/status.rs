@@ -119,6 +119,7 @@ mod tests {
 
     #[test]
     fn renders_workspace_rows() {
+        // Given
         let mut manager = MockWorkspaceManager::new();
         manager
             .expect_get_all()
@@ -140,9 +141,9 @@ mod tests {
                     },
                 ])
             });
-
+        // When
         let output = render(manager).unwrap();
-
+        // Then
         assert!(output.contains("Silo Workspaces"));
         assert!(output.contains("original-1234abcd"));
         assert!(output.contains("(detached)"));
@@ -153,21 +154,24 @@ mod tests {
 
     #[test]
     fn renders_empty_message() {
+        // Given
         let mut manager = MockWorkspaceManager::new();
         manager.expect_get_all().returning(|_| Ok(vec![]));
-
+        // When
         let output = render(manager).unwrap();
-
+        // Then
         assert!(output.contains("No workspaces found."));
     }
 
     #[test]
     fn propagates_listing_errors() {
+        // Given
         let mut manager = MockWorkspaceManager::new();
+        // When
         manager
             .expect_get_all()
             .returning(|_| Err(GitError::NotAGitRepo));
-
+        // Then
         assert!(render(manager).is_err());
     }
 }

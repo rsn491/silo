@@ -12,7 +12,7 @@
 |---------------|-----------|
 | **Language** | Rust 2024 edition (minimum 1.93.0) |
 | **Error Handling** | `thiserror` derive macros + `From` implementations |
-| **Testing** | Unit tests in-file (`#[cfg(test)]`) |
+| **Testing** | Unit tests in-file (`#[cfg(test)]`), each body delimited by `// Given`, `// When`, `// Then` comments |
 | **Quality Gates** | Pre-commit hooks: fmt, clippy, test |
 
 # Architecture

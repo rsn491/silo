@@ -242,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_create_workspace() {
-        // Arrange
+        // Given
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_project_name()
@@ -250,10 +250,10 @@ mod tests {
         mock_git.expect_create_worktree().returning(|_, _| Ok(()));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
-        // Act
+        // When
         let result = workspace.create(None, false, &HashSet::new());
 
-        // Assert
+        // Then
         assert!(result.is_ok());
         let path = result.expect("workspace creation should succeed");
         assert!(path.to_string_lossy().contains("test-project"));
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn test_get_status_for_specific_worktree() {
-        // Arrange
+        // Given
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
@@ -292,12 +292,12 @@ mod tests {
             .returning(|_, _| Ok(0));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
-        // Act
+        // When
         let status = workspace
             .get_git_status(worktree1_info)
             .expect("get_git_status should succeed");
 
-        // Assert
+        // Then
         assert_eq!(status.path, worktree1_path);
         assert_eq!(status.branch, Some("feature".to_string()));
         assert!(status.has_uncommitted_changes);
@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_get_status_with_uncommitted_changes() {
-        // Arrange
+        // Given
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
@@ -338,12 +338,12 @@ mod tests {
             .returning(|_, _| Ok(0));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
-        // Act
+        // When
         let status = workspace
             .get_git_status(worktree1_info)
             .expect("get_git_status should succeed");
 
-        // Assert
+        // Then
         assert_eq!(status.path, worktree1_path);
         assert!(status.has_uncommitted_changes);
         assert_eq!(status.uncommitted_file_count, 3);
@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn test_get_status_for_clean_worktree() {
-        // Arrange
+        // Given
         let mut mock_git = MockGitOperations::new();
         let worktree2_path = PathBuf::from("/repo/worktree2");
         let worktree2_info = GitWorkspaceInfo {
@@ -374,12 +374,12 @@ mod tests {
             .returning(|_, _| Ok(0));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
-        // Act
+        // When
         let status = workspace
             .get_git_status(worktree2_info)
             .expect("get_git_status should succeed");
 
-        // Assert
+        // Then
         assert_eq!(status.path, worktree2_path);
         assert!(!status.has_uncommitted_changes);
         assert_eq!(status.uncommitted_file_count, 0);
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_get_status_with_divergence() {
-        // Arrange
+        // Given
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree1_info = GitWorkspaceInfo {
             path: worktree1_path.clone(),
@@ -412,25 +412,25 @@ mod tests {
             .returning(|_, _| Ok(1));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
-        // Act
+        // When
         let status = workspace
             .get_git_status(worktree1_info)
             .expect("get_git_status should succeed");
 
-        // Assert
+        // Then
         assert_eq!(status.commits_ahead, 5);
         assert_eq!(status.commits_behind, 1);
     }
 
     #[test]
     fn test_get_status_for_nonexistent_worktree() {
+        // Given
         let nonexistent_path = PathBuf::from("/repo/nonexistent");
         let nonexistent_info = GitWorkspaceInfo {
             path: nonexistent_path.clone(),
             branch: Some("feature".to_string()),
             ..Default::default()
         };
-
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_default_remote_branch()
@@ -444,12 +444,12 @@ mod tests {
         mock_git
             .expect_count_commits_behind()
             .returning(|_, _| Ok(0));
-
         let workspace = GitWorktreeWorkspace::new(mock_git);
+
+        // When
         let result = workspace.get_git_status(nonexistent_info);
 
-        // Mock returns Ok with default values (no uncommitted changes, no divergence).
-        assert!(result.is_ok());
+        // Then — mock returns Ok with default values (no uncommitted changes, no divergence).
         let status = result.expect("get_git_status should succeed");
         assert_eq!(status.path, nonexistent_path);
         assert!(!status.has_uncommitted_changes);
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_get_all_excludes_main() {
-        // Arrange
+        // Given
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
 
@@ -505,12 +505,12 @@ mod tests {
             .returning(|_| Ok(Some("abc1234 initial commit".to_string())));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
-        // Act
+        // When
         let all = workspace
             .get_all(WorkspaceListingScope::ManagedOnly)
             .expect("get_all should succeed with mock data");
 
-        // Assert
+        // Then
         // Should only return the non-main worktree with status populated.
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].path, worktree1_path);
@@ -520,6 +520,7 @@ mod tests {
 
     #[test]
     fn test_get_all_inclusive_adds_main_with_status() {
+        // Given
         let repo_root = PathBuf::from("/repo");
         let worktree_path = PathBuf::from("/worktree");
         let worktrees = vec![
@@ -534,7 +535,6 @@ mod tests {
                 ..Default::default()
             },
         ];
-
         let root_for_status = repo_root.clone();
         let mut mock_git = MockGitOperations::new();
         mock_git
@@ -565,22 +565,25 @@ mod tests {
         mock_git
             .expect_get_latest_commit()
             .returning(|_| Ok(Some("abc1234 summary".to_string())));
-
         let all = GitWorktreeWorkspace::new(mock_git)
             .get_all(WorkspaceListingScope::ManagedAndOriginal)
             .expect("inclusive listing should succeed");
-
-        assert_eq!(all.len(), 2);
+        // When
+        let actual_1 = all.len();
+        let actual_2 = all[0].branch.as_deref();
+        let actual_3 = all[0].latest_commit.as_deref();
+        // Then
+        assert_eq!(actual_1, 2);
         assert_eq!(all[0].path, repo_root);
-        assert_eq!(all[0].branch.as_deref(), Some("main"));
+        assert_eq!(actual_2, Some("main"));
         assert!(all[0].has_uncommitted_changes);
         assert_eq!(all[0].commits_ahead, 1);
-        assert_eq!(all[0].latest_commit.as_deref(), Some("abc1234 summary"));
+        assert_eq!(actual_3, Some("abc1234 summary"));
     }
 
     #[test]
     fn test_get_all_includes_clean_workspaces() {
-        // Arrange
+        // Given
         let repo_root = PathBuf::from("/repo");
         let worktree1_path = PathBuf::from("/repo/worktree1");
         let worktree2_path = PathBuf::from("/repo/worktree2");
@@ -631,12 +634,12 @@ mod tests {
             .returning(|_| Ok(Some("abc1234 initial commit".to_string())));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
-        // Act
+        // When
         let all = workspace
             .get_all(WorkspaceListingScope::ManagedOnly)
             .expect("get_all should succeed with mock data");
 
-        // Assert
+        // Then
         // get_all returns all non-main worktrees including clean ones.
         assert_eq!(all.len(), 2);
         let dirty = all
@@ -653,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_skips_worktrees_with_unpushed_commits() {
-        // Arrange
+        // Given
         let repo_root = PathBuf::from("/repo");
         let silo_dir = PathBuf::from("/Users/test/.silo");
         let worktree1_path = silo_dir.join("worktree1");
@@ -695,12 +698,12 @@ mod tests {
         let workspace = GitWorktreeWorkspace::new(mock_git);
         let active = HashSet::new();
 
-        // Act
+        // When
         let result = workspace
             .cleanup(&active, true, false)
             .expect("cleanup should succeed"); // Use all: true to include all worktrees.
 
-        // Assert
+        // Then
         // worktree1 should be skipped, worktree2 should be removed.
         assert_eq!(result.removed.len(), 1);
         assert_eq!(result.removed[0].path, worktree2_path);

@@ -144,6 +144,7 @@ mod tests {
 
     #[test]
     fn test_try_rename_renames_to_suggestion() {
+        // Given
         let mut mock_git = renamable_git();
         mock_git
             .expect_rename_branch()
@@ -151,14 +152,15 @@ mod tests {
             .times(1)
             .returning(|_, _| Ok(()));
         let service = GitBranchService::new(agent_replying(Ok("Add Auth")));
-
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
-
+        // Then
         assert!(matches!(outcome, BranchRenameOutcome::Renamed(name) if name == "add-auth"));
     }
 
     #[test]
     fn test_try_rename_appends_suffix_when_name_taken() {
+        // Given
         let mut mock_git = renamable_git();
         mock_git
             .expect_rename_branch()
@@ -176,8 +178,10 @@ mod tests {
             .returning(|_, _| Ok(()));
         let service = GitBranchService::new(agent_replying(Ok("add-auth")));
 
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
 
+        // Then
         match outcome {
             BranchRenameOutcome::Renamed(name) => {
                 assert!(name.starts_with("add-auth-"));
@@ -189,15 +193,16 @@ mod tests {
 
     #[test]
     fn test_try_rename_reports_failed_fallback_rename() {
+        // Given
         let mut mock_git = renamable_git();
         mock_git
             .expect_rename_branch()
             .times(2)
             .returning(|_, _| Err(GitError::CommandFailed("branch already exists".to_string())));
         let service = GitBranchService::new(agent_replying(Ok("add-auth")));
-
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
-
+        // Then
         assert!(matches!(
             outcome,
             BranchRenameOutcome::RenameFailed { suggested, .. } if suggested == "add-auth"
@@ -206,15 +211,16 @@ mod tests {
 
     #[test]
     fn test_try_rename_reports_other_rename_errors() {
+        // Given
         let mut mock_git = renamable_git();
         mock_git
             .expect_rename_branch()
             .times(1)
             .returning(|_, _| Err(GitError::CommandFailed("locked".to_string())));
         let service = GitBranchService::new(agent_replying(Ok("add-auth")));
-
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
-
+        // Then
         assert!(matches!(
             outcome,
             BranchRenameOutcome::RenameFailed { error, .. } if error.contains("locked")
@@ -223,10 +229,11 @@ mod tests {
 
     #[test]
     fn test_try_rename_reports_suggestion_failure() {
+        // Given
         let service = GitBranchService::new(agent_replying(Err("agent offline")));
-
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &renamable_git());
-
+        // Then
         assert!(matches!(
             outcome,
             BranchRenameOutcome::SuggestionFailed(e) if e.contains("agent offline")
@@ -235,81 +242,97 @@ mod tests {
 
     #[test]
     fn test_try_rename_skips_when_suggestion_is_empty() {
+        // Given
         let service = GitBranchService::new(agent_replying(Ok("   ")));
-
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &renamable_git());
-
+        // Then
         assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
 
     #[test]
     fn test_is_auto_generated_branch_matches_silo_pattern() {
-        assert!(is_auto_generated_branch("silo-64c05006"));
-        assert!(is_auto_generated_branch("myrepo-a1b2c3d4"));
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = is_auto_generated_branch("silo-64c05006");
+        let actual_2 = is_auto_generated_branch("myrepo-a1b2c3d4");
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
     }
 
     #[test]
     fn test_is_auto_generated_branch_rejects_user_names() {
-        assert!(!is_auto_generated_branch("add-auth-support"));
-        assert!(!is_auto_generated_branch("main"));
-        assert!(!is_auto_generated_branch("fix-login-bug"));
-        // 7 hex chars — too short.
-        assert!(!is_auto_generated_branch("silo-64c0500"));
-        // 9 hex chars — too long.
-        assert!(!is_auto_generated_branch("silo-64c050060"));
-        // Non-hex suffix.
-        assert!(!is_auto_generated_branch("silo-xyz12345"));
+        // Given
+        let user_names = [
+            "add-auth-support",
+            "main",
+            "fix-login-bug",
+            "silo-64c0500",   // 7 hex chars — too short.
+            "silo-64c050060", // 9 hex chars — too long.
+            "silo-xyz12345",  // Non-hex suffix.
+        ];
+
+        // When
+        let results: Vec<bool> = user_names
+            .iter()
+            .map(|name| is_auto_generated_branch(name))
+            .collect();
+
+        // Then
+        assert!(results.iter().all(|generated| !generated));
     }
 
     #[test]
     fn test_try_rename_skips_when_get_current_branch_errors() {
-        // Arrange
+        // Given
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_current_branch()
             .returning(|_| Err(GitError::CommandFailed("git error".to_string())));
         let service = GitBranchService::new(Agent::ClaudeCode);
 
-        // Act
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
 
-        // Assert — any Git error on get_current_branch should be treated as Skipped.
+        // Then — any Git error on get_current_branch should be treated as Skipped.
         assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
 
     #[test]
     fn test_try_rename_skips_when_current_branch_is_none() {
-        // Arrange — detached HEAD state.
+        // Given — detached HEAD state.
         let mut mock_git = MockGitOperations::new();
         mock_git.expect_get_current_branch().returning(|_| Ok(None));
         let service = GitBranchService::new(Agent::ClaudeCode);
 
-        // Act
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
 
-        // Assert
+        // Then
         assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
 
     #[test]
     fn test_try_rename_skips_when_branch_is_not_auto_generated() {
-        // Arrange — user has already renamed the branch.
+        // Given — user has already renamed the branch.
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_current_branch()
             .returning(|_| Ok(Some("my-feature-branch".to_string())));
         let service = GitBranchService::new(Agent::ClaudeCode);
 
-        // Act — get_changes_summary should never be called.
+        // When — get_changes_summary should never be called.
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
 
-        // Assert
+        // Then
         assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
 
     #[test]
     fn test_try_rename_skips_when_changes_summary_is_empty() {
-        // Arrange — auto-generated branch but working tree is clean.
+        // Given — auto-generated branch but working tree is clean.
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_current_branch()
@@ -325,16 +348,16 @@ mod tests {
             .returning(|_| Ok(String::new()));
         let service = GitBranchService::new(Agent::ClaudeCode);
 
-        // Act
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
 
-        // Assert
+        // Then
         assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
 
     #[test]
     fn test_try_rename_skips_when_changes_summary_is_whitespace_only() {
-        // Arrange
+        // Given
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_current_branch()
@@ -350,16 +373,16 @@ mod tests {
             .returning(|_| Ok("   \n\t  ".to_string()));
         let service = GitBranchService::new(Agent::ClaudeCode);
 
-        // Act
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
 
-        // Assert
+        // Then
         assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
 
     #[test]
     fn test_try_rename_skips_when_no_new_commits() {
-        // Arrange — auto-generated branch with 0 commits ahead of base.
+        // Given — auto-generated branch with 0 commits ahead of base.
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_current_branch()
@@ -372,16 +395,16 @@ mod tests {
             .returning(|_, _| Ok(0));
         let service = GitBranchService::new(Agent::ClaudeCode);
 
-        // Act — get_changes_summary should never be called.
+        // When — get_changes_summary should never be called.
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
 
-        // Assert
+        // Then
         assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
 
     #[test]
     fn test_try_rename_skips_when_get_changes_summary_fails() {
-        // Arrange — auto-generated branch but git diff fails.
+        // Given — auto-generated branch but git diff fails.
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_current_branch()
@@ -397,10 +420,10 @@ mod tests {
             .returning(|_| Err(GitError::CommandFailed("git diff failed".to_string())));
         let service = GitBranchService::new(Agent::ClaudeCode);
 
-        // Act
+        // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
 
-        // Assert
+        // Then
         assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
 }

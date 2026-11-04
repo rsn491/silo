@@ -27,8 +27,11 @@ mod tests {
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn reports_missing_osascript() {
+        // Given
+        // (no setup needed)
+        // When
         let err = run_osascript("return 1").unwrap_err();
-
+        // Then
         assert!(err.starts_with("failed to run osascript"));
     }
 }

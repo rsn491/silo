@@ -71,6 +71,11 @@ mod tests {
 
     #[test]
     fn terminal_select_without_items_needs_no_terminal() {
-        assert_eq!(TerminalPrompt.select("Pick", &[], 0).unwrap(), None);
+        // Given
+        // (no setup needed)
+        // When
+        let actual = TerminalPrompt.select("Pick", &[], 0).unwrap();
+        // Then
+        assert_eq!(actual, None);
     }
 }

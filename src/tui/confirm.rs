@@ -184,20 +184,35 @@ mod tests {
 
     #[test]
     fn enter_returns_default_choice() {
-        assert!(run(true, vec![key(KeyCode::Enter)]).0);
-        assert!(!run(false, vec![key(KeyCode::Enter)]).0);
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = run(true, vec![key(KeyCode::Enter)]).0;
+        let actual_2 = !run(false, vec![key(KeyCode::Enter)]).0;
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
     }
 
     #[test]
     fn navigation_keys_toggle_focus() {
-        for code in [
+        // Given
+        let keys = [
             KeyCode::Left,
             KeyCode::Right,
             KeyCode::Tab,
             KeyCode::Char('h'),
             KeyCode::Char('l'),
-        ] {
-            let (result, focused, _) = run(false, vec![key(code), key(KeyCode::Enter)]);
+        ];
+
+        // When
+        let outcomes: Vec<_> = keys
+            .iter()
+            .map(|code| run(false, vec![key(*code), key(KeyCode::Enter)]))
+            .collect();
+
+        // Then
+        for (code, (result, focused, _)) in keys.iter().zip(outcomes) {
             assert!(result, "{:?} should move focus to Yes", code);
             assert!(focused);
         }
@@ -205,33 +220,53 @@ mod tests {
 
     #[test]
     fn quick_select_keys() {
-        assert!(run(false, vec![key(KeyCode::Char('y'))]).0);
-        assert!(run(false, vec![key(KeyCode::Char('Y'))]).0);
-        assert!(!run(true, vec![key(KeyCode::Char('n'))]).0);
-        assert!(!run(true, vec![key(KeyCode::Char('N'))]).0);
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = run(false, vec![key(KeyCode::Char('y'))]).0;
+        let actual_2 = run(false, vec![key(KeyCode::Char('Y'))]).0;
+        let actual_3 = !run(true, vec![key(KeyCode::Char('n'))]).0;
+        let actual_4 = !run(true, vec![key(KeyCode::Char('N'))]).0;
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
+        assert!(actual_3);
+        assert!(actual_4);
     }
 
     #[test]
     fn cancel_keys_decline() {
-        assert!(!run(true, vec![key(KeyCode::Esc)]).0);
-        assert!(!run(true, vec![ctrl('c')]).0);
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = !run(true, vec![key(KeyCode::Esc)]).0;
+        let actual_2 = !run(true, vec![ctrl('c')]).0;
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
     }
 
     #[test]
     fn ignores_unrelated_events() {
+        // Given
         let events = vec![
             Event::FocusGained,
             key(KeyCode::Char('x')),
             key(KeyCode::Enter),
         ];
-
-        assert!(run(true, events).0);
+        // When
+        let actual = run(true, events).0;
+        // Then
+        assert!(actual);
     }
 
     #[test]
     fn renders_prompt_and_buttons() {
+        // Given
+        // (no setup needed)
+        // When
         let (_, _, screen) = run(true, vec![key(KeyCode::Enter)]);
-
+        // Then
         assert!(screen.contains("Proceed?"));
         assert!(screen.contains("[ Yes ]"));
         assert!(screen.contains("[ No ]"));
@@ -240,16 +275,17 @@ mod tests {
 
     #[test]
     fn propagates_event_errors() {
+        // Given
         let mut terminal = test_terminal(60, 7);
         let mut yes_focused = true;
-
+        // When
         let result = run_confirm_loop(
             &mut terminal,
             "Proceed?",
             &mut yes_focused,
             &mut event_source(vec![]),
         );
-
+        // Then
         assert!(result.is_err());
     }
 }

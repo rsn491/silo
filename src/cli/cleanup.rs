@@ -171,6 +171,7 @@ mod tests {
 
     #[test]
     fn declined_confirmation_cancels_cleanup() {
+        // Given
         let mut prompt = MockPrompt::new();
         prompt.expect_confirm().times(1).returning(|_, _| Ok(false));
         let mut workspaces = MockWorkspaceManager::new();
@@ -179,14 +180,17 @@ mod tests {
             yes: false,
             ..yes_args()
         };
-
+        // When
         CleanupCommand::new(workspaces, idle_agents(), prompt)
             .run(args)
             .unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     #[test]
     fn confirmed_cleanup_reports_nothing_to_do() {
+        // Given
         let mut prompt = MockPrompt::new();
         prompt.expect_confirm().times(1).returning(|_, _| Ok(true));
         let mut workspaces = MockWorkspaceManager::new();
@@ -198,14 +202,17 @@ mod tests {
             yes: false,
             ..yes_args()
         };
-
+        // When
         CleanupCommand::new(workspaces, idle_agents(), prompt)
             .run(args)
             .unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     #[test]
     fn reports_removed_failed_and_skipped_workspaces() {
+        // Given
         let mut workspaces = MockWorkspaceManager::new();
         workspaces
             .expect_cleanup()
@@ -241,14 +248,17 @@ mod tests {
             force: true,
             yes: true,
         };
-
+        // When
         CleanupCommand::new(workspaces, idle_agents(), MockPrompt::new())
             .run(args)
             .unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     #[test]
     fn fails_when_agent_listing_fails() {
+        // Given
         let mut listing = MockWorkspaceManager::new();
         listing.expect_get_all().returning(|_| Ok(vec![]));
         let mut process = MockProcessOperations::new();
@@ -257,46 +267,43 @@ mod tests {
             .returning(|_| Err(ProcessError::CommandFailed("ps missing".to_string())));
         let mut workspaces = MockWorkspaceManager::new();
         workspaces.expect_cleanup().never();
-
         let result = CleanupCommand::new(
             workspaces,
             AgentListService::new(listing, process),
             MockPrompt::new(),
         )
         .run(yes_args());
-
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "Failed to list running agents"
-        );
+        // When
+        let actual = result.unwrap_err().to_string();
+        // Then
+        assert_eq!(actual, "Failed to list running agents");
     }
 
     #[test]
     fn propagates_cleanup_errors() {
+        // Given
         let mut workspaces = MockWorkspaceManager::new();
         workspaces
             .expect_cleanup()
             .returning(|_, _, _| Err(CleanupError::Git(GitError::NotAGitRepo)));
-
+        // When
         let result =
             CleanupCommand::new(workspaces, idle_agents(), MockPrompt::new()).run(yes_args());
-
+        // Then
         assert!(result.is_err());
     }
 
     #[test]
     fn workspace_detail_describes_kind() {
-        assert_eq!(
-            workspace_detail(&WorkspaceKind::Worktree, Some("main")),
-            "branch: main"
-        );
-        assert_eq!(
-            workspace_detail(&WorkspaceKind::Worktree, None),
-            "branch: (detached)"
-        );
-        assert_eq!(
-            workspace_detail(&WorkspaceKind::Clone, Some("main")),
-            "checkout clone"
-        );
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = workspace_detail(&WorkspaceKind::Worktree, Some("main"));
+        let actual_2 = workspace_detail(&WorkspaceKind::Worktree, None);
+        let actual_3 = workspace_detail(&WorkspaceKind::Clone, Some("main"));
+        // Then
+        assert_eq!(actual_1, "branch: main");
+        assert_eq!(actual_2, "branch: (detached)");
+        assert_eq!(actual_3, "checkout clone");
     }
 }

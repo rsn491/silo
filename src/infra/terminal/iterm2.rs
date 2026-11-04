@@ -88,91 +88,95 @@ mod tests {
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn test_open_tab_and_split_pane_fail_without_osascript() {
+        // Given
         let path = Path::new("/tmp");
-
-        assert!(matches!(
+        // When
+        let actual_1 = matches!(
             ITerm2.open_tab(path, &Agent::ClaudeCode),
             Err(TerminalError::TabOpenFailed(_))
-        ));
-        assert!(matches!(
+        );
+        let actual_2 = matches!(
             ITerm2.split_pane(path, "silo launch"),
             Err(TerminalError::PaneSplitFailed(_))
-        ));
+        );
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
     }
 
     #[test]
     fn test_build_open_tab_script_contains_path_and_agent() {
-        // Arrange
+        // Given
         let path = "/home/user/workspace";
         let agent = "claude";
 
-        // Act
+        // When
         let script = build_open_tab_script(path, agent);
 
-        // Assert
+        // Then
         assert!(script.contains("cd '/home/user/workspace'"));
         assert!(script.contains("&& claude"));
     }
 
     #[test]
     fn test_build_open_tab_script_escapes_single_quote_in_path() {
-        // Arrange
+        // Given
         let path = "/path/with'quote/repo";
 
-        // Act
+        // When
         let script = build_open_tab_script(path, "claude");
 
-        // Assert — single quotes in paths use POSIX '\'' escaping
+        // Then — single quotes in paths use POSIX '\'' escaping
         assert!(script.contains("cd '/path/with'\\''quote/repo'"));
     }
 
     #[test]
     fn test_build_open_tab_script_escapes_single_quote_in_agent_name() {
-        // Arrange
+        // Given
         let agent = "my'agent";
 
-        // Act
+        // When
         let script = build_open_tab_script("/workspace", agent);
 
-        // Assert
+        // Then
         assert!(script.contains("&& my'\\''agent"));
     }
 
     #[test]
     fn test_build_split_pane_script_contains_path_and_command() {
-        // Arrange
+        // Given
         let path = "/home/user/workspace";
         let command = "silo launch";
 
-        // Act
+        // When
         let script = build_split_pane_script(path, command);
 
-        // Assert
+        // Then
         assert!(script.contains("cd '/home/user/workspace'"));
         assert!(script.contains("&& silo launch"));
     }
 
     #[test]
     fn test_build_split_pane_script_escapes_double_quotes_in_command() {
-        // Arrange
+        // Given
         let command = r#"echo "hello""#;
 
-        // Act
+        // When
         let script = build_split_pane_script("/workspace", command);
 
-        // Assert — double quotes are backslash-escaped so they survive the outer double-quoted string
+        // Then — double quotes are backslash-escaped so they survive the outer double-quoted string
         assert!(script.contains(r#"echo \"hello\""#));
     }
 
     #[test]
     fn test_build_split_pane_script_escapes_single_quote_in_path() {
-        // Arrange
+        // Given
         let path = "/path/it's/here";
 
-        // Act
+        // When
         let script = build_split_pane_script(path, "silo launch");
 
-        // Assert
+        // Then
         assert!(script.contains("cd '/path/it'\\''s/here'"));
     }
 }

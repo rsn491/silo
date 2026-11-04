@@ -392,25 +392,32 @@ mod tests {
 
     #[test]
     fn plain_output_lists_agents() {
+        // Given
         let cmd = command(vec![(10, "claude --resume"), (11, "/usr/bin/mystery")]);
         let mut out = Vec::new();
-
         cmd.write_plain(&mut out).unwrap();
-
         let text = String::from_utf8(out).unwrap();
-        assert!(text.starts_with("PID"));
-        assert!(text.contains("claude"));
-        assert!(text.contains("/silo/ws-main"));
-        assert!(text.contains("(unknown)"));
-        assert!(text.contains("(detached)"));
+        // When
+        let actual_1 = text.starts_with("PID");
+        let actual_2 = text.contains("claude");
+        let actual_3 = text.contains("/silo/ws-main");
+        let actual_4 = text.contains("(unknown)");
+        let actual_5 = text.contains("(detached)");
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
+        assert!(actual_3);
+        assert!(actual_4);
+        assert!(actual_5);
     }
 
     #[test]
     fn plain_output_without_agents() {
+        // Given
         let mut out = Vec::new();
-
+        // When
         command(vec![]).write_plain(&mut out).unwrap();
-
+        // Then
         assert!(
             String::from_utf8(out)
                 .unwrap()
@@ -420,49 +427,68 @@ mod tests {
 
     #[test]
     fn quit_keys_end_the_dashboard() {
+        // Given
         let cmd = command(vec![]);
         let mut agents = Vec::new();
+        let events = [key(KeyCode::Char('q')), key(KeyCode::Esc), ctrl('c')];
 
-        for event in [key(KeyCode::Char('q')), key(KeyCode::Esc), ctrl('c')] {
-            assert_eq!(cmd.handle_tick(Some(event), &mut agents, 8), Tick::Quit);
-        }
+        // When
+        let ticks: Vec<Tick> = events
+            .into_iter()
+            .map(|event| cmd.handle_tick(Some(event), &mut agents, 8))
+            .collect();
+
+        // Then
+        assert_eq!(ticks, vec![Tick::Quit, Tick::Quit, Tick::Quit]);
     }
 
     #[test]
     fn other_events_keep_running_without_refresh() {
+        // Given
         let cmd = command(vec![(10, "claude")]);
         let mut agents = Vec::new();
-
-        assert_eq!(
-            cmd.handle_tick(Some(key(KeyCode::Char('x'))), &mut agents, 8),
-            Tick::Continue
-        );
-        assert_eq!(
-            cmd.handle_tick(Some(Event::FocusGained), &mut agents, 8),
-            Tick::Continue
-        );
-        assert!(agents.is_empty());
+        // When
+        let actual_1 = cmd.handle_tick(Some(key(KeyCode::Char('x'))), &mut agents, 8);
+        let actual_2 = cmd.handle_tick(Some(Event::FocusGained), &mut agents, 8);
+        let actual_3 = agents.is_empty();
+        // Then
+        assert_eq!(actual_1, Tick::Continue);
+        assert_eq!(actual_2, Tick::Continue);
+        assert!(actual_3);
     }
 
     #[test]
     fn timeout_refreshes_agents_and_grows_viewport() {
+        // Given
         let cmd = command(vec![(10, "claude"), (11, "codex")]);
         let mut agents = Vec::new();
-
-        assert_eq!(cmd.handle_tick(None, &mut agents, 8), Tick::Grow(10));
-        assert_eq!(agents.len(), 2);
-        assert_eq!(cmd.handle_tick(None, &mut agents, 10), Tick::Continue);
+        // When
+        let actual_1 = cmd.handle_tick(None, &mut agents, 8);
+        let actual_2 = agents.len();
+        let actual_3 = cmd.handle_tick(None, &mut agents, 10);
+        // Then
+        assert_eq!(actual_1, Tick::Grow(10));
+        assert_eq!(actual_2, 2);
+        assert_eq!(actual_3, Tick::Continue);
     }
 
     #[test]
     fn viewport_height_is_clamped() {
-        assert_eq!(viewport_height(0), 8);
-        assert_eq!(viewport_height(3), 11);
-        assert_eq!(viewport_height(100), 23);
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = viewport_height(0);
+        let actual_2 = viewport_height(3);
+        let actual_3 = viewport_height(100);
+        // Then
+        assert_eq!(actual_1, 8);
+        assert_eq!(actual_2, 11);
+        assert_eq!(actual_3, 23);
     }
 
     #[test]
     fn agent_colors_are_distinct() {
+        // Given
         let colors: std::collections::HashSet<_> = [
             Agent::ClaudeCode,
             Agent::Codex,
@@ -473,20 +499,23 @@ mod tests {
         .iter()
         .map(|a| format!("{:?}", agent_color(a)))
         .collect();
-
-        assert_eq!(colors.len(), 5);
+        // When
+        let actual = colors.len();
+        // Then
+        assert_eq!(actual, 5);
     }
 
     #[test]
     fn dashboard_renders_agents() {
+        // Given
         let mut terminal = test_terminal(100, 10);
         let agents = sample_agents();
-
         terminal
             .draw(|f| draw_ps(f, &agents, &mut TableState::default()))
             .unwrap();
-
+        // When
         let screen = screen_text(&terminal);
+        // Then
         assert!(screen.contains("Running Agents (2)"));
         assert!(screen.contains("codex"));
         assert!(screen.contains("(unknown)"));
@@ -497,12 +526,13 @@ mod tests {
 
     #[test]
     fn dashboard_renders_empty_state() {
+        // Given
         let mut terminal = test_terminal(100, 8);
-
+        // When
         terminal
             .draw(|f| draw_ps(f, &[], &mut TableState::default()))
             .unwrap();
-
+        // Then
         assert!(screen_text(&terminal).contains("No running agents found"));
     }
 }

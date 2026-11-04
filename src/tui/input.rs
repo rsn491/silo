@@ -235,8 +235,11 @@ mod tests {
 
     #[test]
     fn typing_and_enter_returns_value() {
+        // Given
+        // (no setup needed)
+        // When
         let (result, screen) = run("", seq(vec![typed("hello"), vec![key(KeyCode::Enter)]]));
-
+        // Then
         assert_eq!(result.as_deref(), Some("hello"));
         assert!(screen.contains("Commit message"));
         assert!(screen.contains("hello"));
@@ -244,12 +247,19 @@ mod tests {
 
     #[test]
     fn cancel_returns_none() {
-        assert_eq!(run("x", vec![key(KeyCode::Esc)]).0, None);
-        assert_eq!(run("x", vec![ctrl('c')]).0, None);
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = run("x", vec![key(KeyCode::Esc)]).0;
+        let actual_2 = run("x", vec![ctrl('c')]).0;
+        // Then
+        assert_eq!(actual_1, None);
+        assert_eq!(actual_2, None);
     }
 
     #[test]
     fn cursor_movement_and_editing() {
+        // Given
         let events = seq(vec![
             vec![key(KeyCode::Home), key(KeyCode::Left)],
             typed(">"),
@@ -259,14 +269,15 @@ mod tests {
             vec![key(KeyCode::Left), key(KeyCode::Right)],
             vec![key(KeyCode::Enter)],
         ]);
-
+        // When
         let (result, _) = run("abc", events);
-
+        // Then
         assert_eq!(result.as_deref(), Some(">ab!"));
     }
 
     #[test]
     fn delete_removes_character_under_cursor() {
+        // Given
         let events = vec![
             key(KeyCode::Home),
             key(KeyCode::Delete),
@@ -274,53 +285,77 @@ mod tests {
             key(KeyCode::Delete),
             key(KeyCode::Enter),
         ];
-
-        assert_eq!(run("abc", events).0.as_deref(), Some("bc"));
+        // When
+        let actual = run("abc", events).0;
+        // Then
+        assert_eq!(actual.as_deref(), Some("bc"));
     }
 
     #[test]
     fn backspace_at_start_is_noop() {
+        // Given
         let events = vec![
             key(KeyCode::Home),
             key(KeyCode::Backspace),
             key(KeyCode::Enter),
         ];
-
-        assert_eq!(run("abc", events).0.as_deref(), Some("abc"));
+        // When
+        let actual = run("abc", events).0;
+        // Then
+        assert_eq!(actual.as_deref(), Some("abc"));
     }
 
     #[test]
-    fn ctrl_u_and_ctrl_k_clear_around_cursor() {
+    fn ctrl_u_clears_text_before_cursor() {
+        // Given
         let events = vec![
             key(KeyCode::Left),
             key(KeyCode::Left),
             ctrl('u'),
             key(KeyCode::Enter),
         ];
-        assert_eq!(run("abcd", events).0.as_deref(), Some("cd"));
 
+        // When
+        let (result, _) = run("abcd", events);
+
+        // Then
+        assert_eq!(result.as_deref(), Some("cd"));
+    }
+
+    #[test]
+    fn ctrl_k_clears_text_after_cursor() {
+        // Given
         let events = vec![
             key(KeyCode::Home),
             key(KeyCode::Right),
             ctrl('k'),
             key(KeyCode::Enter),
         ];
-        assert_eq!(run("abcd", events).0.as_deref(), Some("a"));
+
+        // When
+        let (result, _) = run("abcd", events);
+
+        // Then
+        assert_eq!(result.as_deref(), Some("a"));
     }
 
     #[test]
     fn ignores_unrelated_events() {
+        // Given
         let events = vec![Event::FocusLost, key(KeyCode::F(1)), key(KeyCode::Enter)];
-
-        assert_eq!(run("keep", events).0.as_deref(), Some("keep"));
+        // When
+        let actual = run("keep", events).0;
+        // Then
+        assert_eq!(actual.as_deref(), Some("keep"));
     }
 
     #[test]
     fn propagates_event_errors() {
+        // Given
         let mut terminal = test_terminal(70, 7);
         let mut value = Vec::new();
         let mut pos = 0;
-
+        // When
         let result = run_input_loop(
             &mut terminal,
             "Prompt",
@@ -328,7 +363,7 @@ mod tests {
             &mut pos,
             &mut event_source(vec![]),
         );
-
+        // Then
         assert!(result.is_err());
     }
 }

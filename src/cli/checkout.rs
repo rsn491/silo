@@ -208,41 +208,51 @@ mod tests {
 
     #[test]
     fn find_by_id_matches_directory_name() {
+        // Given
         let workspaces = vec![
             make_workspace("project-abc12345", Some("main")),
             make_workspace("project-xyz67890", Some("feature/foo")),
         ];
+        // When
         let result = find_by_id(&workspaces, "project-abc12345").unwrap();
+        // Then
         assert_eq!(result, PathBuf::from("/silo/project-abc12345"));
     }
 
     #[test]
     fn find_by_id_matches_branch_name() {
+        // Given
         let workspaces = vec![
             make_workspace("project-abc12345", Some("main")),
             make_workspace("project-xyz67890", Some("feature/foo")),
         ];
+        // When
         let result = find_by_id(&workspaces, "feature/foo").unwrap();
+        // Then
         assert_eq!(result, PathBuf::from("/silo/project-xyz67890"));
     }
 
     #[test]
     fn find_by_id_prefers_directory_name_over_branch() {
+        // Given
         // workspace whose dir name equals another workspace's branch name
         let workspaces = vec![
             make_workspace("my-branch", Some("other-branch")),
             make_workspace("project-xyz67890", Some("my-branch")),
         ];
+        // When
         let result = find_by_id(&workspaces, "my-branch").unwrap();
+        // Then
         assert_eq!(result, PathBuf::from("/silo/my-branch"));
     }
 
     #[test]
     fn find_by_id_reports_missing_workspace() {
+        // Given
         let workspaces = vec![make_workspace("project-abc12345", Some("main"))];
-
+        // When
         let err = find_by_id(&workspaces, "nope").unwrap_err();
-
+        // Then
         assert_eq!(err, CheckoutError::NotFound("nope".to_string()));
         assert_eq!(
             err.to_string(),
@@ -268,32 +278,32 @@ mod tests {
 
     #[test]
     fn resolve_workspace_fails_without_workspaces() {
+        // Given
         let command = CheckoutCommand::new(manager_with(vec![]), MockPrompt::new());
-
+        // When
         let err = command.resolve_workspace(Some("x")).unwrap_err();
-
+        // Then
         assert_eq!(checkout_error(err), CheckoutError::NoWorkspaces);
     }
 
     #[test]
     fn resolve_workspace_by_id() {
+        // Given
         let manager = manager_with(vec![make_workspace("project-abc12345", Some("main"))]);
         let mut prompt = MockPrompt::new();
         prompt.expect_select().never();
         let command = CheckoutCommand::new(manager, prompt);
-
-        assert_eq!(
-            command.resolve_workspace(Some("main")).unwrap(),
-            PathBuf::from("/silo/project-abc12345")
-        );
-        assert_eq!(
-            checkout_error(command.resolve_workspace(Some("other")).unwrap_err()),
-            CheckoutError::NotFound("other".to_string())
-        );
+        // When
+        let actual_1 = command.resolve_workspace(Some("main")).unwrap();
+        let actual_2 = checkout_error(command.resolve_workspace(Some("other")).unwrap_err());
+        // Then
+        assert_eq!(actual_1, PathBuf::from("/silo/project-abc12345"));
+        assert_eq!(actual_2, CheckoutError::NotFound("other".to_string()));
     }
 
     #[test]
     fn resolve_workspace_interactively() {
+        // Given
         let mut busy = make_workspace("project-xyz67890", None);
         busy.has_uncommitted_changes = true;
         busy.commits_ahead = 2;
@@ -313,44 +323,50 @@ mod tests {
             .times(1)
             .returning(|_, _, _| Ok(Some(1)));
         let command = CheckoutCommand::new(manager, prompt);
-
-        assert_eq!(
-            command.resolve_workspace(None).unwrap(),
-            PathBuf::from("/silo/project-xyz67890")
-        );
+        // When
+        let actual = command.resolve_workspace(None).unwrap();
+        // Then
+        assert_eq!(actual, PathBuf::from("/silo/project-xyz67890"));
     }
 
     #[test]
     fn resolve_workspace_cancelled_selection() {
+        // Given
         let manager = manager_with(vec![make_workspace("project-abc12345", Some("main"))]);
         let mut prompt = MockPrompt::new();
         prompt.expect_select().returning(|_, _, _| Ok(None));
         let command = CheckoutCommand::new(manager, prompt);
-
+        // When
         let err = command.resolve_workspace(None).unwrap_err();
-
+        // Then
         assert_eq!(checkout_error(err), CheckoutError::NotSelected);
     }
 
     #[test]
     fn resolve_workspace_propagates_listing_errors() {
+        // Given
         let mut manager = MockWorkspaceManager::new();
         manager
             .expect_get_all()
             .returning(|_| Err(GitError::NotAGitRepo));
         let command = CheckoutCommand::new(manager, MockPrompt::new());
-
+        // When
         let err = command.resolve_workspace(None).unwrap_err();
-
+        // Then
         assert!(err.downcast::<CheckoutError>().is_err());
     }
 
     #[test]
     fn spawn_shell_in_reports_exit_code() {
+        // Given
         let tmp = tempfile::TempDir::new().unwrap();
-
-        assert_eq!(spawn_shell_in(tmp.path(), "true").unwrap(), Some(0));
-        assert_eq!(spawn_shell_in(tmp.path(), "false").unwrap(), Some(1));
-        assert!(spawn_shell_in(tmp.path(), "silo-definitely-missing-shell").is_err());
+        // When
+        let actual_1 = spawn_shell_in(tmp.path(), "true").unwrap();
+        let actual_2 = spawn_shell_in(tmp.path(), "false").unwrap();
+        let actual_3 = spawn_shell_in(tmp.path(), "silo-definitely-missing-shell").is_err();
+        // Then
+        assert_eq!(actual_1, Some(0));
+        assert_eq!(actual_2, Some(1));
+        assert!(actual_3);
     }
 }

@@ -192,18 +192,22 @@ mod tests {
 
     #[test]
     fn terminal_errors_become_spawn_errors() {
+        // Given
+        // (no setup needed)
+        // When
         let err = LaunchError::from(TerminalError::TabOpenFailed("nope".to_string()));
-
+        // Then
         assert!(matches!(err, LaunchError::AgentSpawnError(msg) if msg.contains("nope")));
     }
 
     #[test]
     fn failing_agent_reports_exit_status() {
+        // Given
         let dir = TempDir::new().unwrap();
         let guard = WorkspaceLock::new(dir.path()).try_acquire().unwrap();
-
+        // When
         let result = launch_process(Command::new("false"), dir.path(), guard);
-
+        // Then
         assert!(matches!(result, Err(LaunchError::AgentExitError(status)) if !status.success()));
         assert!(!WorkspaceLock::is_locked(dir.path()));
     }
@@ -239,6 +243,7 @@ mod tests {
 
     #[test]
     fn successful_tab_dispatch_releases_launch_lock() {
+        // Given
         let dir = TempDir::new().unwrap();
         let launcher = AgentLauncher::new(
             ExistingWorkspace(dir.path().to_path_buf()),
@@ -252,14 +257,15 @@ mod tests {
                 override_path: None,
             },
         );
-
+        // When
         launcher.launch().unwrap();
-
+        // Then
         assert!(!dir.path().join("silo.lock").exists());
     }
 
     #[test]
     fn missing_terminal_releases_launch_lock() {
+        // Given
         let dir = TempDir::new().unwrap();
         let launcher = AgentLauncher::new(
             ExistingWorkspace(dir.path().to_path_buf()),
@@ -273,24 +279,32 @@ mod tests {
                 override_path: None,
             },
         );
-
-        assert!(launcher.launch().is_err());
-        assert!(!dir.path().join("silo.lock").exists());
+        // When
+        let actual_1 = launcher.launch().is_err();
+        let actual_2 = !dir.path().join("silo.lock").exists();
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
     }
 
     #[test]
     fn spawn_failure_releases_launch_lock() {
+        // Given
         let dir = TempDir::new().unwrap();
         let guard = WorkspaceLock::new(dir.path()).try_acquire().unwrap();
         let command = Command::new("/definitely/not/a/silo-agent");
-
-        assert!(launch_process(command, dir.path(), guard).is_err());
-        assert!(!dir.path().join("silo.lock").exists());
+        // When
+        let actual_1 = launch_process(command, dir.path(), guard).is_err();
+        let actual_2 = !dir.path().join("silo.lock").exists();
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
     }
 
     #[test]
     #[cfg(unix)]
     fn direct_launch_releases_lock_before_waiting() {
+        // Given
         let dir = TempDir::new().unwrap();
         let guard = WorkspaceLock::new(dir.path()).try_acquire().unwrap();
         let mut command = Command::new("sh");
@@ -298,9 +312,9 @@ mod tests {
             "-c",
             "i=0; while test -e silo.lock && test $i -lt 100; do i=$((i + 1)); sleep 0.01; done; test ! -e silo.lock",
         ]);
-
+        // When
         launch_process(command, dir.path(), guard).unwrap();
-
+        // Then
         assert!(!dir.path().join("silo.lock").exists());
     }
 }

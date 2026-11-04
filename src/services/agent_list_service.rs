@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_list_running_agents_in_worktrees() {
-        // Arrange
+        // Given
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(|| {
             Ok(vec![
@@ -205,12 +205,12 @@ mod tests {
 
         let service = AgentListService::new(workspace_manager, mock_process);
 
-        // Act
+        // When
         let agents = service
             .list_running_agents()
             .expect("list_running_agents should succeed with mock data");
 
-        // Assert
+        // Then
         assert_eq!(agents.len(), 2);
         assert_eq!(agents[0].pid, 123);
         assert_eq!(agents[0].path, PathBuf::from("/repo/worktree1"));
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_list_running_agents_in_original_subdirectory_but_not_outside_repository() {
-        // Arrange
+        // Given
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(|| {
             Ok(vec![
@@ -282,12 +282,12 @@ mod tests {
 
         let service = AgentListService::new(workspace_manager, mock_process);
 
-        // Act
+        // When
         let agents = service
             .list_running_agents()
             .expect("list_running_agents should succeed with mock data");
 
-        // Assert
+        // Then
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].pid, 123);
         assert_eq!(agents[0].path, PathBuf::from("/repo"));
@@ -296,7 +296,7 @@ mod tests {
 
     #[test]
     fn test_list_running_agents_cwd_resolution_failure() {
-        // Arrange
+        // Given
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock.expect_list_worktrees().return_once(|| {
             Ok(vec![
@@ -357,12 +357,12 @@ mod tests {
 
         let service = AgentListService::new(workspace_manager, mock_process);
 
-        // Act
+        // When
         let agents = service
             .list_running_agents()
             .expect("list_running_agents should succeed with mock data");
 
-        // Assert
+        // Then
         // Should only find the agent with resolvable CWD.
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].pid, 123);
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn test_list_running_agents_empty_cases() {
-        // Arrange
+        // Given
         // No worktrees.
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock
@@ -394,15 +394,15 @@ mod tests {
             .return_once(|_| Ok(PathBuf::from("/repo/worktree1")));
         let service = AgentListService::new(workspace_manager, mock_process);
 
-        // Act
+        // When
         let agents = service
             .list_running_agents()
             .expect("list_running_agents should succeed with mock data");
 
-        // Assert
+        // Then
         assert_eq!(agents.len(), 0);
 
-        // Act - No processes.
+        // When - No processes.
         let mut worktree_mock = MockGitOperations::new();
         // Only the original repository entry, and no processes.
         worktree_mock.expect_list_worktrees().return_once(|| {
@@ -444,7 +444,7 @@ mod tests {
             .list_running_agents()
             .expect("list_running_agents should succeed with mock data");
 
-        // Assert
+        // Then
         assert_eq!(agents.len(), 0);
     }
 }

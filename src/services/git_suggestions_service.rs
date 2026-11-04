@@ -123,128 +123,136 @@ mod tests {
 
     #[test]
     fn test_suggest_branch_name_sanitizes_agent_output() {
+        // Given
         let service = GitSuggestionsService::new(agent_replying(Ok("Fix Login Bug\nextra")));
-
+        // When
         let result = service.suggest_branch_name("CHANGES-MARKER");
-
+        // Then
         assert_eq!(result, Ok(Some("fix-login-bug".to_string())));
     }
 
     #[test]
     fn test_suggest_branch_name_propagates_agent_error() {
+        // Given
         let service = GitSuggestionsService::new(agent_replying(Err("boom")));
-
+        // When
         let result = service.suggest_branch_name("CHANGES-MARKER");
-
+        // Then
         assert!(result.unwrap_err().contains("boom"));
     }
 
     #[test]
     fn test_suggest_commit_message_uses_first_non_empty_line() {
+        // Given
         let service =
             GitSuggestionsService::new(agent_replying(Ok("\n  Add login form  \nmore detail")));
-
+        // When
         let result = service.suggest_commit_message("CHANGES-MARKER");
-
+        // Then
         assert_eq!(result, Ok(Some("Add login form".to_string())));
     }
 
     #[test]
     fn test_suggest_commit_message_returns_none_for_blank_output() {
+        // Given
         let service = GitSuggestionsService::new(agent_replying(Ok(" \n \n")));
-
+        // When
         let result = service.suggest_commit_message("CHANGES-MARKER");
-
+        // Then
         assert_eq!(result, Ok(None));
     }
 
     #[test]
     fn test_suggest_commit_message_propagates_agent_error() {
+        // Given
         let service = GitSuggestionsService::new(agent_replying(Err("offline")));
-
+        // When
         let result = service.suggest_commit_message("CHANGES-MARKER");
-
+        // Then
         assert!(result.unwrap_err().contains("offline"));
     }
 
     #[test]
     fn test_sanitize_branch_name_already_kebab_case() {
-        // Arrange
+        // Given
         let input = "add-auth-support";
 
-        // Act
+        // When
         let result = sanitize_branch_name(input);
 
-        // Assert
+        // Then
         assert_eq!(result.as_deref(), Some("add-auth-support"));
     }
 
     #[test]
     fn test_sanitize_branch_name_uppercases_lowered() {
-        // Arrange
+        // Given
         let input = "Add Auth Support";
 
-        // Act
+        // When
         let result = sanitize_branch_name(input);
 
-        // Assert
+        // Then
         assert_eq!(result.as_deref(), Some("add-auth-support"));
     }
 
     #[test]
     fn test_sanitize_branch_name_special_chars_replaced() {
-        // Arrange
+        // Given
         let input = "add_auth/support!";
 
-        // Act
+        // When
         let result = sanitize_branch_name(input);
 
-        // Assert
+        // Then
         assert_eq!(result.as_deref(), Some("add-auth-support"));
     }
 
     #[test]
     fn test_sanitize_branch_name_consecutive_hyphens_collapsed() {
-        // Arrange
+        // Given
         let input = "add---auth---support";
 
-        // Act
+        // When
         let result = sanitize_branch_name(input);
 
-        // Assert
+        // Then
         assert_eq!(result.as_deref(), Some("add-auth-support"));
     }
 
     #[test]
     fn test_sanitize_branch_name_empty_input_returns_none() {
-        // Assert — inputs containing only non-alphanumeric characters all sanitize to nothing.
-        assert!(sanitize_branch_name("").is_none());
-        assert!(sanitize_branch_name("   ").is_none());
-        assert!(sanitize_branch_name("---").is_none());
-        assert!(sanitize_branch_name("___").is_none());
+        // Given
+        let inputs = ["", "   ", "---", "___"];
+
+        // When
+        let results: Vec<_> = inputs.iter().map(|raw| sanitize_branch_name(raw)).collect();
+
+        // Then — inputs containing only non-alphanumeric characters all sanitize to nothing.
+        assert!(results.iter().all(Option::is_none));
     }
 
     #[test]
     fn test_sanitize_branch_name_uses_only_first_line() {
-        // Arrange
+        // Given
         let input = "add-auth\nsome other line";
 
-        // Act
+        // When
         let result = sanitize_branch_name(input);
 
-        // Assert
+        // Then
         assert_eq!(result.as_deref(), Some("add-auth"));
     }
 
     #[test]
     fn test_sanitize_branch_name_skips_blank_leading_lines() {
-        // Arrange
+        // Given
         let input = "\n\nadd-auth";
 
-        // Act
+        // When
         let result = sanitize_branch_name(input);
 
-        // Assert
+        // Then
         assert_eq!(result.as_deref(), Some("add-auth"));
     }
 }

@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_get_all_with_status() {
-        // Arrange
+        // Given
         let repo_root = PathBuf::from("/repo");
         let wt1_path = PathBuf::from("/wt1");
 
@@ -166,19 +166,19 @@ mod tests {
         let checkout = GitCheckoutWorkspace::new(checkout_mock);
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
-        // Act
+        // When
         let all = service
             .get_all(WorkspaceListingScope::ManagedOnly)
             .expect("get_all should succeed with mock data");
 
-        // Assert
+        // Then
         assert_eq!(all.len(), 1);
         assert!(all.iter().any(|w| w.path == wt1_path));
     }
 
     #[test]
     fn test_cleanup_combines() {
-        // Arrange
+        // Given
         let repo_root = PathBuf::from("/repo");
 
         let mut worktree_mock = MockGitOperations::new();
@@ -204,19 +204,19 @@ mod tests {
         let checkout = GitCheckoutWorkspace::new(checkout_mock);
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
-        // Act
+        // When
         let result = service
             .cleanup(&HashSet::new(), true, false)
             .expect("cleanup should succeed with mock data");
 
-        // Assert
+        // Then
         assert_eq!(result.removed.len(), 0);
         assert_eq!(result.skipped.len(), 0);
     }
 
     #[test]
     fn test_get_all_propagates_worktree_error() {
-        // Arrange — list_worktrees fails; the error should bubble up through get_all.
+        // Given — list_worktrees fails; the error should bubble up through get_all.
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock
             .expect_list_worktrees()
@@ -231,10 +231,10 @@ mod tests {
         let checkout = GitCheckoutWorkspace::new(checkout_mock);
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
-        // Act
+        // When
         let result = service.get_all(WorkspaceListingScope::ManagedOnly);
 
-        // Assert
+        // Then
         assert!(
             result.is_err(),
             "get_all should propagate a worktree list error"
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_propagates_worktree_list_error() {
-        // Arrange — list_worktrees fails during cleanup.
+        // Given — list_worktrees fails during cleanup.
         let mut worktree_mock = MockGitOperations::new();
         worktree_mock
             .expect_list_worktrees()
@@ -258,10 +258,10 @@ mod tests {
         let checkout = GitCheckoutWorkspace::new(checkout_mock);
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
-        // Act
+        // When
         let result = service.cleanup(&HashSet::new(), true, false);
 
-        // Assert
+        // Then
         assert!(
             result.is_err(),
             "cleanup should propagate a worktree list error"
@@ -271,7 +271,7 @@ mod tests {
     #[test]
     #[allow(clippy::cmp_owned)]
     fn test_get_all_combines() {
-        // Arrange
+        // Given
         let main_path = PathBuf::from("/repo");
         let wt1_path = PathBuf::from("/wt1");
 
@@ -315,12 +315,12 @@ mod tests {
         let checkout = GitCheckoutWorkspace::new(checkout_mock);
         let service = GlobalWorkspaceManager::new(worktree, checkout);
 
-        // Act
+        // When
         let all = service
             .get_all(WorkspaceListingScope::ManagedOnly)
             .expect("get_all should succeed with mock data");
 
-        // Assert
+        // Then
         assert_eq!(all.len(), 1);
         assert!(all.iter().any(|w| w.path == PathBuf::from("/wt1")));
     }

@@ -190,9 +190,9 @@ mod tests {
 
     #[test]
     fn reuse_picks_workspace_at_base_branch() {
+        // Given
         let tmp = tempfile::tempdir().unwrap();
         let ws = make_workspace(&tmp, 0);
-
         let mut mock = MockGitOperations::new();
         mock.expect_is_fully_pushed().never();
         mock.expect_get_project_name()
@@ -202,21 +202,22 @@ mod tests {
             .returning(|| Ok("origin/main".to_string()));
         mock.expect_checkout_new_branch_from()
             .returning(|_, _, _| Ok(()));
-
+        // When
         let result = reuse_inactive_workspace(
             &mock,
             vec![ws],
             Some("new-branch".to_string()),
             &HashSet::new(),
         );
+        // Then
         assert!(result.unwrap().is_some());
     }
 
     #[test]
     fn reuse_picks_workspace_with_pushed_commits() {
+        // Given
         let tmp = tempfile::tempdir().unwrap();
         let ws = make_workspace(&tmp, 3);
-
         let mut mock = MockGitOperations::new();
         mock.expect_is_fully_pushed().once().returning(|_| true);
         mock.expect_get_project_name()
@@ -226,54 +227,58 @@ mod tests {
             .returning(|| Ok("origin/main".to_string()));
         mock.expect_checkout_new_branch_from()
             .returning(|_, _, _| Ok(()));
-
+        // When
         let result = reuse_inactive_workspace(
             &mock,
             vec![ws],
             Some("new-branch".to_string()),
             &HashSet::new(),
         );
+        // Then
         assert!(result.unwrap().is_some());
     }
 
     #[test]
     fn reuse_skips_workspace_with_unpushed_commits() {
+        // Given
         let tmp = tempfile::tempdir().unwrap();
         let ws = make_workspace(&tmp, 2);
-
         let mut mock = MockGitOperations::new();
         mock.expect_is_fully_pushed().once().returning(|_| false);
         mock.expect_get_project_name().never();
-
+        // When
         let result = reuse_inactive_workspace(
             &mock,
             vec![ws],
             Some("new-branch".to_string()),
             &HashSet::new(),
         );
+        // Then
         assert!(result.unwrap().is_none());
     }
 
     #[test]
     fn reuse_skips_locked_workspace() {
+        // Given
         let tmp = tempfile::tempdir().unwrap();
         let lock = WorkspaceLock::new(tmp.path());
         let _guard = lock.try_acquire().unwrap();
-
         let ws = make_workspace(&tmp, 0);
         let mock = MockGitOperations::new();
-
+        // When
         let result = reuse_inactive_workspace(
             &mock,
             vec![ws],
             Some("new-branch".to_string()),
             &HashSet::new(),
         );
+        // Then
         assert!(result.unwrap().is_none());
     }
 
     #[test]
     fn reuse_skips_workspace_with_uncommitted_changes() {
+        // Given
         let tmp = tempfile::tempdir().unwrap();
         let ws = GitWorkspaceInfo {
             path: tmp.path().to_path_buf(),
@@ -282,32 +287,33 @@ mod tests {
             commits_ahead: 0,
             latest_commit: None,
         };
-
         let mock = MockGitOperations::new();
-
+        // When
         let result = reuse_inactive_workspace(
             &mock,
             vec![ws],
             Some("new-branch".to_string()),
             &HashSet::new(),
         );
+        // Then
         assert!(result.unwrap().is_none());
     }
 
     #[test]
     fn reuse_skips_process_active_workspace() {
+        // Given
         let tmp = tempfile::tempdir().unwrap();
         let ws = make_workspace(&tmp, 0);
         let active_paths = HashSet::from([tmp.path().to_path_buf()]);
         let mock = MockGitOperations::new();
-
+        // When
         let result = reuse_inactive_workspace(
             &mock,
             vec![ws],
             Some("new-branch".to_string()),
             &active_paths,
         );
-
+        // Then
         assert!(result.unwrap().is_none());
     }
 }

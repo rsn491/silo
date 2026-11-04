@@ -260,8 +260,11 @@ mod tests {
 
     #[test]
     fn renders_empty_message_when_no_rows() {
+        // Given
+        // (no setup needed)
+        // When
         let text = render(&[]);
-
+        // Then
         assert!(text.starts_with("Title\n"));
         assert!(text.contains("Nothing here."));
         assert!(!text.contains("NAME"));
@@ -269,6 +272,7 @@ mod tests {
 
     #[test]
     fn renders_header_separator_and_rows() {
+        // Given
         let rows = vec![
             Row {
                 cells: vec![StyledCell::plain("alpha"), StyledCell::dim("—")],
@@ -285,9 +289,9 @@ mod tests {
                 ],
             },
         ];
-
+        // When
         let text = render(&rows);
-
+        // Then
         assert!(text.contains("NAME    STATE"));
         assert!(text.contains("──────  ─────"));
         assert!(text.contains("alpha   —"));
@@ -300,26 +304,45 @@ mod tests {
 
     #[test]
     fn styled_cell_constructors() {
-        assert_eq!(StyledCell::plain("a").color, None);
-        assert_eq!(StyledCell::dim("a").color, Some(Color::DarkGrey));
-        assert_eq!(StyledCell::warning("a").color, Some(Color::Yellow));
-        assert_eq!(
-            StyledCell::colored("a", Color::Blue).color,
-            Some(Color::Blue)
-        );
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = StyledCell::plain("a").color;
+        let actual_2 = StyledCell::dim("a").color;
+        let actual_3 = StyledCell::warning("a").color;
+        let actual_4 = StyledCell::colored("a", Color::Blue).color;
+        // Then
+        assert_eq!(actual_1, None);
+        assert_eq!(actual_2, Some(Color::DarkGrey));
+        assert_eq!(actual_3, Some(Color::Yellow));
+        assert_eq!(actual_4, Some(Color::Blue));
     }
 
     #[test]
     fn pad_or_trunc_pads_and_truncates() {
-        assert_eq!(pad_or_trunc("ab", 4), "ab  ");
-        assert_eq!(pad_or_trunc("abcd", 4), "abcd");
-        assert_eq!(pad_or_trunc("abcdef", 4), "abc…");
-        assert_eq!(pad_or_trunc("abc", 0), "…");
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = pad_or_trunc("ab", 4);
+        let actual_2 = pad_or_trunc("abcd", 4);
+        let actual_3 = pad_or_trunc("abcdef", 4);
+        let actual_4 = pad_or_trunc("abc", 0);
+        // Then
+        assert_eq!(actual_1, "ab  ");
+        assert_eq!(actual_2, "abcd");
+        assert_eq!(actual_3, "abc…");
+        assert_eq!(actual_4, "…");
     }
 
     #[test]
     fn status_and_info_lines_write_successfully() {
-        assert!(print_status("✓", Color::Green, "done").is_ok());
-        assert!(print_info("info").is_ok());
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = print_status("✓", Color::Green, "done").is_ok();
+        let actual_2 = print_info("info").is_ok();
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
     }
 }

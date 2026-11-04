@@ -667,92 +667,103 @@ mod tests {
 
     #[test]
     fn tmp_cleanup_is_suppressed_for_original_repository() {
-        assert!(!should_cleanup_tmp(true, true));
-        assert!(should_cleanup_tmp(true, false));
-        assert!(!should_cleanup_tmp(false, false));
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = !should_cleanup_tmp(true, true);
+        let actual_2 = should_cleanup_tmp(true, false);
+        let actual_3 = !should_cleanup_tmp(false, false);
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
+        assert!(actual_3);
     }
 
     #[test]
     fn original_repository_is_not_considered_managed_for_reuse() {
+        // Given
         let original = PathBuf::from("/source/project");
         let managed = vec![crate::infra::git::GitWorkspaceInfo {
             path: PathBuf::from("/silo/project-12345678"),
             ..Default::default()
         }];
-
-        assert!(workspace_is_original(&original, &managed));
-        assert!(!workspace_is_original(&managed[0].path, &managed));
+        // When
+        let actual_1 = workspace_is_original(&original, &managed);
+        let actual_2 = !workspace_is_original(&managed[0].path, &managed);
+        // Then
+        assert!(actual_1);
+        assert!(actual_2);
     }
 
     #[test]
     fn test_shell_quote_simple_string() {
-        // Arrange
+        // Given
         let input = "hello";
 
-        // Act
+        // When
         let result = shell_quote(input);
 
-        // Assert
+        // Then
         assert_eq!(result, "'hello'");
     }
 
     #[test]
     fn test_shell_quote_empty_string() {
-        // Arrange
+        // Given
         let input = "";
 
-        // Act
+        // When
         let result = shell_quote(input);
 
-        // Assert
+        // Then
         assert_eq!(result, "''");
     }
 
     #[test]
     fn test_shell_quote_string_with_spaces() {
-        // Arrange
+        // Given
         let input = "hello world";
 
-        // Act
+        // When
         let result = shell_quote(input);
 
-        // Assert
+        // Then
         assert_eq!(result, "'hello world'");
     }
 
     #[test]
     fn test_shell_quote_string_with_single_quote() {
-        // Arrange
+        // Given
         let input = "it's";
 
-        // Act
+        // When
         let result = shell_quote(input);
 
-        // Assert — POSIX shell escaping replaces ' with '\''
+        // Then — POSIX shell escaping replaces ' with '\''
         assert_eq!(result, "'it'\\''s'");
     }
 
     #[test]
     fn test_shell_quote_multiple_single_quotes() {
-        // Arrange
+        // Given
         let input = "a'b'c";
 
-        // Act
+        // When
         let result = shell_quote(input);
 
-        // Assert
+        // Then
         assert_eq!(result, "'a'\\''b'\\''c'");
     }
 
     #[test]
     fn test_build_silo_launch_command_minimal_args() {
-        // Arrange
+        // Given
         let args = LaunchArgs::default();
 
-        // Act
+        // When
         let cmd = build_silo_launch_command(&args);
 
-        // Assert
+        // Then
         assert!(cmd.contains("launch"));
         assert!(!cmd.contains("--agent"));
         assert!(!cmd.contains("--branch"));
@@ -763,171 +774,188 @@ mod tests {
 
     #[test]
     fn test_build_silo_launch_command_with_clone_flag() {
-        // Arrange
+        // Given
         let args = LaunchArgs {
             clone: true,
             ..Default::default()
         };
 
-        // Act
+        // When
         let cmd = build_silo_launch_command(&args);
 
-        // Assert
+        // Then
         assert!(cmd.contains("--clone"));
         assert!(!cmd.contains("--worktree"));
     }
 
     #[test]
     fn test_build_silo_launch_command_with_worktree_flag() {
-        // Arrange
+        // Given
         let args = LaunchArgs {
             worktree: true,
             ..Default::default()
         };
 
-        // Act
+        // When
         let cmd = build_silo_launch_command(&args);
 
-        // Assert
+        // Then
         assert!(cmd.contains("--worktree"));
         assert!(!cmd.contains("--clone"));
     }
 
     #[test]
     fn test_build_silo_launch_command_with_branch() {
-        // Arrange
+        // Given
         let args = LaunchArgs {
             branch: Some("my-feature".to_string()),
             ..Default::default()
         };
 
-        // Act
+        // When
         let cmd = build_silo_launch_command(&args);
 
-        // Assert
+        // Then
         assert!(cmd.contains("--branch"));
         assert!(cmd.contains("'my-feature'"));
     }
 
     #[test]
     fn test_build_silo_launch_command_with_agent() {
-        // Arrange
+        // Given
         let args = LaunchArgs {
             agent: Some(Agent::Codex),
             ..Default::default()
         };
 
-        // Act
+        // When
         let cmd = build_silo_launch_command(&args);
 
-        // Assert
+        // Then
         assert!(cmd.contains("--agent"));
         assert!(cmd.contains("'codex'"));
     }
 
     #[test]
     fn test_build_silo_launch_command_with_reuse() {
-        // Arrange
+        // Given
         let args = LaunchArgs {
             reuse: true,
             ..Default::default()
         };
 
-        // Act
+        // When
         let cmd = build_silo_launch_command(&args);
 
-        // Assert
+        // Then
         assert!(cmd.contains("--reuse"));
     }
 
     #[test]
     fn test_build_silo_launch_command_split_pane_flag_not_included() {
-        // Arrange — split_pane is consumed before this function is called (handled in run())
+        // Given — split_pane is consumed before this function is called (handled in run())
         let args = LaunchArgs {
             split_pane: true,
             ..Default::default()
         };
 
-        // Act
+        // When
         let cmd = build_silo_launch_command(&args);
 
-        // Assert
+        // Then
         assert!(!cmd.contains("--split-pane"));
     }
 
     #[test]
     fn test_resolve_workspace_type_clone_flag_wins() {
-        // Act
-        let kind = resolve_workspace_type(true, false);
+        // Given
+        let (clone, worktree) = (true, false);
 
-        // Assert
+        // When
+        let kind = resolve_workspace_type(clone, worktree);
+
+        // Then
         assert_eq!(kind, WorkspaceKind::Clone);
     }
 
     #[test]
     fn test_resolve_workspace_type_worktree_flag_wins() {
-        // Act
-        let kind = resolve_workspace_type(false, true);
+        // Given
+        let (clone, worktree) = (false, true);
 
-        // Assert
+        // When
+        let kind = resolve_workspace_type(clone, worktree);
+
+        // Then
         assert_eq!(kind, WorkspaceKind::Worktree);
     }
 
     #[test]
     fn test_resolve_agent_returns_explicit_agent() {
-        // Assert — any explicit agent arg is passed through unchanged.
-        assert_eq!(resolve_agent(Some(Agent::Codex)), Agent::Codex);
-        assert_eq!(resolve_agent(Some(Agent::Gemini)), Agent::Gemini);
-        assert_eq!(resolve_agent(Some(Agent::OpenCode)), Agent::OpenCode);
-        assert_eq!(resolve_agent(Some(Agent::ClaudeCode)), Agent::ClaudeCode);
+        // Given
+        let explicit = [
+            Agent::Codex,
+            Agent::Gemini,
+            Agent::OpenCode,
+            Agent::ClaudeCode,
+        ];
+
+        // When
+        let resolved: Vec<Agent> = explicit
+            .iter()
+            .map(|agent| resolve_agent(Some(agent.clone())))
+            .collect();
+
+        // Then — any explicit agent arg is passed through unchanged.
+        assert_eq!(resolved, explicit);
     }
 
     #[test]
     fn test_build_silo_launch_command_with_tmp() {
-        // Arrange
+        // Given
         let args = LaunchArgs {
             tmp: true,
             ..Default::default()
         };
 
-        // Act
+        // When
         let cmd = build_silo_launch_command(&args);
 
-        // Assert
+        // Then
         assert!(cmd.contains("--tmp"));
     }
 
     #[test]
     fn test_build_silo_launch_command_without_tmp_not_included() {
-        // Arrange
+        // Given
         let args = LaunchArgs::default();
 
-        // Act
+        // When
         let cmd = build_silo_launch_command(&args);
 
-        // Assert
+        // Then
         assert!(!cmd.contains("--tmp"));
     }
 
     #[test]
     fn test_cleanup_tmp_workspace_skips_when_uncommitted_changes() {
-        // Arrange
+        // Given
         let mut mock = crate::infra::git::MockGitOperations::new();
         let path = std::path::Path::new("/fake/path");
         mock.expect_get_status_porcelain()
             .returning(|_| Ok("M  src/main.rs".to_string()));
         mock.expect_remove_worktree().never();
 
-        // Act
+        // When
         let result = cleanup_tmp_workspace(path, WorkspaceKind::Worktree, &mock);
 
-        // Assert
+        // Then
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_cleanup_tmp_workspace_skips_when_unpushed_commits() {
-        // Arrange
+        // Given
         let mut mock = crate::infra::git::MockGitOperations::new();
         let path = std::path::Path::new("/fake/path");
         mock.expect_get_status_porcelain()
@@ -935,16 +963,16 @@ mod tests {
         mock.expect_count_commits_ahead().returning(|_, _| Ok(3));
         mock.expect_remove_worktree().never();
 
-        // Act
+        // When
         let result = cleanup_tmp_workspace(path, WorkspaceKind::Worktree, &mock);
 
-        // Assert
+        // Then
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_cleanup_tmp_workspace_deletes_clean_worktree() {
-        // Arrange
+        // Given
         let mut mock = crate::infra::git::MockGitOperations::new();
         let path = std::path::Path::new("/fake/path");
         mock.expect_get_status_porcelain()
@@ -952,16 +980,16 @@ mod tests {
         mock.expect_count_commits_ahead().returning(|_, _| Ok(0));
         mock.expect_remove_worktree().once().returning(|_| Ok(()));
 
-        // Act
+        // When
         let result = cleanup_tmp_workspace(path, WorkspaceKind::Worktree, &mock);
 
-        // Assert
+        // Then
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_cleanup_tmp_workspace_treats_no_upstream_as_clean() {
-        // Arrange — count_commits_ahead returns Err (no upstream configured) → treated as 0.
+        // Given — count_commits_ahead returns Err (no upstream configured) → treated as 0.
         let mut mock = crate::infra::git::MockGitOperations::new();
         let path = std::path::Path::new("/fake/path");
         mock.expect_get_status_porcelain()
@@ -973,16 +1001,16 @@ mod tests {
         });
         mock.expect_remove_worktree().once().returning(|_| Ok(()));
 
-        // Act
+        // When
         let result = cleanup_tmp_workspace(path, WorkspaceKind::Worktree, &mock);
 
-        // Assert
+        // Then
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_cleanup_tmp_workspace_deletes_clean_clone() {
-        // Arrange — use a real temp dir since remove_dir_all is not behind a trait.
+        // Given — use a real temp dir since remove_dir_all is not behind a trait.
         let tmp_dir = tempfile::TempDir::new().expect("failed to create temp dir");
         let path = tmp_dir.path();
         let mut mock = crate::infra::git::MockGitOperations::new();
@@ -990,10 +1018,10 @@ mod tests {
             .returning(|_| Ok(String::new()));
         mock.expect_count_commits_ahead().returning(|_, _| Ok(0));
 
-        // Act
+        // When
         let result = cleanup_tmp_workspace(path, WorkspaceKind::Clone, &mock);
 
-        // Assert
+        // Then
         assert!(result.is_ok());
         assert!(!path.exists(), "temp dir should have been removed");
         // Prevent TempDir from trying to clean up an already-deleted directory.
@@ -1079,6 +1107,7 @@ mod command_tests {
 
     #[test]
     fn run_rejects_invalid_branch_names() {
+        // Given
         let command = LaunchCommand::new(
             Git::new(),
             None::<FakeTerminal>,
@@ -1086,19 +1115,20 @@ mod command_tests {
             MockProcessOperations::new(),
             MockPrompt::new(),
         );
-
+        // When
         let err = command
             .run(LaunchArgs {
                 branch: Some("bad name".to_string()),
                 ..Default::default()
             })
             .unwrap_err();
-
+        // Then
         assert!(err.to_string().starts_with("invalid --branch"));
     }
 
     #[test]
     fn run_split_pane_requires_terminal() {
+        // Given
         let command = LaunchCommand::new(
             Git::new(),
             None::<FakeTerminal>,
@@ -1106,14 +1136,15 @@ mod command_tests {
             MockProcessOperations::new(),
             MockPrompt::new(),
         );
-
+        // When
         let err = command.run(LaunchArgs::default()).unwrap_err();
-
+        // Then
         assert_eq!(err.to_string(), "no terminal provided for split pane");
     }
 
     #[test]
     fn run_split_pane_relaunches_in_new_pane() {
+        // Given
         let terminal = FakeTerminal::default();
         let command = LaunchCommand::new(
             Git::new(),
@@ -1122,7 +1153,6 @@ mod command_tests {
             MockProcessOperations::new(),
             MockPrompt::new(),
         );
-
         command
             .run(LaunchArgs {
                 branch: Some("feature".to_string()),
@@ -1130,8 +1160,9 @@ mod command_tests {
                 ..Default::default()
             })
             .unwrap();
-
+        // When
         let calls = terminal.calls.borrow();
+        // Then
         assert_eq!(calls.splits.len(), 1);
         assert!(calls.splits[0].contains(" launch --branch 'feature'"));
         assert!(calls.tabs.is_empty());
@@ -1139,6 +1170,7 @@ mod command_tests {
 
     #[test]
     fn run_aborts_when_existing_workspace_is_declined() {
+        // Given
         let repo = TestRepo::new();
         let terminal = FakeTerminal::default();
         let command = LaunchCommand::new(
@@ -1148,14 +1180,15 @@ mod command_tests {
             processes(vec![], repo.work.clone()),
             confirming(false),
         );
-
+        // When
         command.run(main_branch_args()).unwrap();
-
+        // Then
         assert!(terminal.calls.borrow().tabs.is_empty());
     }
 
     #[test]
     fn run_opens_tab_in_existing_workspace() {
+        // Given
         let repo = TestRepo::new();
         let terminal = FakeTerminal::default();
         let command = LaunchCommand::new(
@@ -1165,15 +1198,16 @@ mod command_tests {
             processes(vec![], repo.work.clone()),
             confirming(true),
         );
-
+        // When
         command.run(main_branch_args()).unwrap();
-
+        // Then
         assert_eq!(terminal.calls.borrow().tabs, vec![repo.work.clone()]);
         assert!(!WorkspaceLock::is_locked(&repo.work), "lock is released");
     }
 
     #[test]
     fn run_reports_missing_terminal_for_new_tab() {
+        // Given
         let repo = TestRepo::new();
         let command = LaunchCommand::new(
             repo.git(),
@@ -1182,14 +1216,15 @@ mod command_tests {
             processes(vec![], repo.work.clone()),
             confirming(true),
         );
-
+        // When
         let err = command.run(main_branch_args()).unwrap_err();
-
+        // Then
         assert!(err.to_string().contains("no terminal provided for new tab"));
     }
 
     #[test]
     fn run_refuses_workspace_with_running_agent() {
+        // Given
         let repo = TestRepo::new();
         let mut prompt = MockPrompt::new();
         prompt.expect_confirm().never();
@@ -1200,14 +1235,15 @@ mod command_tests {
             processes(vec![4242], repo.work.clone()),
             prompt,
         );
-
+        // When
         let err = command.run(main_branch_args()).unwrap_err();
-
+        // Then
         assert!(err.to_string().contains("already running"));
     }
 
     #[test]
     fn run_refuses_locked_workspace() {
+        // Given
         let repo = TestRepo::new();
         let _guard = WorkspaceLock::new(&repo.work).try_acquire().unwrap();
         let mut prompt = MockPrompt::new();
@@ -1219,9 +1255,9 @@ mod command_tests {
             processes(vec![], repo.work.clone()),
             prompt,
         );
-
+        // When
         let err = command.run(main_branch_args()).unwrap_err();
-
+        // Then
         assert!(err.to_string().contains("already in progress"));
     }
 
@@ -1247,28 +1283,31 @@ mod command_tests {
 
     #[test]
     fn commit_flow_skips_clean_workspace() {
+        // Given
         let git = dirty_git("", "");
-
+        // When
         let committed =
             handle_commit_flow(Path::new("/ws"), &agent(""), &git, &MockPrompt::new()).unwrap();
-
+        // Then
         assert!(!committed);
     }
 
     #[test]
     fn commit_flow_respects_declined_commit() {
+        // Given
         let git = dirty_git(" M a.rs\n?? b.rs", "");
         let mut prompt = MockPrompt::new();
         prompt.expect_confirm().times(1).returning(|_, _| Ok(false));
         prompt.expect_input().never();
-
+        // When
         let committed = handle_commit_flow(Path::new("/ws"), &agent(""), &git, &prompt).unwrap();
-
+        // Then
         assert!(!committed);
     }
 
     #[test]
     fn commit_flow_commits_with_suggested_message() {
+        // Given
         let mut git = dirty_git(" M a.rs", "");
         git.expect_get_changes_summary()
             .returning(|_| Ok("Diff stat: a.rs".to_string()));
@@ -1283,15 +1322,16 @@ mod command_tests {
             .withf(|_, initial| *initial == Some("Update a.rs"))
             .times(1)
             .returning(|_, _| Ok(Some("Edited message".to_string())));
-
+        // When
         let committed =
             handle_commit_flow(Path::new("/ws"), &agent("Update a.rs"), &git, &prompt).unwrap();
-
+        // Then
         assert!(committed);
     }
 
     #[test]
     fn commit_flow_without_suggestion_and_cancelled_message() {
+        // Given
         let mut git = dirty_git(" M a.rs", "");
         git.expect_get_changes_summary()
             .returning(|_| Err(GitError::CommandFailed("diff failed".to_string())));
@@ -1302,14 +1342,15 @@ mod command_tests {
             .expect_input()
             .withf(|_, initial| initial.is_none())
             .returning(|_, _| Ok(None));
-
+        // When
         let committed = handle_commit_flow(Path::new("/ws"), &agent(""), &git, &prompt).unwrap();
-
+        // Then
         assert!(!committed);
     }
 
     #[test]
     fn commit_flow_reports_commit_failure() {
+        // Given
         let mut git = dirty_git(" M a.rs", "");
         git.expect_get_changes_summary()
             .returning(|_| Ok("changes".to_string()));
@@ -1320,14 +1361,15 @@ mod command_tests {
         prompt
             .expect_input()
             .returning(|_, _| Ok(Some("msg".to_string())));
-
+        // When
         let committed = handle_commit_flow(Path::new("/ws"), &agent("msg"), &git, &prompt).unwrap();
-
+        // Then
         assert!(!committed);
     }
 
     #[test]
     fn commit_flow_detects_changes_left_after_commit() {
+        // Given
         let mut git = dirty_git(" M a.rs", "?? still-here.rs");
         git.expect_get_changes_summary()
             .returning(|_| Ok("changes".to_string()));
@@ -1337,23 +1379,27 @@ mod command_tests {
         prompt
             .expect_input()
             .returning(|_, _| Ok(Some("msg".to_string())));
-
+        // When
         let committed = handle_commit_flow(Path::new("/ws"), &agent("msg"), &git, &prompt).unwrap();
-
+        // Then
         assert!(!committed);
     }
 
     #[test]
     fn push_confirmation_skips_when_nothing_to_push() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_count_commits_ahead().returning(|_, _| Ok(0));
         git.expect_push().never();
-
+        // When
         handle_push_confirmation(Path::new("/ws"), false, &git, &MockPrompt::new()).unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     #[test]
     fn push_confirmation_pushes_fresh_commit_without_upstream() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_count_commits_ahead()
             .returning(|_, _| Err(GitError::CommandFailed("no upstream".to_string())));
@@ -1363,12 +1409,15 @@ mod command_tests {
             .expect_confirm()
             .withf(|message, _| message == "Push changes?")
             .returning(|_, _| Ok(true));
-
+        // When
         handle_push_confirmation(Path::new("/ws"), true, &git, &prompt).unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     #[test]
     fn push_confirmation_reports_push_failure_and_decline() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_count_commits_ahead().returning(|_, _| Ok(2));
         git.expect_push()
@@ -1377,13 +1426,15 @@ mod command_tests {
         let mut prompt = MockPrompt::new();
         prompt.expect_confirm().times(1).returning(|_, _| Ok(true));
         handle_push_confirmation(Path::new("/ws"), false, &git, &prompt).unwrap();
-
         let mut git = MockGitOperations::new();
         git.expect_count_commits_ahead().returning(|_, _| Ok(2));
         git.expect_push().never();
         let mut prompt = MockPrompt::new();
         prompt.expect_confirm().times(1).returning(|_, _| Ok(false));
+        // When
         handle_push_confirmation(Path::new("/ws"), false, &git, &prompt).unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     /// A git mock for an auto-generated branch eligible for renaming.
@@ -1400,47 +1451,83 @@ mod command_tests {
     }
 
     #[test]
-    fn branch_rename_reports_every_outcome() {
-        // Skipped: not an auto-generated branch.
+    fn branch_rename_skips_user_named_branches() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_get_current_branch()
             .returning(|_| Ok(Some("feature".to_string())));
+        git.expect_rename_branch().never();
+
+        // When
         handle_branch_rename(Path::new("/ws"), &agent(""), &git);
 
-        // Renamed.
+        // Then
+        // (the mock verifies on drop that no rename was attempted)
+    }
+
+    #[test]
+    fn branch_rename_renames_auto_generated_branch() {
+        // Given
         let mut git = renamable_git();
         git.expect_rename_branch().times(1).returning(|_, _| Ok(()));
+
+        // When
         handle_branch_rename(Path::new("/ws"), &agent("new-name"), &git);
 
-        // Rename failed.
+        // Then
+        // (the mock verifies on drop that exactly one rename was attempted)
+    }
+
+    #[test]
+    fn branch_rename_reports_failed_rename() {
+        // Given
         let mut git = renamable_git();
         git.expect_rename_branch()
             .times(1)
             .returning(|_, _| Err(GitError::CommandFailed("locked".to_string())));
+
+        // When
         handle_branch_rename(Path::new("/ws"), &agent("new-name"), &git);
 
-        // Suggestion failed.
+        // Then
+        // (the failure is reported, not raised; the mock verifies the attempt on drop)
+    }
+
+    #[test]
+    fn branch_rename_reports_failed_suggestion() {
+        // Given
         let mut failing = MockAgentCommand::new();
         failing
             .expect_prompt()
             .returning(|_| Err(PromptError::Failed("offline".to_string())));
-        handle_branch_rename(Path::new("/ws"), &failing, &renamable_git());
+        let mut git = renamable_git();
+        git.expect_rename_branch().never();
+
+        // When
+        handle_branch_rename(Path::new("/ws"), &failing, &git);
+
+        // Then
+        // (no rename is attempted; the mock verifies on drop)
     }
 
     #[test]
     fn exit_work_skips_rename_for_tmp_workspaces() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_get_current_branch().never();
         git.expect_get_status_porcelain()
             .returning(|_| Ok(String::new()));
         git.expect_count_commits_ahead().returning(|_, _| Ok(0));
-
+        // When
         check_and_handle_exit_work(Path::new("/ws"), &agent(""), true, &git, &MockPrompt::new())
             .unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     #[test]
     fn agent_exit_reports_failed_steps_as_warnings() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_get_status_porcelain()
             .returning(|_| Err(GitError::CommandFailed("status failed".to_string())));
@@ -1450,7 +1537,7 @@ mod command_tests {
             selected_original: false,
             kind: WorkspaceKind::Worktree,
         };
-
+        // When
         handle_agent_exit(
             Path::new("/ws"),
             &agent(""),
@@ -1459,10 +1546,13 @@ mod command_tests {
             &MockPrompt::new(),
         )
         .unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     #[test]
     fn agent_exit_cleans_tmp_workspace_without_exit_work() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_get_status_porcelain()
             .returning(|_| Ok(String::new()));
@@ -1474,7 +1564,7 @@ mod command_tests {
             selected_original: false,
             kind: WorkspaceKind::Worktree,
         };
-
+        // When
         handle_agent_exit(
             Path::new("/ws"),
             &agent(""),
@@ -1483,10 +1573,13 @@ mod command_tests {
             &MockPrompt::new(),
         )
         .unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     #[test]
     fn agent_exit_never_cleans_original_repository() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_get_status_porcelain().never();
         git.expect_remove_worktree().never();
@@ -1496,7 +1589,7 @@ mod command_tests {
             selected_original: true,
             kind: WorkspaceKind::Worktree,
         };
-
+        // When
         handle_agent_exit(
             Path::new("/ws"),
             &agent(""),
@@ -1505,38 +1598,63 @@ mod command_tests {
             &MockPrompt::new(),
         )
         .unwrap();
+        // Then
+        // completing without error is the assertion
     }
 
     #[test]
     fn cleanup_tmp_workspace_reports_removal_failure() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_get_status_porcelain()
             .returning(|_| Ok(String::new()));
         git.expect_count_commits_ahead().returning(|_, _| Ok(0));
         git.expect_remove_worktree()
             .returning(|_| Err(GitError::WorktreeRemovalFailed("busy".to_string())));
-
-        assert!(cleanup_tmp_workspace(Path::new("/ws"), WorkspaceKind::Worktree, &git).is_ok());
+        // When
+        let actual = cleanup_tmp_workspace(Path::new("/ws"), WorkspaceKind::Worktree, &git).is_ok();
+        // Then
+        assert!(actual);
     }
 
     #[test]
     fn agent_display_colors_cover_all_agents() {
-        assert_eq!(agent_display_color(&Agent::ClaudeCode), Color::Cyan);
-        assert_eq!(agent_display_color(&Agent::Codex), Color::Yellow);
-        assert_eq!(agent_display_color(&Agent::Gemini), Color::Blue);
-        assert_eq!(agent_display_color(&Agent::OpenCode), Color::Magenta);
-        assert_eq!(agent_display_color(&Agent::Droid), Color::Green);
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = agent_display_color(&Agent::ClaudeCode);
+        let actual_2 = agent_display_color(&Agent::Codex);
+        let actual_3 = agent_display_color(&Agent::Gemini);
+        let actual_4 = agent_display_color(&Agent::OpenCode);
+        let actual_5 = agent_display_color(&Agent::Droid);
+        // Then
+        assert_eq!(actual_1, Color::Cyan);
+        assert_eq!(actual_2, Color::Yellow);
+        assert_eq!(actual_3, Color::Blue);
+        assert_eq!(actual_4, Color::Magenta);
+        assert_eq!(actual_5, Color::Green);
     }
 
     #[test]
     fn settings_based_defaults_resolve() {
-        // These read the user's real settings.json; any valid value is acceptable.
-        let _ = resolve_workspace_type(false, false);
-        let _ = resolve_agent(None);
+        // Given
+        // (the user's real settings.json, whatever it contains)
+
+        // When
+        let kind = resolve_workspace_type(false, false);
+        let agent = resolve_agent(None);
+
+        // Then
+        assert!(matches!(
+            kind,
+            WorkspaceKind::Worktree | WorkspaceKind::Clone
+        ));
+        assert!(Agent::all_names().contains(&agent.to_string().as_str()));
     }
 
     #[test]
     fn workspace_backend_delegates_to_worktree_manager() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_get_project_name()
             .returning(|| Ok("silo-backend-test".to_string()));
@@ -1550,10 +1668,11 @@ mod command_tests {
         git.expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
         let backend = WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(git));
-
+        // When
         let path = backend
             .create(Some("feature".to_string()), false, &HashSet::new())
             .unwrap();
+        // Then
         assert!(
             path.file_name()
                 .unwrap()
@@ -1577,6 +1696,7 @@ mod command_tests {
 
     #[test]
     fn workspace_backend_delegates_to_clone_manager() {
+        // Given
         let mut git = MockGitOperations::new();
         git.expect_get_project_name()
             .returning(|| Ok("silo-backend-test-clone".to_string()));
@@ -1588,8 +1708,9 @@ mod command_tests {
             .returning(|_, _| Ok(()));
         git.expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
+        // When
         let backend = WorkspaceBackend::Clone(GitCheckoutWorkspace::new(git));
-
+        // Then
         assert!(backend.create(None, false, &HashSet::new()).is_ok());
         assert!(
             backend

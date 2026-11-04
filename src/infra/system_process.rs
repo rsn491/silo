@@ -165,19 +165,27 @@ mod tests {
 
     #[test]
     fn test_find_processes_by_names_excludes_own_process() {
+        // Given
         let processes = SystemProcess
             .find_processes_by_names(&["silo-no-such-process-name"])
             .unwrap();
-
+        // When
         let own_pid = std::process::id();
+        // Then
         assert!(processes.iter().all(|(pid, _)| *pid != own_pid));
     }
 
     #[test]
     fn test_get_process_cwd_of_current_process() {
-        // `lsof` may be missing (or restricted) on some machines; when it works the
+        // Given
+        let pid = std::process::id();
+
+        // When
+        let cwd = SystemProcess.get_process_cwd(pid);
+
+        // Then — `lsof` may be missing (or restricted) on some machines; when it works the
         // result must be this process's working directory.
-        if let Ok(cwd) = SystemProcess.get_process_cwd(std::process::id()) {
+        if let Ok(cwd) = cwd {
             assert_eq!(
                 cwd.canonicalize().unwrap(),
                 std::env::current_dir().unwrap().canonicalize().unwrap()
@@ -187,21 +195,26 @@ mod tests {
 
     #[test]
     fn test_get_process_cwd_fails_for_unknown_pid() {
-        assert!(SystemProcess.get_process_cwd(u32::MAX - 1).is_err());
+        // Given
+        // (no setup needed)
+        // When
+        let actual = SystemProcess.get_process_cwd(u32::MAX - 1).is_err();
+        // Then
+        assert!(actual);
     }
 
     #[test]
     fn test_parse_ps_output_matching_processes() {
-        // Arrange
+        // Given
         let output = "  PID ARGS
   123 /usr/bin/claude --some-args
   456 /usr/bin/other-process
   789 /path/to/claude code";
 
-        // Act
+        // When
         let processes = parse_ps_output_with_patterns(output, &["claude"], 999);
 
-        // Assert
+        // Then
         assert_eq!(processes.len(), 2);
         assert_eq!(processes[0].0, 123);
         assert!(processes[0].1.contains("claude"));
@@ -211,46 +224,46 @@ mod tests {
 
     #[test]
     fn test_parse_ps_output_excludes_own_pid() {
-        // Arrange
+        // Given
         let output = "  PID ARGS
   123 /usr/bin/claude --some-args
   456 /usr/bin/claude --other-args";
 
-        // Act
+        // When
         let processes = parse_ps_output_with_patterns(output, &["claude"], 123);
 
-        // Assert
+        // Then
         assert_eq!(processes.len(), 1);
         assert_eq!(processes[0].0, 456);
     }
 
     #[test]
     fn test_parse_ps_output_no_matches() {
-        // Arrange
+        // Given
         let output = "  PID ARGS
   123 /usr/bin/other
   456 /usr/bin/different";
 
-        // Act
+        // When
         let processes = parse_ps_output_with_patterns(output, &["claude"], 999);
 
-        // Assert
+        // Then
         assert_eq!(processes.len(), 0);
     }
 
     #[test]
     fn test_parse_ps_output_with_multiple_patterns() {
-        // Arrange
+        // Given
         let output = "  PID ARGS
   123 /usr/bin/claude --some-args
   456 /usr/bin/opencode --other-args
   789 /usr/bin/other-process
   101 /path/to/claude code";
 
-        // Act
+        // When
         let processes = parse_ps_output_with_patterns(output, &["claude", "opencode"], 999);
 
-        // Assert
+        // Then
         assert_eq!(processes.len(), 3);
         assert_eq!(processes[0].0, 123);
         assert!(processes[0].1.contains("claude"));
@@ -262,23 +275,25 @@ mod tests {
 
     #[test]
     fn test_parse_lsof_cwd_output_normal() {
-        // Arrange
+        // Given
         let output = "p123
 n/path/to/worktree";
 
-        // Act
+        // When
         let cwd = parse_lsof_cwd_output(output).expect("should parse valid lsof output");
 
-        // Assert
+        // Then
         assert_eq!(cwd, PathBuf::from("/path/to/worktree"));
     }
 
     #[test]
     fn test_parse_lsof_cwd_output_missing_n_line() {
+        // Given
         let output = "p123
 cDIR";
-
+        // When
         let result = parse_lsof_cwd_output(output);
+        // Then
         assert!(result.is_err());
     }
 }

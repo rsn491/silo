@@ -124,51 +124,73 @@ mod tests {
 
     #[test]
     fn test_initialize_idempotent() {
+        // Given
         // This test verifies that initialize can be called multiple times.
         // In practice, this would create the directory if it doesn't exist.
         // We can't easily test the actual filesystem operation in unit tests
         // but we can verify the function is callable.
         let result1 = SiloConfig::initialize();
         let result2 = SiloConfig::initialize();
-
         // Both should succeed (or both fail if home dir not available).
-        assert_eq!(result1.is_ok(), result2.is_ok());
+        // When
+        let actual = result1.is_ok();
+        // Then
+        assert_eq!(actual, result2.is_ok());
     }
 
     #[test]
     fn test_settings_path_is_inside_silo_dir() {
+        // Given
         let (Some(silo_dir), Ok(path)) =
             (SiloConfig::get_silo_dir(), SiloConfig::get_settings_path())
         else {
             return;
         };
 
-        assert_eq!(path, silo_dir.join("settings.json"));
-        // Loading the real settings must not panic, whatever their state.
-        let _ = SiloConfig::load_settings();
+        // When
+        let expected = silo_dir.join("settings.json");
+
+        // Then
+        assert_eq!(path, expected);
+    }
+
+    #[test]
+    fn test_load_settings_does_not_panic() {
+        // Given
+        // (the real settings file, whatever its state)
+
+        // When
+        let result = SiloConfig::load_settings();
+
+        // Then
+        let _ = result; // Ok or Err are both acceptable; the call must not panic.
     }
 
     #[test]
     fn test_save_settings_reports_unwritable_path() {
+        // Given
         let dir = tempdir().unwrap();
         let blocker = dir.path().join("file");
         std::fs::write(&blocker, "not a directory").unwrap();
-
+        // When
         let result = SiloConfig::save_settings_to_path(
             &blocker.join("settings.json"),
             &SiloSettings::default(),
         );
-
+        // Then
         assert!(matches!(result, Err(SiloConfigError::IoError(_))));
     }
 
     #[test]
     fn test_get_silo_dir() {
-        // Should return Some(PathBuf) on most systems.
+        // Given
+        // (the environment's home directory, which may be unavailable)
+
+        // When
         let silo_dir = SiloConfig::get_silo_dir();
 
-        // Can't assert exact value as it depends on environment.
-        // But we can verify it's either Some or None.
+        // Then — the exact value depends on the environment, but when a home directory
+        // exists the silo directory must be a `.silo` folder inside it.
         if let Some(path) = silo_dir {
             assert!(path.to_string_lossy().contains(".silo"));
         }
@@ -176,44 +198,44 @@ mod tests {
 
     #[test]
     fn test_load_settings_missing_file() {
-        // Arrange
+        // Given
         let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
 
-        // Act
+        // When
         let settings = SiloConfig::load_settings_from_path(&settings_path)
             .expect("should load default settings when file is missing");
 
-        // Assert
+        // Then
         assert!(settings.agent.is_none());
     }
 
     #[test]
     fn test_load_settings_valid_json() {
-        // Arrange
+        // Given
         let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         fs::write(&settings_path, r#"{"agent":"codex"}"#).expect("failed to write settings file");
 
-        // Act
+        // When
         let settings = SiloConfig::load_settings_from_path(&settings_path)
             .expect("should load settings from valid JSON");
 
-        // Assert
+        // Then
         assert_eq!(settings.agent, Some(Agent::Codex));
     }
 
     #[test]
     fn test_load_settings_invalid_json() {
-        // Arrange
+        // Given
         let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         fs::write(&settings_path, "{invalid").expect("failed to write settings file");
 
-        // Act
+        // When
         let err = SiloConfig::load_settings_from_path(&settings_path).unwrap_err();
 
-        // Assert
+        // Then
         match err {
             SiloConfigError::JsonParse(_) => {}
             other => panic!("unexpected error: {:?}", other),
@@ -222,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_save_settings() {
-        // Arrange
+        // Given
         let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         let settings = SiloSettings {
@@ -231,11 +253,11 @@ mod tests {
             exit_work: None,
         };
 
-        // Act
+        // When
         SiloConfig::save_settings_to_path(&settings_path, &settings)
             .expect("should save settings to path");
 
-        // Assert
+        // Then
         let contents =
             fs::read_to_string(&settings_path).expect("should read settings file after save");
         assert!(contents.contains("\"agent\""));
@@ -244,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_save_and_load_workspace_type() {
-        // Arrange
+        // Given
         let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         let settings = SiloSettings {
@@ -253,34 +275,34 @@ mod tests {
             exit_work: None,
         };
 
-        // Act
+        // When
         SiloConfig::save_settings_to_path(&settings_path, &settings)
             .expect("should save settings to path");
         let loaded = SiloConfig::load_settings_from_path(&settings_path)
             .expect("should load settings after save");
 
-        // Assert
+        // Then
         assert_eq!(loaded.workspace_type, Some(WorkspaceKind::Clone));
     }
 
     #[test]
     fn test_workspace_type_default_is_absent() {
-        // Arrange
+        // Given
         let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         fs::write(&settings_path, r#"{"agent":"claude"}"#).expect("failed to write settings file");
 
-        // Act
+        // When
         let settings = SiloConfig::load_settings_from_path(&settings_path)
             .expect("should load settings from valid JSON");
 
-        // Assert
+        // Then
         assert!(settings.workspace_type.is_none());
     }
 
     #[test]
     fn test_exit_work_round_trip() {
-        // Arrange
+        // Given
         let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         let settings = SiloSettings {
@@ -289,28 +311,28 @@ mod tests {
             exit_work: Some(false),
         };
 
-        // Act
+        // When
         SiloConfig::save_settings_to_path(&settings_path, &settings)
             .expect("should save settings to path");
         let loaded = SiloConfig::load_settings_from_path(&settings_path)
             .expect("should load settings after save");
 
-        // Assert
+        // Then
         assert_eq!(loaded.exit_work, Some(false));
     }
 
     #[test]
     fn test_exit_work_default_is_absent() {
-        // Arrange
+        // Given
         let dir = tempdir().expect("failed to create temp dir");
         let settings_path = dir.path().join("settings.json");
         fs::write(&settings_path, r#"{"agent":"claude"}"#).expect("failed to write settings file");
 
-        // Act
+        // When
         let settings = SiloConfig::load_settings_from_path(&settings_path)
             .expect("should load settings from valid JSON");
 
-        // Assert
+        // Then
         assert!(settings.exit_work.is_none());
     }
 }

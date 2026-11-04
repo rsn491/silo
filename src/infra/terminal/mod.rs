@@ -82,29 +82,40 @@ mod tests {
 
     #[test]
     fn test_detect_terminal_reads_environment() {
+        // Given
+        // (no setup needed)
+        // When
         let expected = detect_terminal_from_value(std::env::var("TERM_PROGRAM").ok().as_deref());
-
+        // Then
         assert_eq!(detect_terminal().is_ok(), expected.is_ok());
     }
 
     #[test]
     fn test_detect_terminal_iterm2_app_spelling() {
-        // Arrange
+        // Given
         let term_program = Some("iTerm2.app");
 
-        // Act
+        // When
         let terminal = detect_terminal_from_value(term_program)
             .expect("iTerm2.app should be detected as iTerm2");
 
-        // Assert
+        // Then
         assert!(format!("{terminal:?}").contains("ITerm2"));
     }
 
     #[test]
     fn test_detect_terminal_iterm2_variant_names() {
-        // Assert — all documented TERM_PROGRAM spellings for iTerm2 are accepted.
-        for value in &["iterm", "iterm2", "iterm.app", "iterm2.app", "iTerm2"] {
-            let result = detect_terminal_from_value(Some(value));
+        // Given
+        let spellings = ["iterm", "iterm2", "iterm.app", "iterm2.app", "iTerm2"];
+
+        // When
+        let results: Vec<_> = spellings
+            .iter()
+            .map(|value| (value, detect_terminal_from_value(Some(value))))
+            .collect();
+
+        // Then — all documented TERM_PROGRAM spellings for iTerm2 are accepted.
+        for (value, result) in results {
             assert!(
                 result.is_ok(),
                 "TERM_PROGRAM={value:?} should be recognised as iTerm2"
@@ -114,13 +125,13 @@ mod tests {
 
     #[test]
     fn test_detect_terminal_unsupported_terminal_returns_error() {
-        // Arrange
+        // Given
         let term_program = Some("gnome-terminal");
 
-        // Act
+        // When
         let result = detect_terminal_from_value(term_program);
 
-        // Assert
+        // Then
         let err = result.expect_err("unsupported terminal should yield an error");
         assert!(
             matches!(err, TerminalError::TerminalNotSupported(_)),
@@ -130,10 +141,13 @@ mod tests {
 
     #[test]
     fn test_detect_terminal_missing_env_var_returns_error() {
-        // Act
-        let result = detect_terminal_from_value(None);
+        // Given
+        let term_program = None;
 
-        // Assert
+        // When
+        let result = detect_terminal_from_value(term_program);
+
+        // Then
         let err = result.expect_err("missing TERM_PROGRAM should yield an error");
         assert!(
             matches!(err, TerminalError::TerminalDetectionFailed(_)),

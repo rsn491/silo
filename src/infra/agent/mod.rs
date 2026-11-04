@@ -198,96 +198,151 @@ mod tests {
 
     #[test]
     fn test_all_names_are_canonical() {
+        // Given
+        // (no setup needed)
+        // When
+        let actual = Agent::all_names();
+        // Then
         assert_eq!(
-            Agent::all_names(),
+            actual,
             vec!["claude", "opencode", "codex", "gemini", "droid"]
         );
     }
 
     #[test]
     fn test_try_from_str_accepts_canonical_names() {
-        assert_eq!(Agent::try_from_str("claude"), Some(Agent::ClaudeCode));
-        assert_eq!(Agent::try_from_str("opencode"), Some(Agent::OpenCode));
-        assert_eq!(Agent::try_from_str("codex"), Some(Agent::Codex));
-        assert_eq!(Agent::try_from_str("gemini"), Some(Agent::Gemini));
-        assert_eq!(Agent::try_from_str("droid"), Some(Agent::Droid));
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = Agent::try_from_str("claude");
+        let actual_2 = Agent::try_from_str("opencode");
+        let actual_3 = Agent::try_from_str("codex");
+        let actual_4 = Agent::try_from_str("gemini");
+        let actual_5 = Agent::try_from_str("droid");
+        // Then
+        assert_eq!(actual_1, Some(Agent::ClaudeCode));
+        assert_eq!(actual_2, Some(Agent::OpenCode));
+        assert_eq!(actual_3, Some(Agent::Codex));
+        assert_eq!(actual_4, Some(Agent::Gemini));
+        assert_eq!(actual_5, Some(Agent::Droid));
     }
 
     #[test]
     fn test_try_from_str_rejects_claudecode() {
-        assert_eq!(Agent::try_from_str("claudecode"), None);
+        // Given
+        // (no setup needed)
+        // When
+        let actual = Agent::try_from_str("claudecode");
+        // Then
+        assert_eq!(actual, None);
     }
 
     #[test]
     fn test_all_command_names_are_canonical() {
+        // Given
+        // (no setup needed)
+        // When
+        let actual = Agent::all_command_names();
+        // Then
         assert_eq!(
-            Agent::all_command_names(),
+            actual,
             vec!["claude", "opencode", "codex", "gemini", "droid"]
         );
     }
 
     #[test]
     fn test_try_from_command_name_accepts_canonical_names() {
-        assert_eq!(
-            Agent::try_from_command_name("claude"),
-            Some(Agent::ClaudeCode)
-        );
-        assert_eq!(
-            Agent::try_from_command_name("opencode"),
-            Some(Agent::OpenCode)
-        );
-        assert_eq!(Agent::try_from_command_name("codex"), Some(Agent::Codex));
-        assert_eq!(Agent::try_from_command_name("gemini"), Some(Agent::Gemini));
-        assert_eq!(Agent::try_from_command_name("droid"), Some(Agent::Droid));
+        // Given
+        // (no setup needed)
+        // When
+        let actual_1 = Agent::try_from_command_name("claude");
+        let actual_2 = Agent::try_from_command_name("opencode");
+        let actual_3 = Agent::try_from_command_name("codex");
+        let actual_4 = Agent::try_from_command_name("gemini");
+        let actual_5 = Agent::try_from_command_name("droid");
+        // Then
+        assert_eq!(actual_1, Some(Agent::ClaudeCode));
+        assert_eq!(actual_2, Some(Agent::OpenCode));
+        assert_eq!(actual_3, Some(Agent::Codex));
+        assert_eq!(actual_4, Some(Agent::Gemini));
+        assert_eq!(actual_5, Some(Agent::Droid));
     }
 
     #[test]
     fn test_agent_behavior_delegation() {
-        assert_eq!(Agent::ClaudeCode.command_name(), "claude");
-        assert_eq!(Agent::OpenCode.command_name(), "opencode");
-        assert_eq!(Agent::Codex.command_name(), "codex");
-        assert_eq!(Agent::Gemini.command_name(), "gemini");
-        assert_eq!(Agent::Droid.command_name(), "droid");
-        assert_eq!(AgentCommand::command_name(&Agent::Gemini), "gemini");
-        assert_eq!(Agent::Codex.process().get_program(), "codex");
+        // Given
+        let codex_command = Agent::Codex.process();
+        // When
+        let actual_1 = Agent::ClaudeCode.command_name();
+        let actual_2 = Agent::OpenCode.command_name();
+        let actual_3 = Agent::Codex.command_name();
+        let actual_4 = Agent::Gemini.command_name();
+        let actual_5 = Agent::Droid.command_name();
+        let actual_6 = AgentCommand::command_name(&Agent::Gemini);
+        let actual_7 = codex_command.get_program();
+        // Then
+        assert_eq!(actual_1, "claude");
+        assert_eq!(actual_2, "opencode");
+        assert_eq!(actual_3, "codex");
+        assert_eq!(actual_4, "gemini");
+        assert_eq!(actual_5, "droid");
+        assert_eq!(actual_6, "gemini");
+        assert_eq!(actual_7, "codex");
     }
 
     #[test]
     fn test_default_agent_is_claude() {
-        assert_eq!(Agent::default(), Agent::ClaudeCode);
+        // Given
+        // (no setup needed)
+        // When
+        let actual = Agent::default();
+        // Then
+        assert_eq!(actual, Agent::ClaudeCode);
     }
 
     #[test]
     fn test_reference_delegates_to_agent_command() {
+        // Given
         let mut mock = MockAgentCommand::new();
         mock.expect_command_name().return_const("mock");
         mock.expect_prompt()
             .returning(|message| Ok(format!("echo: {}", message)));
         let reference = &mock;
-
-        assert_eq!(AgentCommand::command_name(&reference), "mock");
-        assert_eq!(AgentCommand::prompt(&reference, "hi").unwrap(), "echo: hi");
+        // When
+        let actual_1 = AgentCommand::command_name(&reference);
+        let actual_2 = AgentCommand::prompt(&reference, "hi").unwrap();
+        // Then
+        assert_eq!(actual_1, "mock");
+        assert_eq!(actual_2, "echo: hi");
     }
 
     #[test]
     fn test_run_headless_returns_trimmed_stdout() {
+        // Given
+        // (no setup needed)
+        // When
         let output = run_headless("sh", &["-c", "printf '  hello \\n'"]).unwrap();
-
+        // Then
         assert_eq!(output, "hello");
     }
 
     #[test]
     fn test_run_headless_reports_stderr_on_failure() {
+        // Given
+        // (no setup needed)
+        // When
         let result = run_headless("sh", &["-c", "echo boom >&2; exit 3"]);
-
+        // Then
         assert!(matches!(result, Err(PromptError::Failed(msg)) if msg == "boom"));
     }
 
     #[test]
     fn test_run_headless_reports_spawn_failure() {
+        // Given
         let result = run_headless("silo-definitely-missing-binary", &[]);
-
+        // When
         let err = result.unwrap_err();
+        // Then
         assert!(matches!(err, PromptError::Io(_)));
         assert!(err.to_string().starts_with("failed to spawn agent"));
     }

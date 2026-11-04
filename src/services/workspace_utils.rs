@@ -49,24 +49,33 @@ mod tests {
 
     #[test]
     fn test_parse_uncommitted_changes_with_files() {
+        // Given
         let status_output = " M file1.txt\n M file2.txt\n M file3.txt\n";
+        // When
         let (has_changes, count) = parse_uncommitted_changes(status_output);
+        // Then
         assert!(has_changes);
         assert_eq!(count, 3);
     }
 
     #[test]
     fn test_parse_uncommitted_changes_empty() {
+        // Given
         let status_output = "";
+        // When
         let (has_changes, count) = parse_uncommitted_changes(status_output);
+        // Then
         assert!(!has_changes);
         assert_eq!(count, 0);
     }
 
     #[test]
     fn test_parse_uncommitted_changes_with_empty_lines() {
+        // Given
         let status_output = " M file1.txt\n\n M file2.txt\n";
+        // When
         let (has_changes, count) = parse_uncommitted_changes(status_output);
+        // Then
         assert!(has_changes);
         assert_eq!(count, 2); // Should only count non-empty lines.
     }

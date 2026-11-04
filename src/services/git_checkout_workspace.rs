@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn test_create_checkout_workspace() {
-        // Arrange
+        // Given
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_project_name()
@@ -266,10 +266,10 @@ mod tests {
             .returning(|_, _| Ok(()));
         let workspace = GitCheckoutWorkspace::new(mock_git);
 
-        // Act
+        // When
         let result = workspace.create(None, false, &HashSet::new());
 
-        // Assert
+        // Then
         assert!(result.is_ok());
         let path = result.expect("workspace creation should succeed");
         assert!(path.to_string_lossy().contains("test-project"));
@@ -277,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_create_checkout_workspace_custom_branch() {
-        // Arrange
+        // Given
         let mut mock_git = MockGitOperations::new();
         mock_git
             .expect_get_project_name()
@@ -291,10 +291,10 @@ mod tests {
             .returning(|_, _| Ok(()));
         let workspace = GitCheckoutWorkspace::new(mock_git);
 
-        // Act
+        // When
         let result = workspace.create(Some("my-feature".to_string()), false, &HashSet::new());
 
-        // Assert
+        // Then
         assert!(result.is_ok());
         let path = result.expect("workspace creation should succeed");
         assert!(path.to_string_lossy().contains("my-project"));
@@ -302,17 +302,18 @@ mod tests {
 
     #[test]
     fn get_all_includes_original_repository() {
+        // Given
         let repo = crate::infra::git::test_support::TestRepo::new();
         std::fs::write(repo.work.join("dirty.txt"), "x").unwrap();
         let workspace = GitCheckoutWorkspace::new(repo.git());
-
         let managed = workspace
             .get_all(WorkspaceListingScope::ManagedOnly)
             .unwrap();
+        // When
         let all = workspace
             .get_all(WorkspaceListingScope::ManagedAndOriginal)
             .unwrap();
-
+        // Then
         assert!(managed.is_empty());
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].path, repo.work);
@@ -324,6 +325,7 @@ mod tests {
 
     #[test]
     fn resolve_original_uses_local_origin_for_managed_clone() {
+        // Given
         let clone_path = PathBuf::from("/silo/project-12345678");
         let source_path = PathBuf::from("/source/project");
         let primary_path = PathBuf::from("/source/project-primary");
@@ -342,15 +344,16 @@ mod tests {
             .expect_get_primary_worktree()
             .with(mockall::predicate::eq(source_path))
             .return_once(move |_| Ok(primary_for_result));
-
+        // When
         let resolved =
             GitCheckoutWorkspace::new(mock_git).resolve_original(std::slice::from_ref(&clone_path));
-
+        // Then
         assert_eq!(resolved, Some(primary_path));
     }
 
     #[test]
     fn resolve_original_omits_unresolvable_clone_origin() {
+        // Given
         let clone_path = PathBuf::from("/silo/project-12345678");
         let mut mock_git = MockGitOperations::new();
         let clone_for_root = clone_path.clone();
@@ -359,15 +362,16 @@ mod tests {
             .return_once(move || Ok(clone_for_root));
         mock_git.expect_get_local_origin().return_once(|_| Ok(None));
         mock_git.expect_get_primary_worktree().never();
-
+        // When
         let resolved =
             GitCheckoutWorkspace::new(mock_git).resolve_original(std::slice::from_ref(&clone_path));
-
+        // Then
         assert_eq!(resolved, None);
     }
 
     #[test]
     fn resolve_original_normalizes_regular_repo_to_primary_worktree() {
+        // Given
         let linked_path = PathBuf::from("/worktrees/feature");
         let primary_path = PathBuf::from("/source/project");
         let mut mock_git = MockGitOperations::new();
@@ -382,14 +386,16 @@ mod tests {
             .with(mockall::predicate::eq(linked_path))
             .return_once(move |_| Ok(primary_for_result));
 
+        // When
         let resolved = GitCheckoutWorkspace::new(mock_git).resolve_original(&[]);
 
+        // Then
         assert_eq!(resolved, Some(primary_path));
     }
 
     #[test]
     fn test_find_checkout_dirs_skips_worktrees() {
-        // Arrange
+        // Given
         let temp = tempfile::TempDir::new().expect("failed to create temp dir");
         let base = temp.path();
 
@@ -407,17 +413,17 @@ mod tests {
         )
         .expect("failed to write .git file");
 
-        // Act
+        // When
         let results = find_checkout_dirs(base, "my-project-", &HashSet::new());
 
-        // Assert
+        // Then
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], checkout_dir);
     }
 
     #[test]
     fn test_find_checkout_dirs_skips_active() {
-        // Arrange
+        // Given
         let temp = tempfile::TempDir::new().expect("failed to create temp dir");
         let base = temp.path();
 
@@ -433,10 +439,10 @@ mod tests {
         let mut exclude = HashSet::new();
         exclude.insert(checkout1.clone());
 
-        // Act
+        // When
         let results = find_checkout_dirs(base, "my-project-", &exclude);
 
-        // Assert
+        // Then
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], checkout2);
     }
@@ -444,7 +450,7 @@ mod tests {
     #[test]
     #[allow(clippy::collapsible_if)]
     fn test_cleanup_skips_checkouts_with_unpushed_commits() {
-        // Arrange
+        // Given
         // Test the skipped checkout logic with find_checkout_dirs.
         let temp = tempfile::TempDir::new().expect("failed to create temp dir");
         let silo_dir = temp.path();
@@ -478,7 +484,7 @@ mod tests {
                 }
             });
 
-        // Act
+        // When
         // Simulate cleanup logic manually to avoid SiloConfig::get_silo_dir() dependency.
         let base_branch = mock_git.get_default_remote_branch().ok();
         let mut skipped_count = 0;
@@ -496,7 +502,7 @@ mod tests {
             would_remove_count += 1;
         }
 
-        // Assert
+        // Then
         assert_eq!(skipped_count, 1);
         assert_eq!(would_remove_count, 1);
     }

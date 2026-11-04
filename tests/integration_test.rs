@@ -17,13 +17,13 @@ impl Drop for ChildGuard {
 #[test]
 #[ignore = "requires opencode to be installed"]
 fn test_launch_and_ps() {
+    // Given a dummy git repository with one commit
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let home_dir = temp_dir.path().join("home");
     let repo_dir = temp_dir.path().join("repo");
     fs::create_dir_all(&home_dir).expect("failed to create home dir");
     fs::create_dir_all(&repo_dir).expect("failed to create repo dir");
 
-    // 1. Create a dummy git repo
     let run_git = |args: &[&str], dir: &PathBuf| {
         let status = Command::new("git")
             .args(args)
@@ -40,7 +40,7 @@ fn test_launch_and_ps() {
     run_git(&["add", "README.md"], &repo_dir);
     run_git(&["commit", "-m", "Initial commit"], &repo_dir);
 
-    // 2. Launch silo launch in the background
+    // When silo launch runs in the background and `silo ps` is polled until the agent appears
     let silo_bin = PathBuf::from(env!("CARGO_BIN_EXE_silo"));
 
     let child = Command::new(&silo_bin)
@@ -54,7 +54,7 @@ fn test_launch_and_ps() {
         .expect("Failed to launch silo");
     let _child = ChildGuard(child);
 
-    // Poll silo ps until the agent appears (implies worktree was created too)
+    // (the agent appearing implies the worktree was created too)
     let timeout = Duration::from_secs(10);
     let interval = Duration::from_millis(100);
     let start = std::time::Instant::now();
@@ -76,18 +76,18 @@ fn test_launch_and_ps() {
         thread::sleep(interval);
     };
 
-    println!("Silo ps stdout:\n{}", ps_stdout);
-    assert!(ps_stdout.contains("WORKSPACE"));
-
-    // 3. Verify worktree was created
     let output = Command::new("git")
         .args(["worktree", "list"])
         .current_dir(&repo_dir)
         .output()
         .expect("Failed to run git worktree list");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("Worktree list:\n{}", stdout);
-    assert!(stdout.lines().count() >= 2);
+    let worktree_list = String::from_utf8_lossy(&output.stdout);
+    println!("Silo ps stdout:\n{}", ps_stdout);
+    println!("Worktree list:\n{}", worktree_list);
+
+    // Then the agent is listed and a worktree was created
+    assert!(ps_stdout.contains("WORKSPACE"));
+    assert!(worktree_list.lines().count() >= 2);
 
     // _child is dropped here, killing the process via ChildGuard::drop
 }
