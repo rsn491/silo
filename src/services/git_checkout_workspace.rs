@@ -309,10 +309,12 @@ mod tests {
         let managed = workspace
             .get_all(WorkspaceListingScope::ManagedOnly)
             .unwrap();
+
         // When
         let all = workspace
             .get_all(WorkspaceListingScope::ManagedAndOriginal)
             .unwrap();
+
         // Then
         assert!(managed.is_empty());
         assert_eq!(all.len(), 1);
@@ -344,9 +346,11 @@ mod tests {
             .expect_get_primary_worktree()
             .with(mockall::predicate::eq(source_path))
             .return_once(move |_| Ok(primary_for_result));
+
         // When
         let resolved =
             GitCheckoutWorkspace::new(mock_git).resolve_original(std::slice::from_ref(&clone_path));
+
         // Then
         assert_eq!(resolved, Some(primary_path));
     }
@@ -362,9 +366,11 @@ mod tests {
             .return_once(move || Ok(clone_for_root));
         mock_git.expect_get_local_origin().return_once(|_| Ok(None));
         mock_git.expect_get_primary_worktree().never();
+
         // When
         let resolved =
             GitCheckoutWorkspace::new(mock_git).resolve_original(std::slice::from_ref(&clone_path));
+
         // Then
         assert_eq!(resolved, None);
     }

@@ -125,8 +125,10 @@ mod tests {
     fn test_suggest_branch_name_sanitizes_agent_output() {
         // Given
         let service = GitSuggestionsService::new(agent_replying(Ok("Fix Login Bug\nextra")));
+
         // When
         let result = service.suggest_branch_name("CHANGES-MARKER");
+
         // Then
         assert_eq!(result, Ok(Some("fix-login-bug".to_string())));
     }
@@ -135,8 +137,10 @@ mod tests {
     fn test_suggest_branch_name_propagates_agent_error() {
         // Given
         let service = GitSuggestionsService::new(agent_replying(Err("boom")));
+
         // When
         let result = service.suggest_branch_name("CHANGES-MARKER");
+
         // Then
         assert!(result.unwrap_err().contains("boom"));
     }
@@ -146,8 +150,10 @@ mod tests {
         // Given
         let service =
             GitSuggestionsService::new(agent_replying(Ok("\n  Add login form  \nmore detail")));
+
         // When
         let result = service.suggest_commit_message("CHANGES-MARKER");
+
         // Then
         assert_eq!(result, Ok(Some("Add login form".to_string())));
     }
@@ -156,8 +162,10 @@ mod tests {
     fn test_suggest_commit_message_returns_none_for_blank_output() {
         // Given
         let service = GitSuggestionsService::new(agent_replying(Ok(" \n \n")));
+
         // When
         let result = service.suggest_commit_message("CHANGES-MARKER");
+
         // Then
         assert_eq!(result, Ok(None));
     }
@@ -166,8 +174,10 @@ mod tests {
     fn test_suggest_commit_message_propagates_agent_error() {
         // Given
         let service = GitSuggestionsService::new(agent_replying(Err("offline")));
+
         // When
         let result = service.suggest_commit_message("CHANGES-MARKER");
+
         // Then
         assert!(result.unwrap_err().contains("offline"));
     }

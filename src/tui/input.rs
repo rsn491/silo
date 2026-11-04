@@ -237,8 +237,10 @@ mod tests {
     fn typing_and_enter_returns_value() {
         // Given
         // (no setup needed)
+
         // When
         let (result, screen) = run("", seq(vec![typed("hello"), vec![key(KeyCode::Enter)]]));
+
         // Then
         assert_eq!(result.as_deref(), Some("hello"));
         assert!(screen.contains("Commit message"));
@@ -249,9 +251,11 @@ mod tests {
     fn cancel_returns_none() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = run("x", vec![key(KeyCode::Esc)]).0;
         let actual_2 = run("x", vec![ctrl('c')]).0;
+
         // Then
         assert_eq!(actual_1, None);
         assert_eq!(actual_2, None);
@@ -269,8 +273,10 @@ mod tests {
             vec![key(KeyCode::Left), key(KeyCode::Right)],
             vec![key(KeyCode::Enter)],
         ]);
+
         // When
         let (result, _) = run("abc", events);
+
         // Then
         assert_eq!(result.as_deref(), Some(">ab!"));
     }
@@ -285,8 +291,10 @@ mod tests {
             key(KeyCode::Delete),
             key(KeyCode::Enter),
         ];
+
         // When
         let actual = run("abc", events).0;
+
         // Then
         assert_eq!(actual.as_deref(), Some("bc"));
     }
@@ -299,8 +307,10 @@ mod tests {
             key(KeyCode::Backspace),
             key(KeyCode::Enter),
         ];
+
         // When
         let actual = run("abc", events).0;
+
         // Then
         assert_eq!(actual.as_deref(), Some("abc"));
     }
@@ -343,8 +353,10 @@ mod tests {
     fn ignores_unrelated_events() {
         // Given
         let events = vec![Event::FocusLost, key(KeyCode::F(1)), key(KeyCode::Enter)];
+
         // When
         let actual = run("keep", events).0;
+
         // Then
         assert_eq!(actual.as_deref(), Some("keep"));
     }
@@ -355,6 +367,7 @@ mod tests {
         let mut terminal = test_terminal(70, 7);
         let mut value = Vec::new();
         let mut pos = 0;
+
         // When
         let result = run_input_loop(
             &mut terminal,
@@ -363,6 +376,7 @@ mod tests {
             &mut pos,
             &mut event_source(vec![]),
         );
+
         // Then
         assert!(result.is_err());
     }

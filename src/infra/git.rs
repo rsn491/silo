@@ -814,8 +814,10 @@ mod tests {
     fn test_extract_project_name_https() {
         // Given
         // (no setup needed)
+
         // When
         let actual = extract_project_name_from_url("https://github.com/user/myrepo.git");
+
         // Then
         assert_eq!(actual, Some("myrepo".to_string()));
     }
@@ -824,8 +826,10 @@ mod tests {
     fn test_extract_project_name_ssh() {
         // Given
         // (no setup needed)
+
         // When
         let actual = extract_project_name_from_url("git@github.com:user/myrepo.git");
+
         // Then
         assert_eq!(actual, Some("myrepo".to_string()));
     }
@@ -834,8 +838,10 @@ mod tests {
     fn test_extract_project_name_no_git_suffix() {
         // Given
         // (no setup needed)
+
         // When
         let actual = extract_project_name_from_url("https://github.com/user/myrepo");
+
         // Then
         assert_eq!(actual, Some("myrepo".to_string()));
     }
@@ -888,8 +894,10 @@ detached
     fn test_parse_worktree_list_empty_output() {
         // Given
         let output = "";
+
         // When
         let worktrees = parse_worktree_list(output);
+
         // Then
         assert_eq!(worktrees.len(), 0);
     }
@@ -1124,8 +1132,10 @@ mod git_cli_tests {
         let repo = TestRepo::new();
         let sub = repo.work.join("nested");
         fs::create_dir_all(&sub).unwrap();
+
         // When
         let root = Git::in_dir(&sub).get_repo_root().unwrap();
+
         // Then
         assert_eq!(root, repo.work);
     }
@@ -1134,8 +1144,10 @@ mod git_cli_tests {
     fn get_repo_root_fails_outside_repository() {
         // Given
         let dir = not_a_repo();
+
         // When
         let result = Git::in_dir(dir.path()).get_repo_root();
+
         // Then
         assert!(matches!(result, Err(GitError::NotAGitRepo)));
     }
@@ -1144,8 +1156,10 @@ mod git_cli_tests {
     fn get_project_name_uses_origin_url() {
         // Given
         let repo = TestRepo::new();
+
         // When
         let actual = repo.git().get_project_name().unwrap();
+
         // Then
         assert_eq!(actual, repo.project);
     }
@@ -1154,8 +1168,10 @@ mod git_cli_tests {
     fn get_project_name_falls_back_to_directory_name() {
         // Given
         let (_tmp, path) = standalone_repo();
+
         // When
         let name = Git::in_dir(&path).get_project_name().unwrap();
+
         // Then
         assert_eq!(name, path.file_name().unwrap().to_str().unwrap());
     }
@@ -1164,8 +1180,10 @@ mod git_cli_tests {
     fn get_project_name_fails_outside_repository() {
         // Given
         // (no setup needed)
+
         // When
         let dir = not_a_repo();
+
         // Then
         assert!(Git::in_dir(dir.path()).get_project_name().is_err());
     }
@@ -1174,8 +1192,10 @@ mod git_cli_tests {
     fn extract_project_name_rejects_empty_url() {
         // Given
         // (no setup needed)
+
         // When
         let actual = extract_project_name_from_url("");
+
         // Then
         assert_eq!(actual, None);
     }
@@ -1220,8 +1240,10 @@ mod git_cli_tests {
         let repo = TestRepo::new();
         run_git(&repo.work, &["branch", "existing"]);
         let wt_path = repo.sibling("wt-existing");
+
         // When
         repo.git().create_worktree(&wt_path, "existing").unwrap();
+
         // Then
         assert_eq!(
             run_git(&wt_path, &["rev-parse", "--abbrev-ref", "HEAD"]),
@@ -1233,8 +1255,10 @@ mod git_cli_tests {
     fn create_worktree_fails_when_branch_checked_out_elsewhere() {
         // Given
         let repo = TestRepo::new();
+
         // When
         let result = repo.git().create_worktree(&repo.sibling("wt-main"), "main");
+
         // Then
         assert!(matches!(result, Err(GitError::WorktreeCreationFailed(_))));
     }
@@ -1243,8 +1267,10 @@ mod git_cli_tests {
     fn create_worktree_fails_outside_repository() {
         // Given
         let dir = not_a_repo();
+
         // When
         let result = Git::in_dir(dir.path()).create_worktree(&dir.path().join("wt"), "branch");
+
         // Then
         assert!(matches!(result, Err(GitError::WorktreeCreationFailed(_))));
     }
@@ -1253,8 +1279,10 @@ mod git_cli_tests {
     fn list_worktrees_fails_outside_repository() {
         // Given
         // (no setup needed)
+
         // When
         let dir = not_a_repo();
+
         // Then
         assert!(matches!(
             Git::in_dir(dir.path()).list_worktrees(),
@@ -1266,8 +1294,10 @@ mod git_cli_tests {
     fn get_primary_worktree_fails_outside_repository() {
         // Given
         // (no setup needed)
+
         // When
         let dir = not_a_repo();
+
         // Then
         assert!(Git::new().get_primary_worktree(dir.path()).is_err());
     }
@@ -1276,8 +1306,10 @@ mod git_cli_tests {
     fn remove_worktree_fails_for_unknown_path() {
         // Given
         let repo = TestRepo::new();
+
         // When
         let result = repo.git().remove_worktree(&repo.sibling("missing"));
+
         // Then
         assert!(matches!(result, Err(GitError::WorktreeRemovalFailed(_))));
     }
@@ -1367,8 +1399,10 @@ mod git_cli_tests {
     fn get_default_remote_branch_reads_origin_head() {
         // Given
         let repo = TestRepo::new();
+
         // When
         let actual = repo.git().get_default_remote_branch().unwrap();
+
         // Then
         assert_eq!(actual, "origin/main");
     }
@@ -1377,8 +1411,10 @@ mod git_cli_tests {
     fn get_default_remote_branch_falls_back_without_origin_head() {
         // Given
         // (no setup needed)
+
         // When
         let (_tmp, path) = standalone_repo();
+
         // Then
         assert_eq!(
             Git::in_dir(&path).get_default_remote_branch().unwrap(),
@@ -1432,8 +1468,10 @@ mod git_cli_tests {
         // Given
         let repo = TestRepo::new();
         let result = Git::new().get_status_porcelain(&repo.sibling("missing"));
+
         // When
         let actual = matches!(result, Err(GitError::CommandFailed(_)));
+
         // Then
         assert!(actual);
     }
@@ -1443,8 +1481,10 @@ mod git_cli_tests {
         // Given
         let repo = TestRepo::new();
         let result = Git::new().commit_all(&repo.work, "empty");
+
         // When
         let actual = matches!(result, Err(GitError::CommitFailed(_)));
+
         // Then
         assert!(actual);
     }
@@ -1454,8 +1494,10 @@ mod git_cli_tests {
         // Given
         let repo = TestRepo::new();
         let result = Git::new().stage_all(&repo.sibling("missing"));
+
         // When
         let actual = matches!(result, Err(GitError::CommitFailed(_)));
+
         // Then
         assert!(actual);
     }
@@ -1502,9 +1544,11 @@ mod git_cli_tests {
         // Given
         let repo = TestRepo::new();
         let git = Git::new();
+
         // When
         let actual_1 = git.count_commits_ahead(&repo.work, "nope/nope").is_err();
         let actual_2 = git.count_commits_behind(&repo.work, "nope/nope").is_err();
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -1517,8 +1561,10 @@ mod git_cli_tests {
         let git = Git::new();
         let dest = repo.sibling("clone");
         git.clone_local(&repo.origin, &dest).unwrap();
+
         // When
         git.fetch_remote(&dest).unwrap();
+
         // Then
         assert!(dest.join("README.md").exists());
         assert!(matches!(
@@ -1531,8 +1577,10 @@ mod git_cli_tests {
     fn fetch_remote_fails_without_origin() {
         // Given
         // (no setup needed)
+
         // When
         let (_tmp, path) = standalone_repo();
+
         // Then
         assert!(Git::new().fetch_remote(&path).is_err());
     }
@@ -1660,8 +1708,10 @@ mod git_cli_tests {
         let repo = TestRepo::new();
         run_git(&repo.work, &["checkout", "-q", "--detach"]);
         let result = Git::new().push(&repo.work);
+
         // When
         let actual = matches!(result, Err(GitError::PushFailed(_)));
+
         // Then
         assert!(actual);
     }
@@ -1673,11 +1723,13 @@ mod git_cli_tests {
         let git = Git::new();
         git.checkout_new_branch(&repo.work, "topic").unwrap();
         let missing = repo.sibling("gone.git");
+
         // When
         run_git(
             &repo.work,
             &["remote", "set-url", "origin", missing.to_str().unwrap()],
         );
+
         // Then
         assert!(matches!(git.push(&repo.work), Err(GitError::PushFailed(_))));
     }
@@ -1688,10 +1740,12 @@ mod git_cli_tests {
         let repo = TestRepo::new();
         fs::write(repo.work.join("README.md"), "changed\n").unwrap();
         let summary = Git::new().get_changes_summary(&repo.work).unwrap();
+
         // When
         let actual_1 = summary.contains("Uncommitted changes:");
         let actual_2 = summary.contains("Diff stat:");
         let actual_3 = summary.contains("Recent commits:");
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -1702,10 +1756,12 @@ mod git_cli_tests {
     fn get_changes_summary_propagates_status_error() {
         // Given
         let repo = TestRepo::new();
+
         // When
         let actual = Git::new()
             .get_changes_summary(&repo.sibling("missing"))
             .is_err();
+
         // Then
         assert!(actual);
     }
@@ -1716,8 +1772,10 @@ mod git_cli_tests {
         let repo = TestRepo::new();
         let git = Git::new();
         run_git(&repo.work, &["branch", "taken"]);
+
         // When
         git.rename_branch(&repo.work, "renamed").unwrap();
+
         // Then
         assert_eq!(
             git.get_current_branch(&repo.work).unwrap().as_deref(),
@@ -1730,8 +1788,10 @@ mod git_cli_tests {
     fn get_latest_commit_is_none_without_commits() {
         // Given
         let tmp = TempDir::new().unwrap();
+
         // When
         run_git(tmp.path(), &["init", "-b", "main"]);
+
         // Then
         assert_eq!(Git::new().get_latest_commit(tmp.path()).unwrap(), None);
     }

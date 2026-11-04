@@ -169,8 +169,10 @@ mod tests {
         let processes = SystemProcess
             .find_processes_by_names(&["silo-no-such-process-name"])
             .unwrap();
+
         // When
         let own_pid = std::process::id();
+
         // Then
         assert!(processes.iter().all(|(pid, _)| *pid != own_pid));
     }
@@ -197,8 +199,10 @@ mod tests {
     fn test_get_process_cwd_fails_for_unknown_pid() {
         // Given
         // (no setup needed)
+
         // When
         let actual = SystemProcess.get_process_cwd(u32::MAX - 1).is_err();
+
         // Then
         assert!(actual);
     }
@@ -291,8 +295,10 @@ n/path/to/worktree";
         // Given
         let output = "p123
 cDIR";
+
         // When
         let result = parse_lsof_cwd_output(output);
+
         // Then
         assert!(result.is_err());
     }

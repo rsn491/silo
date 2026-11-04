@@ -180,10 +180,12 @@ mod tests {
             yes: false,
             ..yes_args()
         };
+
         // When
         CleanupCommand::new(workspaces, idle_agents(), prompt)
             .run(args)
             .unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -202,10 +204,12 @@ mod tests {
             yes: false,
             ..yes_args()
         };
+
         // When
         CleanupCommand::new(workspaces, idle_agents(), prompt)
             .run(args)
             .unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -248,10 +252,12 @@ mod tests {
             force: true,
             yes: true,
         };
+
         // When
         CleanupCommand::new(workspaces, idle_agents(), MockPrompt::new())
             .run(args)
             .unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -273,8 +279,10 @@ mod tests {
             MockPrompt::new(),
         )
         .run(yes_args());
+
         // When
         let actual = result.unwrap_err().to_string();
+
         // Then
         assert_eq!(actual, "Failed to list running agents");
     }
@@ -286,9 +294,11 @@ mod tests {
         workspaces
             .expect_cleanup()
             .returning(|_, _, _| Err(CleanupError::Git(GitError::NotAGitRepo)));
+
         // When
         let result =
             CleanupCommand::new(workspaces, idle_agents(), MockPrompt::new()).run(yes_args());
+
         // Then
         assert!(result.is_err());
     }
@@ -297,10 +307,12 @@ mod tests {
     fn workspace_detail_describes_kind() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = workspace_detail(&WorkspaceKind::Worktree, Some("main"));
         let actual_2 = workspace_detail(&WorkspaceKind::Worktree, None);
         let actual_3 = workspace_detail(&WorkspaceKind::Clone, Some("main"));
+
         // Then
         assert_eq!(actual_1, "branch: main");
         assert_eq!(actual_2, "branch: (detached)");

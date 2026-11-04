@@ -255,8 +255,10 @@ mod tests {
     fn enter_returns_current_selection() {
         // Given
         // (no setup needed)
+
         // When
         let actual = run(1, vec![key(KeyCode::Enter)]).0;
+
         // Then
         assert_eq!(actual, Some(1));
     }
@@ -299,11 +301,13 @@ mod tests {
     fn home_and_end_jump() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = run(1, vec![key(KeyCode::End), key(KeyCode::Enter)]).0;
         let actual_2 = run(1, vec![key(KeyCode::Char('G')), key(KeyCode::Enter)]).0;
         let actual_3 = run(1, vec![key(KeyCode::Home), key(KeyCode::Enter)]).0;
         let actual_4 = run(1, vec![key(KeyCode::Char('g')), key(KeyCode::Enter)]).0;
+
         // Then
         assert_eq!(actual_1, Some(2));
         assert_eq!(actual_2, Some(2));
@@ -315,10 +319,12 @@ mod tests {
     fn cancel_keys_return_none() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = run(0, vec![key(KeyCode::Esc)]).0;
         let actual_2 = run(0, vec![key(KeyCode::Char('q'))]).0;
         let actual_3 = run(0, vec![ctrl('c')]).0;
+
         // Then
         assert_eq!(actual_1, None);
         assert_eq!(actual_2, None);
@@ -329,8 +335,10 @@ mod tests {
     fn ignores_unrelated_events() {
         // Given
         let events = vec![Event::FocusGained, key(KeyCode::Tab), key(KeyCode::Enter)];
+
         // When
         let actual = run(2, events).0;
+
         // Then
         assert_eq!(actual, Some(2));
     }
@@ -339,8 +347,10 @@ mod tests {
     fn renders_prompt_items_and_selected_detail() {
         // Given
         // (no setup needed)
+
         // When
         let (_, screen) = run(1, vec![key(KeyCode::Enter)]);
+
         // Then
         assert!(screen.contains("Pick one"));
         assert!(screen.contains("alpha"));
@@ -353,8 +363,10 @@ mod tests {
     fn empty_items_return_none_without_terminal() {
         // Given
         // (no setup needed)
+
         // When
         let actual = run_select("Pick", &[], 0).unwrap();
+
         // Then
         assert_eq!(actual, None);
     }
@@ -364,6 +376,7 @@ mod tests {
         // Given
         let mut terminal = test_terminal(60, 14);
         let mut state = ListState::default();
+
         // When
         let result = run_select_loop(
             &mut terminal,
@@ -372,6 +385,7 @@ mod tests {
             &mut state,
             &mut event_source(vec![]),
         );
+
         // Then
         assert!(result.is_err());
     }

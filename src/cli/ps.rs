@@ -397,12 +397,14 @@ mod tests {
         let mut out = Vec::new();
         cmd.write_plain(&mut out).unwrap();
         let text = String::from_utf8(out).unwrap();
+
         // When
         let actual_1 = text.starts_with("PID");
         let actual_2 = text.contains("claude");
         let actual_3 = text.contains("/silo/ws-main");
         let actual_4 = text.contains("(unknown)");
         let actual_5 = text.contains("(detached)");
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -415,8 +417,10 @@ mod tests {
     fn plain_output_without_agents() {
         // Given
         let mut out = Vec::new();
+
         // When
         command(vec![]).write_plain(&mut out).unwrap();
+
         // Then
         assert!(
             String::from_utf8(out)
@@ -447,10 +451,12 @@ mod tests {
         // Given
         let cmd = command(vec![(10, "claude")]);
         let mut agents = Vec::new();
+
         // When
         let actual_1 = cmd.handle_tick(Some(key(KeyCode::Char('x'))), &mut agents, 8);
         let actual_2 = cmd.handle_tick(Some(Event::FocusGained), &mut agents, 8);
         let actual_3 = agents.is_empty();
+
         // Then
         assert_eq!(actual_1, Tick::Continue);
         assert_eq!(actual_2, Tick::Continue);
@@ -462,10 +468,12 @@ mod tests {
         // Given
         let cmd = command(vec![(10, "claude"), (11, "codex")]);
         let mut agents = Vec::new();
+
         // When
         let actual_1 = cmd.handle_tick(None, &mut agents, 8);
         let actual_2 = agents.len();
         let actual_3 = cmd.handle_tick(None, &mut agents, 10);
+
         // Then
         assert_eq!(actual_1, Tick::Grow(10));
         assert_eq!(actual_2, 2);
@@ -476,10 +484,12 @@ mod tests {
     fn viewport_height_is_clamped() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = viewport_height(0);
         let actual_2 = viewport_height(3);
         let actual_3 = viewport_height(100);
+
         // Then
         assert_eq!(actual_1, 8);
         assert_eq!(actual_2, 11);
@@ -499,8 +509,10 @@ mod tests {
         .iter()
         .map(|a| format!("{:?}", agent_color(a)))
         .collect();
+
         // When
         let actual = colors.len();
+
         // Then
         assert_eq!(actual, 5);
     }
@@ -513,8 +525,10 @@ mod tests {
         terminal
             .draw(|f| draw_ps(f, &agents, &mut TableState::default()))
             .unwrap();
+
         // When
         let screen = screen_text(&terminal);
+
         // Then
         assert!(screen.contains("Running Agents (2)"));
         assert!(screen.contains("codex"));
@@ -528,10 +542,12 @@ mod tests {
     fn dashboard_renders_empty_state() {
         // Given
         let mut terminal = test_terminal(100, 8);
+
         // When
         terminal
             .draw(|f| draw_ps(f, &[], &mut TableState::default()))
             .unwrap();
+
         // Then
         assert!(screen_text(&terminal).contains("No running agents found"));
     }

@@ -152,8 +152,10 @@ mod tests {
             .times(1)
             .returning(|_, _| Ok(()));
         let service = GitBranchService::new(agent_replying(Ok("Add Auth")));
+
         // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
         // Then
         assert!(matches!(outcome, BranchRenameOutcome::Renamed(name) if name == "add-auth"));
     }
@@ -200,8 +202,10 @@ mod tests {
             .times(2)
             .returning(|_, _| Err(GitError::CommandFailed("branch already exists".to_string())));
         let service = GitBranchService::new(agent_replying(Ok("add-auth")));
+
         // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
         // Then
         assert!(matches!(
             outcome,
@@ -218,8 +222,10 @@ mod tests {
             .times(1)
             .returning(|_, _| Err(GitError::CommandFailed("locked".to_string())));
         let service = GitBranchService::new(agent_replying(Ok("add-auth")));
+
         // When
         let outcome = service.try_rename(Path::new("/workspace"), &mock_git);
+
         // Then
         assert!(matches!(
             outcome,
@@ -231,8 +237,10 @@ mod tests {
     fn test_try_rename_reports_suggestion_failure() {
         // Given
         let service = GitBranchService::new(agent_replying(Err("agent offline")));
+
         // When
         let outcome = service.try_rename(Path::new("/workspace"), &renamable_git());
+
         // Then
         assert!(matches!(
             outcome,
@@ -244,8 +252,10 @@ mod tests {
     fn test_try_rename_skips_when_suggestion_is_empty() {
         // Given
         let service = GitBranchService::new(agent_replying(Ok("   ")));
+
         // When
         let outcome = service.try_rename(Path::new("/workspace"), &renamable_git());
+
         // Then
         assert!(matches!(outcome, BranchRenameOutcome::Skipped));
     }
@@ -254,9 +264,11 @@ mod tests {
     fn test_is_auto_generated_branch_matches_silo_pattern() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = is_auto_generated_branch("silo-64c05006");
         let actual_2 = is_auto_generated_branch("myrepo-a1b2c3d4");
+
         // Then
         assert!(actual_1);
         assert!(actual_2);

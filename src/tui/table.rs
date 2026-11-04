@@ -262,8 +262,10 @@ mod tests {
     fn renders_empty_message_when_no_rows() {
         // Given
         // (no setup needed)
+
         // When
         let text = render(&[]);
+
         // Then
         assert!(text.starts_with("Title\n"));
         assert!(text.contains("Nothing here."));
@@ -289,8 +291,10 @@ mod tests {
                 ],
             },
         ];
+
         // When
         let text = render(&rows);
+
         // Then
         assert!(text.contains("NAME    STATE"));
         assert!(text.contains("──────  ─────"));
@@ -306,11 +310,13 @@ mod tests {
     fn styled_cell_constructors() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = StyledCell::plain("a").color;
         let actual_2 = StyledCell::dim("a").color;
         let actual_3 = StyledCell::warning("a").color;
         let actual_4 = StyledCell::colored("a", Color::Blue).color;
+
         // Then
         assert_eq!(actual_1, None);
         assert_eq!(actual_2, Some(Color::DarkGrey));
@@ -322,11 +328,13 @@ mod tests {
     fn pad_or_trunc_pads_and_truncates() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = pad_or_trunc("ab", 4);
         let actual_2 = pad_or_trunc("abcd", 4);
         let actual_3 = pad_or_trunc("abcdef", 4);
         let actual_4 = pad_or_trunc("abc", 0);
+
         // Then
         assert_eq!(actual_1, "ab  ");
         assert_eq!(actual_2, "abcd");
@@ -338,9 +346,11 @@ mod tests {
     fn status_and_info_lines_write_successfully() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = print_status("✓", Color::Green, "done").is_ok();
         let actual_2 = print_info("info").is_ok();
+
         // Then
         assert!(actual_1);
         assert!(actual_2);

@@ -194,8 +194,10 @@ mod tests {
     fn terminal_errors_become_spawn_errors() {
         // Given
         // (no setup needed)
+
         // When
         let err = LaunchError::from(TerminalError::TabOpenFailed("nope".to_string()));
+
         // Then
         assert!(matches!(err, LaunchError::AgentSpawnError(msg) if msg.contains("nope")));
     }
@@ -205,8 +207,10 @@ mod tests {
         // Given
         let dir = TempDir::new().unwrap();
         let guard = WorkspaceLock::new(dir.path()).try_acquire().unwrap();
+
         // When
         let result = launch_process(Command::new("false"), dir.path(), guard);
+
         // Then
         assert!(matches!(result, Err(LaunchError::AgentExitError(status)) if !status.success()));
         assert!(!WorkspaceLock::is_locked(dir.path()));
@@ -257,8 +261,10 @@ mod tests {
                 override_path: None,
             },
         );
+
         // When
         launcher.launch().unwrap();
+
         // Then
         assert!(!dir.path().join("silo.lock").exists());
     }
@@ -279,9 +285,11 @@ mod tests {
                 override_path: None,
             },
         );
+
         // When
         let actual_1 = launcher.launch().is_err();
         let actual_2 = !dir.path().join("silo.lock").exists();
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -293,9 +301,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let guard = WorkspaceLock::new(dir.path()).try_acquire().unwrap();
         let command = Command::new("/definitely/not/a/silo-agent");
+
         // When
         let actual_1 = launch_process(command, dir.path(), guard).is_err();
         let actual_2 = !dir.path().join("silo.lock").exists();
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -312,8 +322,10 @@ mod tests {
             "-c",
             "i=0; while test -e silo.lock && test $i -lt 100; do i=$((i + 1)); sleep 0.01; done; test ! -e silo.lock",
         ]);
+
         // When
         launch_process(command, dir.path(), guard).unwrap();
+
         // Then
         assert!(!dir.path().join("silo.lock").exists());
     }

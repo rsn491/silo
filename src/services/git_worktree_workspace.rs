@@ -568,10 +568,12 @@ mod tests {
         let all = GitWorktreeWorkspace::new(mock_git)
             .get_all(WorkspaceListingScope::ManagedAndOriginal)
             .expect("inclusive listing should succeed");
+
         // When
         let actual_1 = all.len();
         let actual_2 = all[0].branch.as_deref();
         let actual_3 = all[0].latest_commit.as_deref();
+
         // Then
         assert_eq!(actual_1, 2);
         assert_eq!(all[0].path, repo_root);

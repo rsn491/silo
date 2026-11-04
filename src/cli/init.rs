@@ -296,10 +296,12 @@ mod tests {
     fn non_interactive_without_args_skips_settings() {
         // Given
         let (_dir, path) = settings_file();
+
         // When
         InitCommand::new(MockPrompt::new())
             .configure(no_args(), false, &path)
             .unwrap();
+
         // Then
         assert!(!path.exists());
     }
@@ -325,8 +327,10 @@ mod tests {
         InitCommand::new(MockPrompt::new())
             .configure(args, false, &path)
             .unwrap();
+
         // When
         let settings = read(&path);
+
         // Then
         assert_eq!(settings.agent, Some(Agent::Gemini));
         assert_eq!(settings.workspace_type, Some(WorkspaceKind::Clone));
@@ -345,8 +349,10 @@ mod tests {
         InitCommand::new(prompt)
             .configure(no_args(), true, &path)
             .unwrap();
+
         // When
         let settings = read(&path);
+
         // Then
         assert_eq!(settings.agent, Some(Agent::Codex));
         assert_eq!(settings.workspace_type, Some(WorkspaceKind::Clone));
@@ -361,8 +367,10 @@ mod tests {
         InitCommand::new(prompt)
             .configure(no_args(), true, &path)
             .unwrap();
+
         // When
         let settings = read(&path);
+
         // Then
         assert_eq!(settings.agent, Some(Agent::ClaudeCode));
         assert_eq!(settings.workspace_type, Some(WorkspaceKind::Worktree));
@@ -375,10 +383,12 @@ mod tests {
         let (_dir, path) = settings_file();
         let skip_agent = Agent::all_names().len();
         let prompt = selecting([Some(skip_agent), Some(2), None]);
+
         // When
         InitCommand::new(prompt)
             .configure(no_args(), true, &path)
             .unwrap();
+
         // Then
         assert!(!path.exists());
     }
@@ -445,8 +455,10 @@ mod tests {
             .expect_select()
             .returning(|_, _, _| Err("terminal gone".into()));
         let result = InitCommand::new(prompt).configure(no_args(), true, &path);
+
         // When
         let actual = result.unwrap_err().to_string();
+
         // Then
         assert_eq!(actual, "terminal gone");
     }
@@ -461,9 +473,11 @@ mod tests {
         let settings_path = SiloConfig::get_settings_path().unwrap();
         let before = std::fs::read(&settings_path).ok();
         let result = InitCommand::new(prompt).run(no_args());
+
         // When
         let actual_1 = result.is_ok();
         let actual_2 = std::fs::read(&settings_path).ok();
+
         // Then
         assert!(actual_1);
         assert_eq!(actual_2, before);

@@ -341,8 +341,10 @@ mod tests {
         let guard = WorkspaceLock::new(dir.path()).try_acquire().unwrap();
         let path = dir.path().join(LOCK_FILE_NAME);
         fs::write(&path, "replacement").unwrap();
+
         // When
         drop(guard);
+
         // Then
         assert_eq!(fs::read_to_string(path).unwrap(), "replacement");
     }

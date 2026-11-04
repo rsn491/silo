@@ -90,6 +90,7 @@ mod tests {
     fn test_open_tab_and_split_pane_fail_without_osascript() {
         // Given
         let path = Path::new("/tmp");
+
         // When
         let actual_1 = matches!(
             ITerm2.open_tab(path, &Agent::ClaudeCode),
@@ -99,6 +100,7 @@ mod tests {
             ITerm2.split_pane(path, "silo launch"),
             Err(TerminalError::PaneSplitFailed(_))
         );
+
         // Then
         assert!(actual_1);
         assert!(actual_2);

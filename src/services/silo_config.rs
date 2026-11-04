@@ -132,8 +132,10 @@ mod tests {
         let result1 = SiloConfig::initialize();
         let result2 = SiloConfig::initialize();
         // Both should succeed (or both fail if home dir not available).
+
         // When
         let actual = result1.is_ok();
+
         // Then
         assert_eq!(actual, result2.is_ok());
     }
@@ -172,11 +174,13 @@ mod tests {
         let dir = tempdir().unwrap();
         let blocker = dir.path().join("file");
         std::fs::write(&blocker, "not a directory").unwrap();
+
         // When
         let result = SiloConfig::save_settings_to_path(
             &blocker.join("settings.json"),
             &SiloSettings::default(),
         );
+
         // Then
         assert!(matches!(result, Err(SiloConfigError::IoError(_))));
     }

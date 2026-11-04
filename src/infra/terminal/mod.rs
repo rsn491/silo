@@ -84,8 +84,10 @@ mod tests {
     fn test_detect_terminal_reads_environment() {
         // Given
         // (no setup needed)
+
         // When
         let expected = detect_terminal_from_value(std::env::var("TERM_PROGRAM").ok().as_deref());
+
         // Then
         assert_eq!(detect_terminal().is_ok(), expected.is_ok());
     }

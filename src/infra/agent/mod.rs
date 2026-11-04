@@ -200,8 +200,10 @@ mod tests {
     fn test_all_names_are_canonical() {
         // Given
         // (no setup needed)
+
         // When
         let actual = Agent::all_names();
+
         // Then
         assert_eq!(
             actual,
@@ -213,12 +215,14 @@ mod tests {
     fn test_try_from_str_accepts_canonical_names() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = Agent::try_from_str("claude");
         let actual_2 = Agent::try_from_str("opencode");
         let actual_3 = Agent::try_from_str("codex");
         let actual_4 = Agent::try_from_str("gemini");
         let actual_5 = Agent::try_from_str("droid");
+
         // Then
         assert_eq!(actual_1, Some(Agent::ClaudeCode));
         assert_eq!(actual_2, Some(Agent::OpenCode));
@@ -231,8 +235,10 @@ mod tests {
     fn test_try_from_str_rejects_claudecode() {
         // Given
         // (no setup needed)
+
         // When
         let actual = Agent::try_from_str("claudecode");
+
         // Then
         assert_eq!(actual, None);
     }
@@ -241,8 +247,10 @@ mod tests {
     fn test_all_command_names_are_canonical() {
         // Given
         // (no setup needed)
+
         // When
         let actual = Agent::all_command_names();
+
         // Then
         assert_eq!(
             actual,
@@ -254,12 +262,14 @@ mod tests {
     fn test_try_from_command_name_accepts_canonical_names() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = Agent::try_from_command_name("claude");
         let actual_2 = Agent::try_from_command_name("opencode");
         let actual_3 = Agent::try_from_command_name("codex");
         let actual_4 = Agent::try_from_command_name("gemini");
         let actual_5 = Agent::try_from_command_name("droid");
+
         // Then
         assert_eq!(actual_1, Some(Agent::ClaudeCode));
         assert_eq!(actual_2, Some(Agent::OpenCode));
@@ -272,6 +282,7 @@ mod tests {
     fn test_agent_behavior_delegation() {
         // Given
         let codex_command = Agent::Codex.process();
+
         // When
         let actual_1 = Agent::ClaudeCode.command_name();
         let actual_2 = Agent::OpenCode.command_name();
@@ -280,6 +291,7 @@ mod tests {
         let actual_5 = Agent::Droid.command_name();
         let actual_6 = AgentCommand::command_name(&Agent::Gemini);
         let actual_7 = codex_command.get_program();
+
         // Then
         assert_eq!(actual_1, "claude");
         assert_eq!(actual_2, "opencode");
@@ -294,8 +306,10 @@ mod tests {
     fn test_default_agent_is_claude() {
         // Given
         // (no setup needed)
+
         // When
         let actual = Agent::default();
+
         // Then
         assert_eq!(actual, Agent::ClaudeCode);
     }
@@ -308,9 +322,11 @@ mod tests {
         mock.expect_prompt()
             .returning(|message| Ok(format!("echo: {}", message)));
         let reference = &mock;
+
         // When
         let actual_1 = AgentCommand::command_name(&reference);
         let actual_2 = AgentCommand::prompt(&reference, "hi").unwrap();
+
         // Then
         assert_eq!(actual_1, "mock");
         assert_eq!(actual_2, "echo: hi");
@@ -320,8 +336,10 @@ mod tests {
     fn test_run_headless_returns_trimmed_stdout() {
         // Given
         // (no setup needed)
+
         // When
         let output = run_headless("sh", &["-c", "printf '  hello \\n'"]).unwrap();
+
         // Then
         assert_eq!(output, "hello");
     }
@@ -330,8 +348,10 @@ mod tests {
     fn test_run_headless_reports_stderr_on_failure() {
         // Given
         // (no setup needed)
+
         // When
         let result = run_headless("sh", &["-c", "echo boom >&2; exit 3"]);
+
         // Then
         assert!(matches!(result, Err(PromptError::Failed(msg)) if msg == "boom"));
     }
@@ -340,8 +360,10 @@ mod tests {
     fn test_run_headless_reports_spawn_failure() {
         // Given
         let result = run_headless("silo-definitely-missing-binary", &[]);
+
         // When
         let err = result.unwrap_err();
+
         // Then
         assert!(matches!(err, PromptError::Io(_)));
         assert!(err.to_string().starts_with("failed to spawn agent"));

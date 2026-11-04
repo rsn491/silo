@@ -669,10 +669,12 @@ mod tests {
     fn tmp_cleanup_is_suppressed_for_original_repository() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = !should_cleanup_tmp(true, true);
         let actual_2 = should_cleanup_tmp(true, false);
         let actual_3 = !should_cleanup_tmp(false, false);
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -687,9 +689,11 @@ mod tests {
             path: PathBuf::from("/silo/project-12345678"),
             ..Default::default()
         }];
+
         // When
         let actual_1 = workspace_is_original(&original, &managed);
         let actual_2 = !workspace_is_original(&managed[0].path, &managed);
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -1115,6 +1119,7 @@ mod command_tests {
             MockProcessOperations::new(),
             MockPrompt::new(),
         );
+
         // When
         let err = command
             .run(LaunchArgs {
@@ -1122,6 +1127,7 @@ mod command_tests {
                 ..Default::default()
             })
             .unwrap_err();
+
         // Then
         assert!(err.to_string().starts_with("invalid --branch"));
     }
@@ -1136,8 +1142,10 @@ mod command_tests {
             MockProcessOperations::new(),
             MockPrompt::new(),
         );
+
         // When
         let err = command.run(LaunchArgs::default()).unwrap_err();
+
         // Then
         assert_eq!(err.to_string(), "no terminal provided for split pane");
     }
@@ -1160,8 +1168,10 @@ mod command_tests {
                 ..Default::default()
             })
             .unwrap();
+
         // When
         let calls = terminal.calls.borrow();
+
         // Then
         assert_eq!(calls.splits.len(), 1);
         assert!(calls.splits[0].contains(" launch --branch 'feature'"));
@@ -1180,8 +1190,10 @@ mod command_tests {
             processes(vec![], repo.work.clone()),
             confirming(false),
         );
+
         // When
         command.run(main_branch_args()).unwrap();
+
         // Then
         assert!(terminal.calls.borrow().tabs.is_empty());
     }
@@ -1198,8 +1210,10 @@ mod command_tests {
             processes(vec![], repo.work.clone()),
             confirming(true),
         );
+
         // When
         command.run(main_branch_args()).unwrap();
+
         // Then
         assert_eq!(terminal.calls.borrow().tabs, vec![repo.work.clone()]);
         assert!(!WorkspaceLock::is_locked(&repo.work), "lock is released");
@@ -1216,8 +1230,10 @@ mod command_tests {
             processes(vec![], repo.work.clone()),
             confirming(true),
         );
+
         // When
         let err = command.run(main_branch_args()).unwrap_err();
+
         // Then
         assert!(err.to_string().contains("no terminal provided for new tab"));
     }
@@ -1235,8 +1251,10 @@ mod command_tests {
             processes(vec![4242], repo.work.clone()),
             prompt,
         );
+
         // When
         let err = command.run(main_branch_args()).unwrap_err();
+
         // Then
         assert!(err.to_string().contains("already running"));
     }
@@ -1255,8 +1273,10 @@ mod command_tests {
             processes(vec![], repo.work.clone()),
             prompt,
         );
+
         // When
         let err = command.run(main_branch_args()).unwrap_err();
+
         // Then
         assert!(err.to_string().contains("already in progress"));
     }
@@ -1285,9 +1305,11 @@ mod command_tests {
     fn commit_flow_skips_clean_workspace() {
         // Given
         let git = dirty_git("", "");
+
         // When
         let committed =
             handle_commit_flow(Path::new("/ws"), &agent(""), &git, &MockPrompt::new()).unwrap();
+
         // Then
         assert!(!committed);
     }
@@ -1299,8 +1321,10 @@ mod command_tests {
         let mut prompt = MockPrompt::new();
         prompt.expect_confirm().times(1).returning(|_, _| Ok(false));
         prompt.expect_input().never();
+
         // When
         let committed = handle_commit_flow(Path::new("/ws"), &agent(""), &git, &prompt).unwrap();
+
         // Then
         assert!(!committed);
     }
@@ -1322,9 +1346,11 @@ mod command_tests {
             .withf(|_, initial| *initial == Some("Update a.rs"))
             .times(1)
             .returning(|_, _| Ok(Some("Edited message".to_string())));
+
         // When
         let committed =
             handle_commit_flow(Path::new("/ws"), &agent("Update a.rs"), &git, &prompt).unwrap();
+
         // Then
         assert!(committed);
     }
@@ -1342,8 +1368,10 @@ mod command_tests {
             .expect_input()
             .withf(|_, initial| initial.is_none())
             .returning(|_, _| Ok(None));
+
         // When
         let committed = handle_commit_flow(Path::new("/ws"), &agent(""), &git, &prompt).unwrap();
+
         // Then
         assert!(!committed);
     }
@@ -1361,8 +1389,10 @@ mod command_tests {
         prompt
             .expect_input()
             .returning(|_, _| Ok(Some("msg".to_string())));
+
         // When
         let committed = handle_commit_flow(Path::new("/ws"), &agent("msg"), &git, &prompt).unwrap();
+
         // Then
         assert!(!committed);
     }
@@ -1379,8 +1409,10 @@ mod command_tests {
         prompt
             .expect_input()
             .returning(|_, _| Ok(Some("msg".to_string())));
+
         // When
         let committed = handle_commit_flow(Path::new("/ws"), &agent("msg"), &git, &prompt).unwrap();
+
         // Then
         assert!(!committed);
     }
@@ -1391,8 +1423,10 @@ mod command_tests {
         let mut git = MockGitOperations::new();
         git.expect_count_commits_ahead().returning(|_, _| Ok(0));
         git.expect_push().never();
+
         // When
         handle_push_confirmation(Path::new("/ws"), false, &git, &MockPrompt::new()).unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -1409,8 +1443,10 @@ mod command_tests {
             .expect_confirm()
             .withf(|message, _| message == "Push changes?")
             .returning(|_, _| Ok(true));
+
         // When
         handle_push_confirmation(Path::new("/ws"), true, &git, &prompt).unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -1431,8 +1467,10 @@ mod command_tests {
         git.expect_push().never();
         let mut prompt = MockPrompt::new();
         prompt.expect_confirm().times(1).returning(|_, _| Ok(false));
+
         // When
         handle_push_confirmation(Path::new("/ws"), false, &git, &prompt).unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -1518,9 +1556,11 @@ mod command_tests {
         git.expect_get_status_porcelain()
             .returning(|_| Ok(String::new()));
         git.expect_count_commits_ahead().returning(|_, _| Ok(0));
+
         // When
         check_and_handle_exit_work(Path::new("/ws"), &agent(""), true, &git, &MockPrompt::new())
             .unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -1537,6 +1577,7 @@ mod command_tests {
             selected_original: false,
             kind: WorkspaceKind::Worktree,
         };
+
         // When
         handle_agent_exit(
             Path::new("/ws"),
@@ -1546,6 +1587,7 @@ mod command_tests {
             &MockPrompt::new(),
         )
         .unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -1564,6 +1606,7 @@ mod command_tests {
             selected_original: false,
             kind: WorkspaceKind::Worktree,
         };
+
         // When
         handle_agent_exit(
             Path::new("/ws"),
@@ -1573,6 +1616,7 @@ mod command_tests {
             &MockPrompt::new(),
         )
         .unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -1589,6 +1633,7 @@ mod command_tests {
             selected_original: true,
             kind: WorkspaceKind::Worktree,
         };
+
         // When
         handle_agent_exit(
             Path::new("/ws"),
@@ -1598,6 +1643,7 @@ mod command_tests {
             &MockPrompt::new(),
         )
         .unwrap();
+
         // Then
         // completing without error is the assertion
     }
@@ -1611,8 +1657,10 @@ mod command_tests {
         git.expect_count_commits_ahead().returning(|_, _| Ok(0));
         git.expect_remove_worktree()
             .returning(|_| Err(GitError::WorktreeRemovalFailed("busy".to_string())));
+
         // When
         let actual = cleanup_tmp_workspace(Path::new("/ws"), WorkspaceKind::Worktree, &git).is_ok();
+
         // Then
         assert!(actual);
     }
@@ -1621,12 +1669,14 @@ mod command_tests {
     fn agent_display_colors_cover_all_agents() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = agent_display_color(&Agent::ClaudeCode);
         let actual_2 = agent_display_color(&Agent::Codex);
         let actual_3 = agent_display_color(&Agent::Gemini);
         let actual_4 = agent_display_color(&Agent::OpenCode);
         let actual_5 = agent_display_color(&Agent::Droid);
+
         // Then
         assert_eq!(actual_1, Color::Cyan);
         assert_eq!(actual_2, Color::Yellow);
@@ -1668,10 +1718,12 @@ mod command_tests {
         git.expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
         let backend = WorkspaceBackend::Worktree(GitWorktreeWorkspace::new(git));
+
         // When
         let path = backend
             .create(Some("feature".to_string()), false, &HashSet::new())
             .unwrap();
+
         // Then
         assert!(
             path.file_name()
@@ -1708,8 +1760,10 @@ mod command_tests {
             .returning(|_, _| Ok(()));
         git.expect_get_default_remote_branch()
             .returning(|| Ok("origin/main".to_string()));
+
         // When
         let backend = WorkspaceBackend::Clone(GitCheckoutWorkspace::new(git));
+
         // Then
         assert!(backend.create(None, false, &HashSet::new()).is_ok());
         assert!(

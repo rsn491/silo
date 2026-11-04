@@ -186,9 +186,11 @@ mod tests {
     fn enter_returns_default_choice() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = run(true, vec![key(KeyCode::Enter)]).0;
         let actual_2 = !run(false, vec![key(KeyCode::Enter)]).0;
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -222,11 +224,13 @@ mod tests {
     fn quick_select_keys() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = run(false, vec![key(KeyCode::Char('y'))]).0;
         let actual_2 = run(false, vec![key(KeyCode::Char('Y'))]).0;
         let actual_3 = !run(true, vec![key(KeyCode::Char('n'))]).0;
         let actual_4 = !run(true, vec![key(KeyCode::Char('N'))]).0;
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -238,9 +242,11 @@ mod tests {
     fn cancel_keys_decline() {
         // Given
         // (no setup needed)
+
         // When
         let actual_1 = !run(true, vec![key(KeyCode::Esc)]).0;
         let actual_2 = !run(true, vec![ctrl('c')]).0;
+
         // Then
         assert!(actual_1);
         assert!(actual_2);
@@ -254,8 +260,10 @@ mod tests {
             key(KeyCode::Char('x')),
             key(KeyCode::Enter),
         ];
+
         // When
         let actual = run(true, events).0;
+
         // Then
         assert!(actual);
     }
@@ -264,8 +272,10 @@ mod tests {
     fn renders_prompt_and_buttons() {
         // Given
         // (no setup needed)
+
         // When
         let (_, _, screen) = run(true, vec![key(KeyCode::Enter)]);
+
         // Then
         assert!(screen.contains("Proceed?"));
         assert!(screen.contains("[ Yes ]"));
@@ -278,6 +288,7 @@ mod tests {
         // Given
         let mut terminal = test_terminal(60, 7);
         let mut yes_focused = true;
+
         // When
         let result = run_confirm_loop(
             &mut terminal,
@@ -285,6 +296,7 @@ mod tests {
             &mut yes_focused,
             &mut event_source(vec![]),
         );
+
         // Then
         assert!(result.is_err());
     }
