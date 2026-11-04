@@ -19,3 +19,16 @@ pub fn run_osascript(script: &str) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn reports_missing_osascript() {
+        let err = run_osascript("return 1").unwrap_err();
+
+        assert!(err.starts_with("failed to run osascript"));
+    }
+}

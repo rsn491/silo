@@ -81,6 +81,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_detect_terminal_reads_environment() {
+        let expected = detect_terminal_from_value(std::env::var("TERM_PROGRAM").ok().as_deref());
+
+        assert_eq!(detect_terminal().is_ok(), expected.is_ok());
+    }
+
+    #[test]
     fn test_detect_terminal_iterm2_app_spelling() {
         // Arrange
         let term_program = Some("iTerm2.app");

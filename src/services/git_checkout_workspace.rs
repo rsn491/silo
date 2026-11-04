@@ -301,6 +301,28 @@ mod tests {
     }
 
     #[test]
+    fn get_all_includes_original_repository() {
+        let repo = crate::infra::git::test_support::TestRepo::new();
+        std::fs::write(repo.work.join("dirty.txt"), "x").unwrap();
+        let workspace = GitCheckoutWorkspace::new(repo.git());
+
+        let managed = workspace
+            .get_all(WorkspaceListingScope::ManagedOnly)
+            .unwrap();
+        let all = workspace
+            .get_all(WorkspaceListingScope::ManagedAndOriginal)
+            .unwrap();
+
+        assert!(managed.is_empty());
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].path, repo.work);
+        assert_eq!(all[0].branch.as_deref(), Some("main"));
+        assert!(all[0].has_uncommitted_changes);
+        assert_eq!(all[0].commits_ahead, 0);
+        assert!(all[0].latest_commit.is_some());
+    }
+
+    #[test]
     fn resolve_original_uses_local_origin_for_managed_clone() {
         let clone_path = PathBuf::from("/silo/project-12345678");
         let source_path = PathBuf::from("/source/project");

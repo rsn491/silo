@@ -164,6 +164,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_find_processes_by_names_excludes_own_process() {
+        let processes = SystemProcess
+            .find_processes_by_names(&["silo-no-such-process-name"])
+            .unwrap();
+
+        let own_pid = std::process::id();
+        assert!(processes.iter().all(|(pid, _)| *pid != own_pid));
+    }
+
+    #[test]
+    fn test_get_process_cwd_of_current_process() {
+        // `lsof` may be missing (or restricted) on some machines; when it works the
+        // result must be this process's working directory.
+        if let Ok(cwd) = SystemProcess.get_process_cwd(std::process::id()) {
+            assert_eq!(
+                cwd.canonicalize().unwrap(),
+                std::env::current_dir().unwrap().canonicalize().unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_process_cwd_fails_for_unknown_pid() {
+        assert!(SystemProcess.get_process_cwd(u32::MAX - 1).is_err());
+    }
+
+    #[test]
     fn test_parse_ps_output_matching_processes() {
         // Arrange
         let output = "  PID ARGS

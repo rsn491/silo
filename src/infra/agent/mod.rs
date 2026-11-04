@@ -29,6 +29,7 @@ pub enum PromptError {
 }
 
 /// Behavior that every agent variant must implement.
+#[cfg_attr(test, mockall::automock)]
 pub trait AgentCommand {
     /// Returns the executable name used to invoke this agent.
     fn command_name(&self) -> &'static str;
@@ -40,6 +41,32 @@ pub trait AgentCommand {
     /// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
     /// if the agent exits with a non-zero status.
     fn prompt(&self, message: &str) -> Result<String, PromptError>;
+}
+
+impl<T: AgentCommand + ?Sized> AgentCommand for &T {
+    fn command_name(&self) -> &'static str {
+        (**self).command_name()
+    }
+
+    fn prompt(&self, message: &str) -> Result<String, PromptError> {
+        (**self).prompt(message)
+    }
+}
+
+/// Runs `program` with `args` non-interactively and returns its trimmed stdout.
+///
+/// # Errors
+///
+/// Returns [`PromptError::Io`] if the process cannot be spawned, or [`PromptError::Failed`]
+/// with the trimmed stderr if it exits with a non-zero status.
+fn run_headless(program: &str, args: &[&str]) -> Result<String, PromptError> {
+    let output = std::process::Command::new(program).args(args).output()?;
+    if !output.status.success() {
+        return Err(PromptError::Failed(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 /// Represents the supported AI agents that can be launched.
@@ -219,6 +246,49 @@ mod tests {
         assert_eq!(Agent::ClaudeCode.command_name(), "claude");
         assert_eq!(Agent::OpenCode.command_name(), "opencode");
         assert_eq!(Agent::Codex.command_name(), "codex");
+        assert_eq!(Agent::Gemini.command_name(), "gemini");
         assert_eq!(Agent::Droid.command_name(), "droid");
+        assert_eq!(AgentCommand::command_name(&Agent::Gemini), "gemini");
+        assert_eq!(Agent::Codex.process().get_program(), "codex");
+    }
+
+    #[test]
+    fn test_default_agent_is_claude() {
+        assert_eq!(Agent::default(), Agent::ClaudeCode);
+    }
+
+    #[test]
+    fn test_reference_delegates_to_agent_command() {
+        let mut mock = MockAgentCommand::new();
+        mock.expect_command_name().return_const("mock");
+        mock.expect_prompt()
+            .returning(|message| Ok(format!("echo: {}", message)));
+        let reference = &mock;
+
+        assert_eq!(AgentCommand::command_name(&reference), "mock");
+        assert_eq!(AgentCommand::prompt(&reference, "hi").unwrap(), "echo: hi");
+    }
+
+    #[test]
+    fn test_run_headless_returns_trimmed_stdout() {
+        let output = run_headless("sh", &["-c", "printf '  hello \\n'"]).unwrap();
+
+        assert_eq!(output, "hello");
+    }
+
+    #[test]
+    fn test_run_headless_reports_stderr_on_failure() {
+        let result = run_headless("sh", &["-c", "echo boom >&2; exit 3"]);
+
+        assert!(matches!(result, Err(PromptError::Failed(msg)) if msg == "boom"));
+    }
+
+    #[test]
+    fn test_run_headless_reports_spawn_failure() {
+        let result = run_headless("silo-definitely-missing-binary", &[]);
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, PromptError::Io(_)));
+        assert!(err.to_string().starts_with("failed to spawn agent"));
     }
 }

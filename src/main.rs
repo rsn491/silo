@@ -20,6 +20,7 @@ use services::agent_launcher::LaunchMode;
 use services::agent_list_service::AgentListService;
 use services::global_workspace_manager::GlobalWorkspaceManager;
 use services::silo_config::SiloConfig;
+use tui::TerminalPrompt;
 
 /// The main CLI structure for Silo.
 #[derive(Parser)]
@@ -74,29 +75,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (LaunchMode::ExecReplace, None)
             };
 
-            LaunchCommand::new(Git, terminal, launch_mode, SystemProcess).run(args)?;
+            LaunchCommand::new(
+                Git::new(),
+                terminal,
+                launch_mode,
+                SystemProcess,
+                TerminalPrompt,
+            )
+            .run(args)?;
         }
         Commands::Ps(args) => {
             PsCommand::new(AgentListService::new(
-                GlobalWorkspaceManager::with_git(Git),
+                GlobalWorkspaceManager::with_git(Git::new()),
                 SystemProcess,
             ))
             .run(args)?;
         }
-        Commands::Init(args) => InitCommand::new().run(args)?,
+        Commands::Init(args) => InitCommand::new(TerminalPrompt).run(args)?,
         Commands::Cleanup(args) => {
             CleanupCommand::new(
-                GlobalWorkspaceManager::with_git(Git),
-                AgentListService::new(GlobalWorkspaceManager::with_git(Git), SystemProcess),
+                GlobalWorkspaceManager::with_git(Git::new()),
+                AgentListService::new(GlobalWorkspaceManager::with_git(Git::new()), SystemProcess),
+                TerminalPrompt,
             )
             .run(args)?;
         }
         Commands::Status => {
-            StatusCommand::new(GlobalWorkspaceManager::with_git(Git)).run()?;
+            StatusCommand::new(GlobalWorkspaceManager::with_git(Git::new())).run()?;
         }
         Commands::Completions(args) => CompletionsCommand::new().run(args)?,
         Commands::Checkout(args) => {
-            CheckoutCommand::new(GlobalWorkspaceManager::with_git(Git)).run(args)?;
+            CheckoutCommand::new(GlobalWorkspaceManager::with_git(Git::new()), TerminalPrompt)
+                .run(args)?;
         }
     }
 

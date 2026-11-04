@@ -1,6 +1,6 @@
 //! Logic for the `ps` command.
 
-use std::io;
+use std::io::{self, Write};
 use std::time::Duration;
 
 use clap::Args;
@@ -21,9 +21,9 @@ use ratatui::{
 };
 
 use crate::infra::agent::Agent;
-use crate::infra::git::GitOperations;
 use crate::infra::system_process::ProcessOperations;
 use crate::services::agent_list_service::{AgentListService, RunningAgent};
+use crate::services::workspace_manager::WorkspaceManager;
 
 /// Arguments for the `ps` subcommand.
 #[derive(Args)]
@@ -34,14 +34,25 @@ pub struct PsArgs {
 }
 
 /// Handler for the `ps` command.
-pub struct PsCommand<G: GitOperations + Clone, P: ProcessOperations> {
+pub struct PsCommand<W: WorkspaceManager, P: ProcessOperations> {
     /// Service for enumerating running agents.
-    service: AgentListService<G, P>,
+    service: AgentListService<W, P>,
 }
 
-impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
+/// What the dashboard loop should do after handling one poll result.
+#[derive(Debug, PartialEq, Eq)]
+enum Tick {
+    /// The user asked to quit.
+    Quit,
+    /// Keep running with the current viewport.
+    Continue,
+    /// The agent list grew; the viewport must be recreated with this height.
+    Grow(u16),
+}
+
+impl<W: WorkspaceManager, P: ProcessOperations> PsCommand<W, P> {
     /// Creates a new `PsCommand`.
-    pub fn new(service: AgentListService<G, P>) -> Self {
+    pub fn new(service: AgentListService<W, P>) -> Self {
         Self { service }
     }
 
@@ -72,26 +83,20 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
 
         loop {
             terminal.draw(|f| draw_ps(f, &agents, &mut table_state))?;
-            if event::poll(Duration::from_secs(2))? {
-                if let Event::Key(key) = event::read()? {
-                    match (key.code, key.modifiers) {
-                        (KeyCode::Char('c'), KeyModifiers::CONTROL)
-                        | (KeyCode::Char('q'), _)
-                        | (KeyCode::Esc, _) => {
-                            disable_raw_mode()?;
-                            terminal.show_cursor()?;
-                            println!();
-                            return Ok(());
-                        }
-                        _ => {}
-                    }
-                }
+            let event = if event::poll(Duration::from_secs(2))? {
+                Some(event::read()?)
             } else {
-                let new_agents = self.service.list_running_agents().unwrap_or_default();
-                let new_height = viewport_height(new_agents.len());
-                agents = new_agents;
-
-                if new_height > height {
+                None
+            };
+            match self.handle_tick(event, &mut agents, height) {
+                Tick::Quit => {
+                    disable_raw_mode()?;
+                    terminal.show_cursor()?;
+                    println!();
+                    return Ok(());
+                }
+                Tick::Continue => {}
+                Tick::Grow(new_height) => {
                     // The viewport must grow. Clear the old area before recreating
                     // the terminal so ratatui doesn't scroll and garble old content.
                     disable_raw_mode()?;
@@ -114,31 +119,77 @@ impl<G: GitOperations + Clone, P: ProcessOperations> PsCommand<G, P> {
         }
     }
 
+    /// Handles one poll result: a key event (`Some`) or a refresh timeout (`None`).
+    ///
+    /// On timeout the agent list is refreshed in place.
+    fn handle_tick(
+        &self,
+        event: Option<Event>,
+        agents: &mut Vec<RunningAgent>,
+        height: u16,
+    ) -> Tick {
+        match event {
+            Some(Event::Key(key)) => match (key.code, key.modifiers) {
+                (KeyCode::Char('c'), KeyModifiers::CONTROL)
+                | (KeyCode::Char('q'), _)
+                | (KeyCode::Esc, _) => Tick::Quit,
+                _ => Tick::Continue,
+            },
+            Some(_) => Tick::Continue,
+            None => {
+                *agents = self.service.list_running_agents().unwrap_or_default();
+                let new_height = viewport_height(agents.len());
+                if new_height > height {
+                    Tick::Grow(new_height)
+                } else {
+                    Tick::Continue
+                }
+            }
+        }
+    }
+
     /// Prints agents as a fixed-width plain-text table and returns.
     ///
     /// # Errors
     ///
     /// Returns an error if listing running agents fails.
     fn run_plain(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.write_plain(&mut io::stdout())
+    }
+
+    /// Writes agents as a fixed-width plain-text table to `out`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if writing to `out` fails.
+    fn write_plain(&self, out: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
         let agents = self.service.list_running_agents().unwrap_or_default();
         if agents.is_empty() {
-            println!("No running agents found in this repository's workspaces.");
+            writeln!(
+                out,
+                "No running agents found in this repository's workspaces."
+            )?;
             return Ok(());
         }
-        println!("{:<8} {:<12} {:<28} WORKSPACE", "PID", "AGENT", "BRANCH");
+        writeln!(
+            out,
+            "{:<8} {:<12} {:<28} WORKSPACE",
+            "PID", "AGENT", "BRANCH"
+        )?;
         for a in &agents {
             let agent_name = a
                 .agent_type
                 .as_ref()
                 .map(|ag| ag.to_string())
                 .unwrap_or_else(|| "(unknown)".to_string());
-            println!(
+            writeln!(
+                out,
                 "{:<8} {:<12} {:<28} {}",
                 a.pid,
                 agent_name,
                 a.branch.as_deref().unwrap_or("(detached)"),
                 a.path.display(),
-            );
+            )?;
         }
         Ok(())
     }
@@ -271,4 +322,187 @@ fn draw_ps(f: &mut ratatui::Frame<'_>, agents: &[RunningAgent], table_state: &mu
         Span::raw(" quit"),
     ]));
     f.render_widget(footer, chunks[1]);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::infra::git::GitWorkspaceInfo;
+    use crate::infra::system_process::MockProcessOperations;
+    use crate::services::workspace_manager::MockWorkspaceManager;
+    use crate::tui::test_support::{ctrl, key, screen_text, test_terminal};
+
+    /// A ps command whose workspaces contain processes for each `(pid, args)` pair.
+    fn command(
+        processes: Vec<(u32, &'static str)>,
+    ) -> PsCommand<MockWorkspaceManager, MockProcessOperations> {
+        let mut workspaces = MockWorkspaceManager::new();
+        workspaces.expect_get_all().returning(|_| {
+            Ok(vec![
+                GitWorkspaceInfo {
+                    path: PathBuf::from("/silo/ws-main"),
+                    branch: Some("main".to_string()),
+                    ..Default::default()
+                },
+                GitWorkspaceInfo {
+                    path: PathBuf::from("/silo/ws-detached"),
+                    branch: None,
+                    ..Default::default()
+                },
+            ])
+        });
+        let mut process = MockProcessOperations::new();
+        process
+            .expect_find_processes_by_names()
+            .returning(move |_| {
+                Ok(processes
+                    .iter()
+                    .map(|(pid, args)| (*pid, args.to_string()))
+                    .collect())
+            });
+        process.expect_get_process_cwd().returning(|pid| {
+            Ok(PathBuf::from(if pid % 2 == 0 {
+                "/silo/ws-main"
+            } else {
+                "/silo/ws-detached"
+            }))
+        });
+        PsCommand::new(AgentListService::new(workspaces, process))
+    }
+
+    /// Sample running agents covering known, unknown and detached cases.
+    fn sample_agents() -> Vec<RunningAgent> {
+        vec![
+            RunningAgent {
+                pid: 42,
+                agent_type: Some(Agent::Codex),
+                path: PathBuf::from("/silo/ws-main"),
+                branch: Some("main".to_string()),
+            },
+            RunningAgent {
+                pid: 43,
+                agent_type: None,
+                path: PathBuf::from("/silo/ws-detached"),
+                branch: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn plain_output_lists_agents() {
+        let cmd = command(vec![(10, "claude --resume"), (11, "/usr/bin/mystery")]);
+        let mut out = Vec::new();
+
+        cmd.write_plain(&mut out).unwrap();
+
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.starts_with("PID"));
+        assert!(text.contains("claude"));
+        assert!(text.contains("/silo/ws-main"));
+        assert!(text.contains("(unknown)"));
+        assert!(text.contains("(detached)"));
+    }
+
+    #[test]
+    fn plain_output_without_agents() {
+        let mut out = Vec::new();
+
+        command(vec![]).write_plain(&mut out).unwrap();
+
+        assert!(
+            String::from_utf8(out)
+                .unwrap()
+                .contains("No running agents")
+        );
+    }
+
+    #[test]
+    fn quit_keys_end_the_dashboard() {
+        let cmd = command(vec![]);
+        let mut agents = Vec::new();
+
+        for event in [key(KeyCode::Char('q')), key(KeyCode::Esc), ctrl('c')] {
+            assert_eq!(cmd.handle_tick(Some(event), &mut agents, 8), Tick::Quit);
+        }
+    }
+
+    #[test]
+    fn other_events_keep_running_without_refresh() {
+        let cmd = command(vec![(10, "claude")]);
+        let mut agents = Vec::new();
+
+        assert_eq!(
+            cmd.handle_tick(Some(key(KeyCode::Char('x'))), &mut agents, 8),
+            Tick::Continue
+        );
+        assert_eq!(
+            cmd.handle_tick(Some(Event::FocusGained), &mut agents, 8),
+            Tick::Continue
+        );
+        assert!(agents.is_empty());
+    }
+
+    #[test]
+    fn timeout_refreshes_agents_and_grows_viewport() {
+        let cmd = command(vec![(10, "claude"), (11, "codex")]);
+        let mut agents = Vec::new();
+
+        assert_eq!(cmd.handle_tick(None, &mut agents, 8), Tick::Grow(10));
+        assert_eq!(agents.len(), 2);
+        assert_eq!(cmd.handle_tick(None, &mut agents, 10), Tick::Continue);
+    }
+
+    #[test]
+    fn viewport_height_is_clamped() {
+        assert_eq!(viewport_height(0), 8);
+        assert_eq!(viewport_height(3), 11);
+        assert_eq!(viewport_height(100), 23);
+    }
+
+    #[test]
+    fn agent_colors_are_distinct() {
+        let colors: std::collections::HashSet<_> = [
+            Agent::ClaudeCode,
+            Agent::Codex,
+            Agent::Gemini,
+            Agent::OpenCode,
+            Agent::Droid,
+        ]
+        .iter()
+        .map(|a| format!("{:?}", agent_color(a)))
+        .collect();
+
+        assert_eq!(colors.len(), 5);
+    }
+
+    #[test]
+    fn dashboard_renders_agents() {
+        let mut terminal = test_terminal(100, 10);
+        let agents = sample_agents();
+
+        terminal
+            .draw(|f| draw_ps(f, &agents, &mut TableState::default()))
+            .unwrap();
+
+        let screen = screen_text(&terminal);
+        assert!(screen.contains("Running Agents (2)"));
+        assert!(screen.contains("codex"));
+        assert!(screen.contains("(unknown)"));
+        assert!(screen.contains("(detached)"));
+        assert!(screen.contains("/silo/ws-main"));
+        assert!(screen.contains("q quit"));
+    }
+
+    #[test]
+    fn dashboard_renders_empty_state() {
+        let mut terminal = test_terminal(100, 8);
+
+        terminal
+            .draw(|f| draw_ps(f, &[], &mut TableState::default()))
+            .unwrap();
+
+        assert!(screen_text(&terminal).contains("No running agents found"));
+    }
 }

@@ -40,7 +40,7 @@ pub fn run_confirm(prompt: &str, default_yes: bool) -> Result<bool, Box<dyn std:
 
     let mut yes_focused = default_yes;
 
-    let result = run_confirm_loop(&mut terminal, prompt, &mut yes_focused);
+    let result = run_confirm_loop(&mut terminal, prompt, &mut yes_focused, &mut event::read);
 
     disable_raw_mode()?;
     terminal.show_cursor()?;
@@ -60,6 +60,7 @@ fn run_confirm_loop<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     prompt: &str,
     yes_focused: &mut bool,
+    next_event: &mut impl FnMut() -> io::Result<Event>,
 ) -> Result<bool, Box<dyn std::error::Error>>
 where
     B::Error: 'static,
@@ -67,7 +68,7 @@ where
     loop {
         terminal.draw(|f| draw_confirm(f, prompt, *yes_focused))?;
 
-        if let Event::Key(key) = event::read()? {
+        if let Event::Key(key) = next_event()? {
             match (key.code, key.modifiers) {
                 (KeyCode::Char('c'), KeyModifiers::CONTROL) | (KeyCode::Esc, _) => {
                     return Ok(false);
@@ -160,4 +161,95 @@ fn draw_confirm(f: &mut ratatui::Frame<'_>, prompt: &str, yes_focused: bool) {
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, inner[3]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::test_support::{ctrl, event_source, key, screen_text, test_terminal};
+
+    /// Runs the confirm loop over `events` and returns the result plus final focus.
+    fn run(default_yes: bool, events: Vec<Event>) -> (bool, bool, String) {
+        let mut terminal = test_terminal(60, 7);
+        let mut yes_focused = default_yes;
+        let result = run_confirm_loop(
+            &mut terminal,
+            "Proceed?",
+            &mut yes_focused,
+            &mut event_source(events),
+        )
+        .unwrap();
+        (result, yes_focused, screen_text(&terminal))
+    }
+
+    #[test]
+    fn enter_returns_default_choice() {
+        assert!(run(true, vec![key(KeyCode::Enter)]).0);
+        assert!(!run(false, vec![key(KeyCode::Enter)]).0);
+    }
+
+    #[test]
+    fn navigation_keys_toggle_focus() {
+        for code in [
+            KeyCode::Left,
+            KeyCode::Right,
+            KeyCode::Tab,
+            KeyCode::Char('h'),
+            KeyCode::Char('l'),
+        ] {
+            let (result, focused, _) = run(false, vec![key(code), key(KeyCode::Enter)]);
+            assert!(result, "{:?} should move focus to Yes", code);
+            assert!(focused);
+        }
+    }
+
+    #[test]
+    fn quick_select_keys() {
+        assert!(run(false, vec![key(KeyCode::Char('y'))]).0);
+        assert!(run(false, vec![key(KeyCode::Char('Y'))]).0);
+        assert!(!run(true, vec![key(KeyCode::Char('n'))]).0);
+        assert!(!run(true, vec![key(KeyCode::Char('N'))]).0);
+    }
+
+    #[test]
+    fn cancel_keys_decline() {
+        assert!(!run(true, vec![key(KeyCode::Esc)]).0);
+        assert!(!run(true, vec![ctrl('c')]).0);
+    }
+
+    #[test]
+    fn ignores_unrelated_events() {
+        let events = vec![
+            Event::FocusGained,
+            key(KeyCode::Char('x')),
+            key(KeyCode::Enter),
+        ];
+
+        assert!(run(true, events).0);
+    }
+
+    #[test]
+    fn renders_prompt_and_buttons() {
+        let (_, _, screen) = run(true, vec![key(KeyCode::Enter)]);
+
+        assert!(screen.contains("Proceed?"));
+        assert!(screen.contains("[ Yes ]"));
+        assert!(screen.contains("[ No ]"));
+        assert!(screen.contains("y/n quick select"));
+    }
+
+    #[test]
+    fn propagates_event_errors() {
+        let mut terminal = test_terminal(60, 7);
+        let mut yes_focused = true;
+
+        let result = run_confirm_loop(
+            &mut terminal,
+            "Proceed?",
+            &mut yes_focused,
+            &mut event_source(vec![]),
+        );
+
+        assert!(result.is_err());
+    }
 }

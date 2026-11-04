@@ -339,6 +339,7 @@ pub enum WorkspaceListingScope {
 }
 
 /// Trait for managing and inspecting existing workspaces.
+#[cfg_attr(test, mockall::automock)]
 pub trait WorkspaceManager {
     /// Removes all inactive workspaces and returns per-item results.
     ///

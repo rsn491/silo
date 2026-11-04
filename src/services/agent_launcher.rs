@@ -189,6 +189,24 @@ fn launch_process(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_errors_become_spawn_errors() {
+        let err = LaunchError::from(TerminalError::TabOpenFailed("nope".to_string()));
+
+        assert!(matches!(err, LaunchError::AgentSpawnError(msg) if msg.contains("nope")));
+    }
+
+    #[test]
+    fn failing_agent_reports_exit_status() {
+        let dir = TempDir::new().unwrap();
+        let guard = WorkspaceLock::new(dir.path()).try_acquire().unwrap();
+
+        let result = launch_process(Command::new("false"), dir.path(), guard);
+
+        assert!(matches!(result, Err(LaunchError::AgentExitError(status)) if !status.success()));
+        assert!(!WorkspaceLock::is_locked(dir.path()));
+    }
     use crate::infra::terminal::TerminalError;
     use std::path::Path;
     use tempfile::TempDir;

@@ -1,21 +1,21 @@
 //! Logic for the `status` command.
 
+use std::io::{self, Write};
+
 use crossterm::style::Color;
 
-use crate::infra::git::GitOperations;
-use crate::services::global_workspace_manager::GlobalWorkspaceManager;
 use crate::services::workspace_manager::{WorkspaceListingScope, WorkspaceManager};
 use crate::tui::{Column, Row, StyledCell, render_table};
 
 /// Handler for the `status` command.
-pub struct StatusCommand<G: GitOperations> {
+pub struct StatusCommand<W: WorkspaceManager> {
     /// Workspace manager for worktree and checkout status.
-    workspace_manager: GlobalWorkspaceManager<G>,
+    workspace_manager: W,
 }
 
-impl<G: GitOperations> StatusCommand<G> {
+impl<W: WorkspaceManager> StatusCommand<W> {
     /// Creates a new `StatusCommand`.
-    pub fn new(workspace_manager: GlobalWorkspaceManager<G>) -> Self {
+    pub fn new(workspace_manager: W) -> Self {
         Self { workspace_manager }
     }
 
@@ -25,6 +25,15 @@ impl<G: GitOperations> StatusCommand<G> {
     ///
     /// Returns an error if workspace status cannot be retrieved.
     pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.run_to(&mut io::stdout())
+    }
+
+    /// Writes the workspace status table to `out`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if workspace status cannot be retrieved or writing fails.
+    fn run_to(&self, out: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
         let statuses = self
             .workspace_manager
             .get_all(WorkspaceListingScope::ManagedAndOriginal)?;
@@ -88,6 +97,77 @@ impl<G: GitOperations> StatusCommand<G> {
             })
             .collect();
 
-        render_table("Silo Workspaces", &cols, &rows, "No workspaces found.")
+        render_table(out, "Silo Workspaces", &cols, &rows, "No workspaces found.")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::infra::git::GitWorkspaceInfo;
+    use crate::infra::git_error::GitError;
+    use crate::services::workspace_manager::MockWorkspaceManager;
+
+    /// Runs the status command against `manager` and returns the rendered output.
+    fn render(manager: MockWorkspaceManager) -> Result<String, Box<dyn std::error::Error>> {
+        let mut out = Vec::new();
+        StatusCommand::new(manager).run_to(&mut out)?;
+        Ok(String::from_utf8(out).unwrap())
+    }
+
+    #[test]
+    fn renders_workspace_rows() {
+        let mut manager = MockWorkspaceManager::new();
+        manager
+            .expect_get_all()
+            .withf(|scope| *scope == WorkspaceListingScope::ManagedAndOriginal)
+            .returning(|_| {
+                Ok(vec![
+                    GitWorkspaceInfo {
+                        path: PathBuf::from("/repo/original"),
+                        branch: Some("main".to_string()),
+                        latest_commit: Some("abc123 initial".to_string()),
+                        ..Default::default()
+                    },
+                    GitWorkspaceInfo {
+                        path: PathBuf::from("/silo/original-1234abcd"),
+                        branch: None,
+                        has_uncommitted_changes: true,
+                        commits_ahead: 3,
+                        latest_commit: None,
+                    },
+                ])
+            });
+
+        let output = render(manager).unwrap();
+
+        assert!(output.contains("Silo Workspaces"));
+        assert!(output.contains("original-1234abcd"));
+        assert!(output.contains("(detached)"));
+        assert!(output.contains("+3"));
+        assert!(output.contains("abc123 initial"));
+        assert!(output.contains('*'));
+    }
+
+    #[test]
+    fn renders_empty_message() {
+        let mut manager = MockWorkspaceManager::new();
+        manager.expect_get_all().returning(|_| Ok(vec![]));
+
+        let output = render(manager).unwrap();
+
+        assert!(output.contains("No workspaces found."));
+    }
+
+    #[test]
+    fn propagates_listing_errors() {
+        let mut manager = MockWorkspaceManager::new();
+        manager
+            .expect_get_all()
+            .returning(|_| Err(GitError::NotAGitRepo));
+
+        assert!(render(manager).is_err());
     }
 }

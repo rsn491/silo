@@ -83,18 +83,12 @@ impl SiloConfig {
         Self::load_settings_from_path(&settings_path)
     }
 
-    /// Saves settings to the default settings path.
+    /// Loads settings from a specific file path; a missing file yields default settings.
     ///
     /// # Errors
     ///
-    /// Returns [`SiloConfigError`] if the home directory is missing or writing fails.
-    pub fn save_settings(settings: &SiloSettings) -> Result<(), SiloConfigError> {
-        let settings_path = Self::get_settings_path()?;
-        Self::save_settings_to_path(&settings_path, settings)
-    }
-
-    /// Internal method to load settings from a specific file path.
-    fn load_settings_from_path(path: &Path) -> Result<SiloSettings, SiloConfigError> {
+    /// Returns [`SiloConfigError`] if the file cannot be read or parsed.
+    pub fn load_settings_from_path(path: &Path) -> Result<SiloSettings, SiloConfigError> {
         if !path.exists() {
             return Ok(SiloSettings::default());
         }
@@ -103,8 +97,15 @@ impl SiloConfig {
         serde_json::from_str(&contents).map_err(|e| SiloConfigError::JsonParse(e.to_string()))
     }
 
-    /// Internal method to save settings to a specific file path.
-    fn save_settings_to_path(path: &Path, settings: &SiloSettings) -> Result<(), SiloConfigError> {
+    /// Saves settings to a specific file path, creating parent directories as needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SiloConfigError`] if the directory or file cannot be written.
+    pub fn save_settings_to_path(
+        path: &Path,
+        settings: &SiloSettings,
+    ) -> Result<(), SiloConfigError> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -132,6 +133,33 @@ mod tests {
 
         // Both should succeed (or both fail if home dir not available).
         assert_eq!(result1.is_ok(), result2.is_ok());
+    }
+
+    #[test]
+    fn test_settings_path_is_inside_silo_dir() {
+        let (Some(silo_dir), Ok(path)) =
+            (SiloConfig::get_silo_dir(), SiloConfig::get_settings_path())
+        else {
+            return;
+        };
+
+        assert_eq!(path, silo_dir.join("settings.json"));
+        // Loading the real settings must not panic, whatever their state.
+        let _ = SiloConfig::load_settings();
+    }
+
+    #[test]
+    fn test_save_settings_reports_unwritable_path() {
+        let dir = tempdir().unwrap();
+        let blocker = dir.path().join("file");
+        std::fs::write(&blocker, "not a directory").unwrap();
+
+        let result = SiloConfig::save_settings_to_path(
+            &blocker.join("settings.json"),
+            &SiloSettings::default(),
+        );
+
+        assert!(matches!(result, Err(SiloConfigError::IoError(_))));
     }
 
     #[test]

@@ -61,21 +61,20 @@ pub struct Row {
     pub cells: Vec<StyledCell>,
 }
 
-/// Render a styled table inline to stdout (no alternate screen).
+/// Render a styled table inline to `out` (no alternate screen).
 ///
 /// Output stays in the terminal scrollback buffer just like `docker ps` or `ls -l`.
 ///
 /// # Errors
 ///
-/// Returns an error if writing to stdout fails.
-pub fn render_table(
+/// Returns an error if writing to `out` fails.
+pub fn render_table<W: io::Write>(
+    out: &mut W,
     title: &str,
     cols: &[Column],
     rows: &[Row],
     empty_msg: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut out = io::stdout();
-
     // Title
     execute!(
         out,
@@ -218,4 +217,109 @@ pub fn print_info(message: &str) -> Result<(), Box<dyn std::error::Error>> {
     )?;
     out.flush()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Removes ANSI escape sequences from `s`.
+    fn strip_ansi(s: &str) -> String {
+        let mut out = String::new();
+        let mut chars = s.chars();
+        while let Some(c) = chars.next() {
+            if c == '\u{1b}' {
+                for c in chars.by_ref() {
+                    if c.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    /// Renders a table into a string with escape codes removed.
+    fn render(rows: &[Row]) -> String {
+        let cols = [
+            Column {
+                header: "name",
+                width: 6,
+            },
+            Column {
+                header: "state",
+                width: 5,
+            },
+        ];
+        let mut buf = Vec::new();
+        render_table(&mut buf, "Title", &cols, rows, "Nothing here.").unwrap();
+        strip_ansi(&String::from_utf8(buf).unwrap())
+    }
+
+    #[test]
+    fn renders_empty_message_when_no_rows() {
+        let text = render(&[]);
+
+        assert!(text.starts_with("Title\n"));
+        assert!(text.contains("Nothing here."));
+        assert!(!text.contains("NAME"));
+    }
+
+    #[test]
+    fn renders_header_separator_and_rows() {
+        let rows = vec![
+            Row {
+                cells: vec![StyledCell::plain("alpha"), StyledCell::dim("—")],
+            },
+            Row {
+                cells: vec![
+                    StyledCell {
+                        text: "beta-long-name".to_string(),
+                        color: None,
+                        bold: true,
+                    },
+                    StyledCell::warning("*"),
+                    StyledCell::plain("extra column"),
+                ],
+            },
+        ];
+
+        let text = render(&rows);
+
+        assert!(text.contains("NAME    STATE"));
+        assert!(text.contains("──────  ─────"));
+        assert!(text.contains("alpha   —"));
+        assert!(text.contains("beta-…  *"));
+        assert!(
+            text.contains("…"),
+            "extra cells are truncated to zero width"
+        );
+    }
+
+    #[test]
+    fn styled_cell_constructors() {
+        assert_eq!(StyledCell::plain("a").color, None);
+        assert_eq!(StyledCell::dim("a").color, Some(Color::DarkGrey));
+        assert_eq!(StyledCell::warning("a").color, Some(Color::Yellow));
+        assert_eq!(
+            StyledCell::colored("a", Color::Blue).color,
+            Some(Color::Blue)
+        );
+    }
+
+    #[test]
+    fn pad_or_trunc_pads_and_truncates() {
+        assert_eq!(pad_or_trunc("ab", 4), "ab  ");
+        assert_eq!(pad_or_trunc("abcd", 4), "abcd");
+        assert_eq!(pad_or_trunc("abcdef", 4), "abc…");
+        assert_eq!(pad_or_trunc("abc", 0), "…");
+    }
+
+    #[test]
+    fn status_and_info_lines_write_successfully() {
+        assert!(print_status("✓", Color::Green, "done").is_ok());
+        assert!(print_info("info").is_ok());
+    }
 }

@@ -25,8 +25,39 @@ impl CompletionsCommand {
     ///
     /// Returns an error if the shell completion script cannot be generated.
     pub fn run(&self, args: CompletionsArgs) -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = crate::Cli::command();
-        generate(args.shell, &mut cmd, "silo", &mut std::io::stdout());
+        self.write_to(args, &mut std::io::stdout());
         Ok(())
+    }
+
+    /// Writes the completion script for `args.shell` to `out`.
+    fn write_to(&self, args: CompletionsArgs, out: &mut impl std::io::Write) {
+        let mut cmd = crate::Cli::command();
+        generate(args.shell, &mut cmd, "silo", out);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generates_script_mentioning_subcommands() {
+        for shell in [Shell::Bash, Shell::Zsh, Shell::Fish] {
+            let mut out = Vec::new();
+
+            CompletionsCommand::new().write_to(CompletionsArgs { shell }, &mut out);
+
+            let script = String::from_utf8(out).unwrap();
+            assert!(script.contains("silo"), "{shell} script names the binary");
+            assert!(
+                script.contains("launch"),
+                "{shell} script lists subcommands"
+            );
+        }
+    }
+
+    #[test]
+    fn cli_definition_is_valid() {
+        crate::Cli::command().debug_assert();
     }
 }

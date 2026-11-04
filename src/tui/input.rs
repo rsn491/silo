@@ -42,7 +42,13 @@ pub fn run_input(
     let mut value: Vec<char> = initial.unwrap_or("").chars().collect();
     let mut cursor_pos = value.len();
 
-    let result = run_input_loop(&mut terminal, prompt, &mut value, &mut cursor_pos);
+    let result = run_input_loop(
+        &mut terminal,
+        prompt,
+        &mut value,
+        &mut cursor_pos,
+        &mut event::read,
+    );
 
     disable_raw_mode()?;
     terminal.show_cursor()?;
@@ -62,6 +68,7 @@ fn run_input_loop<B: ratatui::backend::Backend>(
     prompt: &str,
     value: &mut Vec<char>,
     pos: &mut usize,
+    next_event: &mut impl FnMut() -> io::Result<Event>,
 ) -> Result<Option<String>, Box<dyn std::error::Error>>
 where
     B::Error: 'static,
@@ -69,7 +76,7 @@ where
     loop {
         terminal.draw(|f| draw_input(f, prompt, value, *pos))?;
 
-        if let Event::Key(key) = event::read()? {
+        if let Event::Key(key) = next_event()? {
             match (key.code, key.modifiers) {
                 (KeyCode::Char('c'), KeyModifiers::CONTROL) | (KeyCode::Esc, _) => {
                     return Ok(None);
@@ -148,7 +155,7 @@ fn draw_input(f: &mut ratatui::Frame<'_>, prompt: &str, value: &[char], pos: usi
         .constraints([
             Constraint::Length(1), // prompt label
             Constraint::Length(1), // spacer
-            Constraint::Length(1), // text field
+            Constraint::Length(2), // text field + underline
             Constraint::Length(1), // hint
         ])
         .split(dialog_area);
@@ -198,4 +205,130 @@ fn draw_input(f: &mut ratatui::Frame<'_>, prompt: &str, value: &[char], pos: usi
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, inner[3]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::test_support::{ctrl, event_source, key, screen_text, test_terminal, typed};
+
+    /// Runs the input loop starting from `initial` over `events`.
+    fn run(initial: &str, events: Vec<Event>) -> (Option<String>, String) {
+        let mut terminal = test_terminal(70, 7);
+        let mut value: Vec<char> = initial.chars().collect();
+        let mut pos = value.len();
+        let result = run_input_loop(
+            &mut terminal,
+            "Commit message",
+            &mut value,
+            &mut pos,
+            &mut event_source(events),
+        )
+        .unwrap();
+        (result, screen_text(&terminal))
+    }
+
+    /// Concatenates event groups.
+    fn seq(groups: Vec<Vec<Event>>) -> Vec<Event> {
+        groups.into_iter().flatten().collect()
+    }
+
+    #[test]
+    fn typing_and_enter_returns_value() {
+        let (result, screen) = run("", seq(vec![typed("hello"), vec![key(KeyCode::Enter)]]));
+
+        assert_eq!(result.as_deref(), Some("hello"));
+        assert!(screen.contains("Commit message"));
+        assert!(screen.contains("hello"));
+    }
+
+    #[test]
+    fn cancel_returns_none() {
+        assert_eq!(run("x", vec![key(KeyCode::Esc)]).0, None);
+        assert_eq!(run("x", vec![ctrl('c')]).0, None);
+    }
+
+    #[test]
+    fn cursor_movement_and_editing() {
+        let events = seq(vec![
+            vec![key(KeyCode::Home), key(KeyCode::Left)],
+            typed(">"),
+            vec![key(KeyCode::End), key(KeyCode::Right)],
+            typed("!"),
+            vec![key(KeyCode::Left), key(KeyCode::Backspace)],
+            vec![key(KeyCode::Left), key(KeyCode::Right)],
+            vec![key(KeyCode::Enter)],
+        ]);
+
+        let (result, _) = run("abc", events);
+
+        assert_eq!(result.as_deref(), Some(">ab!"));
+    }
+
+    #[test]
+    fn delete_removes_character_under_cursor() {
+        let events = vec![
+            key(KeyCode::Home),
+            key(KeyCode::Delete),
+            key(KeyCode::End),
+            key(KeyCode::Delete),
+            key(KeyCode::Enter),
+        ];
+
+        assert_eq!(run("abc", events).0.as_deref(), Some("bc"));
+    }
+
+    #[test]
+    fn backspace_at_start_is_noop() {
+        let events = vec![
+            key(KeyCode::Home),
+            key(KeyCode::Backspace),
+            key(KeyCode::Enter),
+        ];
+
+        assert_eq!(run("abc", events).0.as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn ctrl_u_and_ctrl_k_clear_around_cursor() {
+        let events = vec![
+            key(KeyCode::Left),
+            key(KeyCode::Left),
+            ctrl('u'),
+            key(KeyCode::Enter),
+        ];
+        assert_eq!(run("abcd", events).0.as_deref(), Some("cd"));
+
+        let events = vec![
+            key(KeyCode::Home),
+            key(KeyCode::Right),
+            ctrl('k'),
+            key(KeyCode::Enter),
+        ];
+        assert_eq!(run("abcd", events).0.as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn ignores_unrelated_events() {
+        let events = vec![Event::FocusLost, key(KeyCode::F(1)), key(KeyCode::Enter)];
+
+        assert_eq!(run("keep", events).0.as_deref(), Some("keep"));
+    }
+
+    #[test]
+    fn propagates_event_errors() {
+        let mut terminal = test_terminal(70, 7);
+        let mut value = Vec::new();
+        let mut pos = 0;
+
+        let result = run_input_loop(
+            &mut terminal,
+            "Prompt",
+            &mut value,
+            &mut pos,
+            &mut event_source(vec![]),
+        );
+
+        assert!(result.is_err());
+    }
 }

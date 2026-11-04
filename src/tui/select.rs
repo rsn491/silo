@@ -56,7 +56,7 @@ pub fn run_select(
     let mut state = ListState::default();
     state.select(Some(default.min(items.len().saturating_sub(1))));
 
-    let result = run_select_loop(&mut terminal, items, prompt, &mut state);
+    let result = run_select_loop(&mut terminal, items, prompt, &mut state, &mut event::read);
 
     disable_raw_mode()?;
     terminal.show_cursor()?;
@@ -75,6 +75,7 @@ fn run_select_loop<B: ratatui::backend::Backend>(
     items: &[SelectItem],
     prompt: &str,
     state: &mut ListState,
+    next_event: &mut impl FnMut() -> io::Result<Event>,
 ) -> Result<Option<usize>, Box<dyn std::error::Error>>
 where
     B::Error: 'static,
@@ -82,7 +83,7 @@ where
     loop {
         terminal.draw(|f| draw_select(f, items, prompt, state))?;
 
-        if let Event::Key(key) = event::read()? {
+        if let Event::Key(key) = next_event()? {
             match (key.code, key.modifiers) {
                 (KeyCode::Char('c'), KeyModifiers::CONTROL)
                 | (KeyCode::Esc, _)
@@ -209,4 +210,134 @@ fn draw_footer(f: &mut ratatui::Frame<'_>, area: Rect) {
     ]))
     .alignment(Alignment::Center);
     f.render_widget(hint, area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::test_support::{ctrl, event_source, key, screen_text, test_terminal};
+
+    /// Three items; only the second has a detail line.
+    fn items() -> Vec<SelectItem> {
+        vec![
+            SelectItem {
+                label: "alpha".to_string(),
+                detail: None,
+            },
+            SelectItem {
+                label: "beta".to_string(),
+                detail: Some("beta details".to_string()),
+            },
+            SelectItem {
+                label: "gamma".to_string(),
+                detail: None,
+            },
+        ]
+    }
+
+    /// Runs the select loop starting at `start` over `events`.
+    fn run(start: usize, events: Vec<Event>) -> (Option<usize>, String) {
+        let mut terminal = test_terminal(60, 14);
+        let mut state = ListState::default();
+        state.select(Some(start));
+        let result = run_select_loop(
+            &mut terminal,
+            &items(),
+            "Pick one",
+            &mut state,
+            &mut event_source(events),
+        )
+        .unwrap();
+        (result, screen_text(&terminal))
+    }
+
+    #[test]
+    fn enter_returns_current_selection() {
+        assert_eq!(run(1, vec![key(KeyCode::Enter)]).0, Some(1));
+    }
+
+    #[test]
+    fn up_and_down_move_within_bounds() {
+        let events = vec![
+            key(KeyCode::Down),
+            key(KeyCode::Char('j')),
+            key(KeyCode::Down),
+            key(KeyCode::Enter),
+        ];
+        assert_eq!(run(0, events).0, Some(2));
+
+        let events = vec![
+            key(KeyCode::Up),
+            key(KeyCode::Char('k')),
+            key(KeyCode::Up),
+            key(KeyCode::Enter),
+        ];
+        assert_eq!(run(2, events).0, Some(0));
+    }
+
+    #[test]
+    fn home_and_end_jump() {
+        assert_eq!(
+            run(1, vec![key(KeyCode::End), key(KeyCode::Enter)]).0,
+            Some(2)
+        );
+        assert_eq!(
+            run(1, vec![key(KeyCode::Char('G')), key(KeyCode::Enter)]).0,
+            Some(2)
+        );
+        assert_eq!(
+            run(1, vec![key(KeyCode::Home), key(KeyCode::Enter)]).0,
+            Some(0)
+        );
+        assert_eq!(
+            run(1, vec![key(KeyCode::Char('g')), key(KeyCode::Enter)]).0,
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn cancel_keys_return_none() {
+        assert_eq!(run(0, vec![key(KeyCode::Esc)]).0, None);
+        assert_eq!(run(0, vec![key(KeyCode::Char('q'))]).0, None);
+        assert_eq!(run(0, vec![ctrl('c')]).0, None);
+    }
+
+    #[test]
+    fn ignores_unrelated_events() {
+        let events = vec![Event::FocusGained, key(KeyCode::Tab), key(KeyCode::Enter)];
+
+        assert_eq!(run(2, events).0, Some(2));
+    }
+
+    #[test]
+    fn renders_prompt_items_and_selected_detail() {
+        let (_, screen) = run(1, vec![key(KeyCode::Enter)]);
+
+        assert!(screen.contains("Pick one"));
+        assert!(screen.contains("alpha"));
+        assert!(screen.contains("› beta"));
+        assert!(screen.contains("beta details"));
+        assert!(screen.contains("navigate"));
+    }
+
+    #[test]
+    fn empty_items_return_none_without_terminal() {
+        assert_eq!(run_select("Pick", &[], 0).unwrap(), None);
+    }
+
+    #[test]
+    fn propagates_event_errors() {
+        let mut terminal = test_terminal(60, 14);
+        let mut state = ListState::default();
+
+        let result = run_select_loop(
+            &mut terminal,
+            &items(),
+            "Pick",
+            &mut state,
+            &mut event_source(vec![]),
+        );
+
+        assert!(result.is_err());
+    }
 }

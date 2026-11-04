@@ -1,16 +1,16 @@
 //! Service for generating descriptive git branch names via an AI agent.
 
-use crate::infra::agent::Agent;
+use crate::infra::agent::AgentCommand;
 
 /// Generates descriptive git branch name suggestions by prompting an AI agent in headless mode.
-pub struct GitSuggestionsService {
+pub struct GitSuggestionsService<A: AgentCommand> {
     /// Agent used to generate branch name suggestions.
-    agent: Agent,
+    agent: A,
 }
 
-impl GitSuggestionsService {
+impl<A: AgentCommand> GitSuggestionsService<A> {
     /// Creates a new `GitSuggestionsService`.
-    pub fn new(agent: Agent) -> Self {
+    pub fn new(agent: A) -> Self {
         Self { agent }
     }
 
@@ -104,6 +104,68 @@ fn sanitize_branch_name(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infra::agent::{MockAgentCommand, PromptError};
+
+    /// An agent mock that checks the prompt mentions `changes` and replies with `reply`.
+    fn agent_replying(reply: Result<&'static str, &'static str>) -> MockAgentCommand {
+        let mut agent = MockAgentCommand::new();
+        agent
+            .expect_prompt()
+            .withf(|prompt| prompt.contains("CHANGES-MARKER"))
+            .times(1)
+            .returning(move |_| {
+                reply
+                    .map(str::to_string)
+                    .map_err(|e| PromptError::Failed(e.to_string()))
+            });
+        agent
+    }
+
+    #[test]
+    fn test_suggest_branch_name_sanitizes_agent_output() {
+        let service = GitSuggestionsService::new(agent_replying(Ok("Fix Login Bug\nextra")));
+
+        let result = service.suggest_branch_name("CHANGES-MARKER");
+
+        assert_eq!(result, Ok(Some("fix-login-bug".to_string())));
+    }
+
+    #[test]
+    fn test_suggest_branch_name_propagates_agent_error() {
+        let service = GitSuggestionsService::new(agent_replying(Err("boom")));
+
+        let result = service.suggest_branch_name("CHANGES-MARKER");
+
+        assert!(result.unwrap_err().contains("boom"));
+    }
+
+    #[test]
+    fn test_suggest_commit_message_uses_first_non_empty_line() {
+        let service =
+            GitSuggestionsService::new(agent_replying(Ok("\n  Add login form  \nmore detail")));
+
+        let result = service.suggest_commit_message("CHANGES-MARKER");
+
+        assert_eq!(result, Ok(Some("Add login form".to_string())));
+    }
+
+    #[test]
+    fn test_suggest_commit_message_returns_none_for_blank_output() {
+        let service = GitSuggestionsService::new(agent_replying(Ok(" \n \n")));
+
+        let result = service.suggest_commit_message("CHANGES-MARKER");
+
+        assert_eq!(result, Ok(None));
+    }
+
+    #[test]
+    fn test_suggest_commit_message_propagates_agent_error() {
+        let service = GitSuggestionsService::new(agent_replying(Err("offline")));
+
+        let result = service.suggest_commit_message("CHANGES-MARKER");
+
+        assert!(result.unwrap_err().contains("offline"));
+    }
 
     #[test]
     fn test_sanitize_branch_name_already_kebab_case() {

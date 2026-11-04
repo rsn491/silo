@@ -1,13 +1,13 @@
 //! Logic for the `checkout` command.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
+use thiserror::Error;
 
-use crate::infra::git::{GitOperations, GitWorkspaceInfo};
-use crate::services::global_workspace_manager::GlobalWorkspaceManager;
+use crate::infra::git::GitWorkspaceInfo;
 use crate::services::workspace_manager::{WorkspaceListingScope, WorkspaceManager};
-use crate::tui::{SelectItem, pad_or_trunc, run_select};
+use crate::tui::{Prompt, SelectItem, pad_or_trunc};
 
 /// Arguments for the `checkout` command.
 #[derive(Parser, Debug)]
@@ -18,16 +18,35 @@ pub struct CheckoutArgs {
     pub workspace_id: Option<String>,
 }
 
-/// Handler for the `checkout` command.
-pub struct CheckoutCommand<G: GitOperations> {
-    /// Workspace manager used to list available workspaces.
-    workspace_manager: GlobalWorkspaceManager<G>,
+/// Reasons the checkout command cannot pick a workspace; each exits with code 1.
+#[derive(Debug, Error, PartialEq)]
+enum CheckoutError {
+    /// The repository has no workspaces at all.
+    #[error("No workspaces found.")]
+    NoWorkspaces,
+    /// No workspace matched the requested ID or branch.
+    #[error("No workspace found with ID or branch '{0}'.")]
+    NotFound(String),
+    /// The user cancelled the interactive selector.
+    #[error("No workspace selected.")]
+    NotSelected,
 }
 
-impl<G: GitOperations> CheckoutCommand<G> {
+/// Handler for the `checkout` command.
+pub struct CheckoutCommand<W: WorkspaceManager, U: Prompt> {
+    /// Workspace manager used to list available workspaces.
+    workspace_manager: W,
+    /// Interactive prompt used when no workspace ID is given.
+    prompt: U,
+}
+
+impl<W: WorkspaceManager, U: Prompt> CheckoutCommand<W, U> {
     /// Creates a new `CheckoutCommand`.
-    pub fn new(workspace_manager: GlobalWorkspaceManager<G>) -> Self {
-        Self { workspace_manager }
+    pub fn new(workspace_manager: W, prompt: U) -> Self {
+        Self {
+            workspace_manager,
+            prompt,
+        }
     }
 
     /// Executes the checkout command.
@@ -36,22 +55,51 @@ impl<G: GitOperations> CheckoutCommand<G> {
     ///
     /// Returns an error if workspace listing, user selection, or shell spawning fails.
     pub fn run(self, args: CheckoutArgs) -> Result<(), Box<dyn std::error::Error>> {
+        let workspace_path = match self.resolve_workspace(args.workspace_id.as_deref()) {
+            Ok(path) => path,
+            Err(e) => match e.downcast::<CheckoutError>() {
+                Ok(reason) => {
+                    eprintln!("{}", reason);
+                    std::process::exit(1);
+                }
+                Err(e) => return Err(e),
+            },
+        };
+
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+        if let Some(code) = spawn_shell_in(&workspace_path, &shell)?
+            && code != 0
+        {
+            std::process::exit(code);
+        }
+        Ok(())
+    }
+
+    /// Returns the path of the workspace matching `id`, or the one the user selects.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CheckoutError`] when no workspace can be chosen, or any listing or
+    /// prompt error.
+    fn resolve_workspace(&self, id: Option<&str>) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let workspaces = self
             .workspace_manager
             .get_all(WorkspaceListingScope::ManagedAndOriginal)?;
 
         if workspaces.is_empty() {
-            eprintln!("No workspaces found.");
-            std::process::exit(1);
+            return Err(CheckoutError::NoWorkspaces.into());
         }
 
-        let workspace_path = if let Some(id) = args.workspace_id {
-            find_by_id(&workspaces, &id)?
-        } else {
-            select_interactively(&workspaces)?
-        };
-
-        spawn_shell_in(&workspace_path)
+        match id {
+            Some(id) => Ok(find_by_id(&workspaces, id)?),
+            None => {
+                let items = select_items(&workspaces);
+                match self.prompt.select("Select a workspace", &items, 0)? {
+                    Some(idx) => Ok(workspaces[idx].path.clone()),
+                    None => Err(CheckoutError::NotSelected.into()),
+                }
+            }
+        }
     }
 }
 
@@ -60,35 +108,22 @@ impl<G: GitOperations> CheckoutCommand<G> {
 ///
 /// # Errors
 ///
-/// Exits with code 1 if no workspace with the given ID or branch is found.
-fn find_by_id(
-    workspaces: &[GitWorkspaceInfo],
-    id: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let found = workspaces.iter().find(|w| {
-        let name_match = w.path.file_name().and_then(|n| n.to_str()) == Some(id);
-        let branch_match = w.branch.as_deref() == Some(id);
-        name_match || branch_match
-    });
-
-    match found {
-        Some(w) => Ok(w.path.clone()),
-        None => {
-            eprintln!("No workspace found with ID or branch '{}'.", id);
-            std::process::exit(1);
-        }
-    }
+/// Returns [`CheckoutError::NotFound`] if no workspace with the given ID or branch is found.
+fn find_by_id(workspaces: &[GitWorkspaceInfo], id: &str) -> Result<PathBuf, CheckoutError> {
+    workspaces
+        .iter()
+        .find(|w| {
+            let name_match = w.path.file_name().and_then(|n| n.to_str()) == Some(id);
+            let branch_match = w.branch.as_deref() == Some(id);
+            name_match || branch_match
+        })
+        .map(|w| w.path.clone())
+        .ok_or_else(|| CheckoutError::NotFound(id.to_string()))
 }
 
-/// Presents an interactive ratatui list of workspaces and returns the selected path.
-///
-/// # Errors
-///
-/// Returns an error if the terminal interaction fails. Exits with code 1 if the user cancels.
-fn select_interactively(
-    workspaces: &[GitWorkspaceInfo],
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let items: Vec<SelectItem> = workspaces
+/// Builds the selector rows for the interactive workspace picker.
+fn select_items(workspaces: &[GitWorkspaceInfo]) -> Vec<SelectItem> {
+    workspaces
         .iter()
         .map(|w| {
             let id = w.path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
@@ -114,23 +149,17 @@ fn select_interactively(
             };
             SelectItem { label, detail }
         })
-        .collect();
-
-    match run_select("Select a workspace", &items, 0)? {
-        Some(idx) => Ok(workspaces[idx].path.clone()),
-        None => {
-            eprintln!("No workspace selected.");
-            std::process::exit(1);
-        }
-    }
+        .collect()
 }
 
-/// Spawns the user's shell with its working directory set to the given workspace path.
+/// Spawns `shell` with its working directory set to the given workspace path and waits for it.
+///
+/// Returns the shell's exit code (`None` if it was terminated by a signal).
 ///
 /// # Errors
 ///
 /// Returns an error if the shell process cannot be spawned.
-fn spawn_shell_in(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn spawn_shell_in(path: &Path, shell: &str) -> Result<Option<i32>, Box<dyn std::error::Error>> {
     use crossterm::{
         execute,
         style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
@@ -153,27 +182,21 @@ fn spawn_shell_in(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         ResetColor,
     )?;
 
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-    let status = std::process::Command::new(&shell)
+    let status = std::process::Command::new(shell)
         .current_dir(path)
         .status()?;
 
-    if let Some(code) = status.code()
-        && code != 0
-    {
-        std::process::exit(code);
-    }
-
-    Ok(())
+    Ok(status.code())
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
-    use crate::infra::git::GitWorkspaceInfo;
-
-    use super::find_by_id;
+    use super::*;
+    use crate::infra::git_error::GitError;
+    use crate::services::workspace_manager::MockWorkspaceManager;
+    use crate::tui::prompt::MockPrompt;
 
     fn make_workspace(dir: &str, branch: Option<&str>) -> GitWorkspaceInfo {
         GitWorkspaceInfo {
@@ -212,5 +235,122 @@ mod tests {
         ];
         let result = find_by_id(&workspaces, "my-branch").unwrap();
         assert_eq!(result, PathBuf::from("/silo/my-branch"));
+    }
+
+    #[test]
+    fn find_by_id_reports_missing_workspace() {
+        let workspaces = vec![make_workspace("project-abc12345", Some("main"))];
+
+        let err = find_by_id(&workspaces, "nope").unwrap_err();
+
+        assert_eq!(err, CheckoutError::NotFound("nope".to_string()));
+        assert_eq!(
+            err.to_string(),
+            "No workspace found with ID or branch 'nope'."
+        );
+    }
+
+    /// A workspace manager returning `workspaces` for every listing.
+    fn manager_with(workspaces: Vec<GitWorkspaceInfo>) -> MockWorkspaceManager {
+        let mut manager = MockWorkspaceManager::new();
+        manager
+            .expect_get_all()
+            .withf(|scope| *scope == WorkspaceListingScope::ManagedAndOriginal)
+            .returning(move |_| Ok(workspaces.clone()));
+        manager
+    }
+
+    /// Extracts the [`CheckoutError`] from a boxed error.
+    fn checkout_error(err: Box<dyn std::error::Error>) -> CheckoutError {
+        *err.downcast::<CheckoutError>()
+            .expect("expected CheckoutError")
+    }
+
+    #[test]
+    fn resolve_workspace_fails_without_workspaces() {
+        let command = CheckoutCommand::new(manager_with(vec![]), MockPrompt::new());
+
+        let err = command.resolve_workspace(Some("x")).unwrap_err();
+
+        assert_eq!(checkout_error(err), CheckoutError::NoWorkspaces);
+    }
+
+    #[test]
+    fn resolve_workspace_by_id() {
+        let manager = manager_with(vec![make_workspace("project-abc12345", Some("main"))]);
+        let mut prompt = MockPrompt::new();
+        prompt.expect_select().never();
+        let command = CheckoutCommand::new(manager, prompt);
+
+        assert_eq!(
+            command.resolve_workspace(Some("main")).unwrap(),
+            PathBuf::from("/silo/project-abc12345")
+        );
+        assert_eq!(
+            checkout_error(command.resolve_workspace(Some("other")).unwrap_err()),
+            CheckoutError::NotFound("other".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_workspace_interactively() {
+        let mut busy = make_workspace("project-xyz67890", None);
+        busy.has_uncommitted_changes = true;
+        busy.commits_ahead = 2;
+        busy.latest_commit = Some("abc123 wip".to_string());
+        let manager = manager_with(vec![make_workspace("project-abc12345", Some("main")), busy]);
+        let mut prompt = MockPrompt::new();
+        prompt
+            .expect_select()
+            .withf(|_, items, default| {
+                *default == 0
+                    && items.len() == 2
+                    && items[0].detail.is_none()
+                    && items[1].label.contains("(detached)")
+                    && items[1].label.contains("abc123 wip")
+                    && items[1].detail.as_deref() == Some("uncommitted changes · 2 commit(s) ahead")
+            })
+            .times(1)
+            .returning(|_, _, _| Ok(Some(1)));
+        let command = CheckoutCommand::new(manager, prompt);
+
+        assert_eq!(
+            command.resolve_workspace(None).unwrap(),
+            PathBuf::from("/silo/project-xyz67890")
+        );
+    }
+
+    #[test]
+    fn resolve_workspace_cancelled_selection() {
+        let manager = manager_with(vec![make_workspace("project-abc12345", Some("main"))]);
+        let mut prompt = MockPrompt::new();
+        prompt.expect_select().returning(|_, _, _| Ok(None));
+        let command = CheckoutCommand::new(manager, prompt);
+
+        let err = command.resolve_workspace(None).unwrap_err();
+
+        assert_eq!(checkout_error(err), CheckoutError::NotSelected);
+    }
+
+    #[test]
+    fn resolve_workspace_propagates_listing_errors() {
+        let mut manager = MockWorkspaceManager::new();
+        manager
+            .expect_get_all()
+            .returning(|_| Err(GitError::NotAGitRepo));
+        let command = CheckoutCommand::new(manager, MockPrompt::new());
+
+        let err = command.resolve_workspace(None).unwrap_err();
+
+        assert!(err.downcast::<CheckoutError>().is_err());
+    }
+
+    #[test]
+    fn spawn_shell_in_reports_exit_code() {
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        assert_eq!(spawn_shell_in(tmp.path(), "true").unwrap(), Some(0));
+        assert_eq!(spawn_shell_in(tmp.path(), "false").unwrap(), Some(1));
+        assert!(spawn_shell_in(tmp.path(), "silo-definitely-missing-shell").is_err());
     }
 }

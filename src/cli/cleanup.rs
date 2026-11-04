@@ -5,13 +5,11 @@ use std::collections::HashSet;
 use clap::Parser;
 use crossterm::style::Color;
 
-use crate::infra::git::GitOperations;
 use crate::infra::system_process::ProcessOperations;
 use crate::services::agent_list_service::AgentListService;
-use crate::services::global_workspace_manager::GlobalWorkspaceManager;
 use crate::services::workspace_kind::WorkspaceKind;
 use crate::services::workspace_manager::WorkspaceManager;
-use crate::tui::{print_status, run_confirm};
+use crate::tui::{Prompt, print_status};
 
 /// Arguments for the `cleanup` command.
 #[derive(Parser, Debug)]
@@ -30,19 +28,25 @@ pub struct CleanupArgs {
 }
 
 /// Handler for the `cleanup` command.
-pub struct CleanupCommand<G: GitOperations, P: ProcessOperations + Clone> {
+pub struct CleanupCommand<W: WorkspaceManager, L: WorkspaceManager, P: ProcessOperations, U: Prompt>
+{
     /// Workspace manager for both worktrees and checkouts.
-    workspaces: GlobalWorkspaceManager<G>,
+    workspaces: W,
     /// Service for detecting active agent workspaces.
-    agent_list: AgentListService<G, P>,
+    agent_list: AgentListService<L, P>,
+    /// Interactive prompt used for confirmation.
+    prompt: U,
 }
 
-impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
+impl<W: WorkspaceManager, L: WorkspaceManager, P: ProcessOperations, U: Prompt>
+    CleanupCommand<W, L, P, U>
+{
     /// Creates a new `CleanupCommand`.
-    pub fn new(workspaces: GlobalWorkspaceManager<G>, agent_list: AgentListService<G, P>) -> Self {
+    pub fn new(workspaces: W, agent_list: AgentListService<L, P>, prompt: U) -> Self {
         Self {
             workspaces,
             agent_list,
+            prompt,
         }
     }
 
@@ -53,8 +57,9 @@ impl<G: GitOperations, P: ProcessOperations + Clone> CleanupCommand<G, P> {
     /// Returns an error if the cleanup operation fails or if user input cannot be read.
     pub fn run(&self, args: CleanupArgs) -> Result<(), Box<dyn std::error::Error>> {
         if !args.yes {
-            let confirmed =
-                run_confirm("This will remove all inactive worktrees. Continue?", false)?;
+            let confirmed = self
+                .prompt
+                .confirm("This will remove all inactive worktrees. Continue?", false)?;
 
             if !confirmed {
                 print_status("✗", Color::DarkGrey, "Cleanup cancelled.")?;
@@ -128,5 +133,170 @@ fn workspace_detail(kind: &WorkspaceKind, branch: Option<&str>) -> String {
             format!("branch: {}", branch.unwrap_or("(detached)"))
         }
         WorkspaceKind::Clone => "checkout clone".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::infra::git_error::GitError;
+    use crate::infra::system_process::{MockProcessOperations, ProcessError};
+    use crate::services::workspace_manager::{
+        CleanupError, CleanupResult, FailedWorkspace, MockWorkspaceManager, RemovedWorkspace,
+        SkippedWorkspace,
+    };
+    use crate::tui::prompt::MockPrompt;
+
+    /// An agent list service that reports no running agents.
+    fn idle_agents() -> AgentListService<MockWorkspaceManager, MockProcessOperations> {
+        let mut listing = MockWorkspaceManager::new();
+        listing.expect_get_all().returning(|_| Ok(vec![]));
+        let mut process = MockProcessOperations::new();
+        process
+            .expect_find_processes_by_names()
+            .returning(|_| Ok(vec![]));
+        AgentListService::new(listing, process)
+    }
+
+    /// Default args with confirmation skipped.
+    fn yes_args() -> CleanupArgs {
+        CleanupArgs {
+            all: false,
+            force: false,
+            yes: true,
+        }
+    }
+
+    #[test]
+    fn declined_confirmation_cancels_cleanup() {
+        let mut prompt = MockPrompt::new();
+        prompt.expect_confirm().times(1).returning(|_, _| Ok(false));
+        let mut workspaces = MockWorkspaceManager::new();
+        workspaces.expect_cleanup().never();
+        let args = CleanupArgs {
+            yes: false,
+            ..yes_args()
+        };
+
+        CleanupCommand::new(workspaces, idle_agents(), prompt)
+            .run(args)
+            .unwrap();
+    }
+
+    #[test]
+    fn confirmed_cleanup_reports_nothing_to_do() {
+        let mut prompt = MockPrompt::new();
+        prompt.expect_confirm().times(1).returning(|_, _| Ok(true));
+        let mut workspaces = MockWorkspaceManager::new();
+        workspaces
+            .expect_cleanup()
+            .times(1)
+            .returning(|_, _, _| Ok(CleanupResult::default()));
+        let args = CleanupArgs {
+            yes: false,
+            ..yes_args()
+        };
+
+        CleanupCommand::new(workspaces, idle_agents(), prompt)
+            .run(args)
+            .unwrap();
+    }
+
+    #[test]
+    fn reports_removed_failed_and_skipped_workspaces() {
+        let mut workspaces = MockWorkspaceManager::new();
+        workspaces
+            .expect_cleanup()
+            .withf(|excluded, all, force| excluded.is_empty() && *all && *force)
+            .returning(|_, _, _| {
+                Ok(CleanupResult {
+                    removed: vec![
+                        RemovedWorkspace {
+                            path: PathBuf::from("/silo/a"),
+                            kind: WorkspaceKind::Worktree,
+                            branch: Some("feature".to_string()),
+                        },
+                        RemovedWorkspace {
+                            path: PathBuf::from("/silo/b"),
+                            kind: WorkspaceKind::Clone,
+                            branch: None,
+                        },
+                    ],
+                    failed: vec![FailedWorkspace {
+                        path: PathBuf::from("/silo/c"),
+                        error: "busy".to_string(),
+                    }],
+                    skipped: vec![SkippedWorkspace {
+                        path: PathBuf::from("/silo/d"),
+                        kind: WorkspaceKind::Worktree,
+                        branch: None,
+                        commits_ahead: 2,
+                    }],
+                })
+            });
+        let args = CleanupArgs {
+            all: true,
+            force: true,
+            yes: true,
+        };
+
+        CleanupCommand::new(workspaces, idle_agents(), MockPrompt::new())
+            .run(args)
+            .unwrap();
+    }
+
+    #[test]
+    fn fails_when_agent_listing_fails() {
+        let mut listing = MockWorkspaceManager::new();
+        listing.expect_get_all().returning(|_| Ok(vec![]));
+        let mut process = MockProcessOperations::new();
+        process
+            .expect_find_processes_by_names()
+            .returning(|_| Err(ProcessError::CommandFailed("ps missing".to_string())));
+        let mut workspaces = MockWorkspaceManager::new();
+        workspaces.expect_cleanup().never();
+
+        let result = CleanupCommand::new(
+            workspaces,
+            AgentListService::new(listing, process),
+            MockPrompt::new(),
+        )
+        .run(yes_args());
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Failed to list running agents"
+        );
+    }
+
+    #[test]
+    fn propagates_cleanup_errors() {
+        let mut workspaces = MockWorkspaceManager::new();
+        workspaces
+            .expect_cleanup()
+            .returning(|_, _, _| Err(CleanupError::Git(GitError::NotAGitRepo)));
+
+        let result =
+            CleanupCommand::new(workspaces, idle_agents(), MockPrompt::new()).run(yes_args());
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn workspace_detail_describes_kind() {
+        assert_eq!(
+            workspace_detail(&WorkspaceKind::Worktree, Some("main")),
+            "branch: main"
+        );
+        assert_eq!(
+            workspace_detail(&WorkspaceKind::Worktree, None),
+            "branch: (detached)"
+        );
+        assert_eq!(
+            workspace_detail(&WorkspaceKind::Clone, Some("main")),
+            "checkout clone"
+        );
     }
 }

@@ -3,10 +3,8 @@
 use std::path::PathBuf;
 
 use crate::infra::agent::Agent;
-use crate::infra::git::GitOperations;
 use crate::infra::git_error::GitError;
 use crate::infra::system_process::{ProcessError, ProcessOperations};
-use crate::services::global_workspace_manager::GlobalWorkspaceManager;
 use crate::services::workspace_manager::{WorkspaceListingScope, WorkspaceManager};
 use strum::IntoEnumIterator;
 use thiserror::Error;
@@ -36,16 +34,16 @@ pub enum ListError {
 }
 
 /// Service for identifying running AI agents within known repository workspaces.
-pub struct AgentListService<G: GitOperations, P: ProcessOperations> {
+pub struct AgentListService<W: WorkspaceManager, P: ProcessOperations> {
     /// Workspace manager providing the list of known workspaces.
-    workspace_manager: GlobalWorkspaceManager<G>,
+    workspace_manager: W,
     /// Process operations used to discover running agents.
     process: P,
 }
 
-impl<G: GitOperations, P: ProcessOperations> AgentListService<G, P> {
+impl<W: WorkspaceManager, P: ProcessOperations> AgentListService<W, P> {
     /// Creates a new `AgentListService`.
-    pub fn new(workspace_manager: GlobalWorkspaceManager<G>, process: P) -> Self {
+    pub fn new(workspace_manager: W, process: P) -> Self {
         Self {
             workspace_manager,
             process,
@@ -137,6 +135,7 @@ mod tests {
     use crate::infra::system_process::MockProcessOperations;
     use crate::services::git_checkout_workspace::GitCheckoutWorkspace;
     use crate::services::git_worktree_workspace::GitWorktreeWorkspace;
+    use crate::services::global_workspace_manager::GlobalWorkspaceManager;
     use mockall::predicate;
 
     #[test]

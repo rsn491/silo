@@ -85,6 +85,21 @@ fn build_split_pane_script(path_str: &str, command: &str) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn test_open_tab_and_split_pane_fail_without_osascript() {
+        let path = Path::new("/tmp");
+
+        assert!(matches!(
+            ITerm2.open_tab(path, &Agent::ClaudeCode),
+            Err(TerminalError::TabOpenFailed(_))
+        ));
+        assert!(matches!(
+            ITerm2.split_pane(path, "silo launch"),
+            Err(TerminalError::PaneSplitFailed(_))
+        ));
+    }
+
     #[test]
     fn test_build_open_tab_script_contains_path_and_agent() {
         // Arrange
