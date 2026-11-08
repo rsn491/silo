@@ -1,0 +1,21 @@
+name: lintmatter
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lintmatter:
+    name: lintmatter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Pinned to a commit: the action is not yet part of a tagged release.
+      - uses: rsn491/lintmatter@531c73ef24ab07f4fe58b72cf2a3bc8d16ba8449
+        with:
+          strict: true
