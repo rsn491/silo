@@ -42,7 +42,8 @@ pub trait GitOperations {
     /// # Errors
     ///
     /// Returns [`GitError::WorktreeCreationFailed`] if the `git worktree add` command fails.
-    fn create_worktree(&self, path: &Path, branch: &str) -> Result<(), GitError>;
+    fn create_worktree(&self, path: &Path, branch: &str, start_point: &str)
+    -> Result<(), GitError>;
 
     /// Lists all worktrees associated with the current Git repository.
     ///
@@ -108,13 +109,6 @@ pub trait GitOperations {
     /// Returns [`GitError::CloneFailed`] if the `git clone --local` command fails.
     fn clone_local(&self, source: &Path, dest: &Path) -> Result<(), GitError>;
 
-    /// Checks out a new branch in the specified repository path.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`GitError::CommandFailed`] if the `git checkout -b` command fails.
-    fn checkout_new_branch(&self, path: &Path, branch: &str) -> Result<(), GitError>;
-
     /// Checks out a new branch starting from `start_point` in the specified path.
     ///
     /// # Errors
@@ -133,6 +127,19 @@ pub trait GitOperations {
     ///
     /// Returns [`GitError::CommandFailed`] if the `git fetch` command fails.
     fn fetch_remote(&self, path: &Path) -> Result<(), GitError>;
+
+    /// Copies the remote-tracking ref `remote_ref` (e.g. "origin/main") from the
+    /// repository at `source` into the repository at `path` under the same name.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GitError::CommandFailed`] if the `git fetch` command fails.
+    fn import_remote_ref(
+        &self,
+        path: &Path,
+        source: &Path,
+        remote_ref: &str,
+    ) -> Result<(), GitError>;
 
     /// Returns the name of the current branch at the specified path.
     ///
@@ -234,10 +241,16 @@ impl GitOperations for Git {
             .ok_or_else(|| GitError::CommandFailed("could not determine project name".to_string()))
     }
 
-    fn create_worktree(&self, path: &Path, branch: &str) -> Result<(), GitError> {
+    fn create_worktree(
+        &self,
+        path: &Path,
+        branch: &str,
+        start_point: &str,
+    ) -> Result<(), GitError> {
         let output = Command::new("git")
             .args(["worktree", "add", "-b", branch])
             .arg(path)
+            .arg(start_point)
             .output()
             .map_err(|e| GitError::WorktreeCreationFailed(e.to_string()))?;
 
@@ -456,22 +469,6 @@ impl GitOperations for Git {
         Ok(())
     }
 
-    fn checkout_new_branch(&self, path: &Path, branch: &str) -> Result<(), GitError> {
-        let output = Command::new("git")
-            .args(["-C"])
-            .arg(path)
-            .args(["checkout", "-b", branch])
-            .output()
-            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(GitError::CommandFailed(stderr.to_string()));
-        }
-
-        Ok(())
-    }
-
     fn checkout_new_branch_from(
         &self,
         path: &Path,
@@ -498,6 +495,30 @@ impl GitOperations for Git {
             .args(["-C"])
             .arg(path)
             .args(["fetch", "origin"])
+            .output()
+            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(GitError::CommandFailed(stderr.to_string()));
+        }
+
+        Ok(())
+    }
+
+    fn import_remote_ref(
+        &self,
+        path: &Path,
+        source: &Path,
+        remote_ref: &str,
+    ) -> Result<(), GitError> {
+        let refspec = format!("+refs/remotes/{remote_ref}:refs/remotes/{remote_ref}");
+        let output = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .arg("fetch")
+            .arg(source)
+            .arg(refspec)
             .output()
             .map_err(|e| GitError::CommandFailed(e.to_string()))?;
 

@@ -113,6 +113,17 @@ pub fn commits_ahead_of_remote<G: GitOperations>(
     if ahead > 0 { Some(ahead) } else { None }
 }
 
+/// Fetches `origin` in the repository at `repo` and returns the remote default
+/// branch (e.g. `origin/main`) that new workspaces should branch from.
+///
+/// A failed fetch (e.g. offline) is logged and the last-known remote ref is used.
+pub fn fetch_base_branch<G: GitOperations>(git: &G, repo: &Path) -> Result<String, GitError> {
+    if let Err(e) = git.fetch_remote(repo) {
+        log::warn!("could not fetch origin in {:?}: {}", repo, e);
+    }
+    git.get_default_remote_branch()
+}
+
 /// Attempts to reuse an inactive workspace by checking out a new branch.
 ///
 /// Returns `Ok(Some(path))` when a reusable workspace is found and updated,
