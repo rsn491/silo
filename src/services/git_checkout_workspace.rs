@@ -8,7 +8,7 @@ use super::silo_config::SiloConfig;
 use super::workspace_manager::{
     CleanupError, CleanupResult, FailedWorkspace, RemovedWorkspace, SkippedWorkspace,
     WorkspaceFactory, WorkspaceListingScope, WorkspaceManager, commits_ahead_of_remote,
-    reuse_inactive_workspace,
+    fetch_base_branch, reuse_inactive_workspace,
 };
 use super::workspace_utils::{generate_workspace_path, parse_uncommitted_changes};
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
@@ -104,8 +104,12 @@ impl<G: GitOperations> WorkspaceFactory for GitCheckoutWorkspace<G> {
             .to_string_lossy();
         let branch_name = branch.unwrap_or_else(|| dest_name.to_string());
 
+        // Fetch in the source repo, since the clone's `origin` is the local source path.
+        let base = fetch_base_branch(&self.git, &repo_root)?;
         self.git.clone_local(&repo_root, &dest)?;
-        self.git.checkout_new_branch(&dest, &branch_name)?;
+        self.git.import_remote_ref(&dest, &repo_root, &base)?;
+        self.git
+            .checkout_new_branch_from(&dest, &branch_name, &base)?;
 
         Ok(dest)
     }
@@ -260,10 +264,21 @@ mod tests {
         mock_git
             .expect_get_repo_root()
             .returning(|| Ok(PathBuf::from("/tmp/repo")));
+        mock_git.expect_fetch_remote().returning(|_| Ok(()));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
         mock_git.expect_clone_local().returning(|_, _| Ok(()));
         mock_git
-            .expect_checkout_new_branch()
-            .returning(|_, _| Ok(()));
+            .expect_import_remote_ref()
+            .withf(|_, source, r| source == Path::new("/tmp/repo") && r == "origin/main")
+            .once()
+            .returning(|_, _, _| Ok(()));
+        mock_git
+            .expect_checkout_new_branch_from()
+            .withf(|_, _, start| start == "origin/main")
+            .once()
+            .returning(|_, _, _| Ok(()));
         let workspace = GitCheckoutWorkspace::new(mock_git);
 
         // Act
@@ -285,10 +300,17 @@ mod tests {
         mock_git
             .expect_get_repo_root()
             .returning(|| Ok(PathBuf::from("/tmp/repo")));
+        mock_git.expect_fetch_remote().returning(|_| Ok(()));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
         mock_git.expect_clone_local().returning(|_, _| Ok(()));
         mock_git
-            .expect_checkout_new_branch()
-            .returning(|_, _| Ok(()));
+            .expect_import_remote_ref()
+            .returning(|_, _, _| Ok(()));
+        mock_git
+            .expect_checkout_new_branch_from()
+            .returning(|_, _, _| Ok(()));
         let workspace = GitCheckoutWorkspace::new(mock_git);
 
         // Act
