@@ -8,7 +8,7 @@ use super::silo_config::SiloConfig;
 use super::workspace_manager::{
     CleanupError, CleanupResult, FailedWorkspace, GitStatus, RemovedWorkspace, SkippedWorkspace,
     StatusError, WorkspaceFactory, WorkspaceListingScope, WorkspaceManager,
-    commits_ahead_of_remote, reuse_inactive_workspace,
+    commits_ahead_of_remote, fetch_base_branch, reuse_inactive_workspace,
 };
 use super::workspace_utils::{generate_workspace_path, parse_uncommitted_changes};
 use crate::infra::git::{GitOperations, GitWorkspaceInfo};
@@ -109,7 +109,10 @@ impl<G: GitOperations> WorkspaceFactory for GitWorktreeWorkspace<G> {
             .to_string_lossy();
         let branch_name = branch.unwrap_or_else(|| worktree_name.to_string());
 
-        self.git.create_worktree(&worktree_path, &branch_name)?;
+        let repo_root = self.git.get_repo_root()?;
+        let base = fetch_base_branch(&self.git, &repo_root)?;
+        self.git
+            .create_worktree(&worktree_path, &branch_name, &base)?;
 
         Ok(worktree_path)
     }
@@ -247,7 +250,18 @@ mod tests {
         mock_git
             .expect_get_project_name()
             .returning(|| Ok("test-project".to_string()));
-        mock_git.expect_create_worktree().returning(|_, _| Ok(()));
+        mock_git
+            .expect_get_repo_root()
+            .returning(|| Ok(PathBuf::from("/tmp/repo")));
+        mock_git.expect_fetch_remote().returning(|_| Ok(()));
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_create_worktree()
+            .withf(|_, _, start| start == "origin/main")
+            .once()
+            .returning(|_, _, _| Ok(()));
         let workspace = GitWorktreeWorkspace::new(mock_git);
 
         // Act
@@ -257,6 +271,34 @@ mod tests {
         assert!(result.is_ok());
         let path = result.expect("workspace creation should succeed");
         assert!(path.to_string_lossy().contains("test-project"));
+    }
+
+    #[test]
+    fn test_create_workspace_continues_when_fetch_fails() {
+        let mut mock_git = MockGitOperations::new();
+        mock_git
+            .expect_get_project_name()
+            .returning(|| Ok("test-project".to_string()));
+        mock_git
+            .expect_get_repo_root()
+            .returning(|| Ok(PathBuf::from("/tmp/repo")));
+        mock_git.expect_fetch_remote().returning(|_| {
+            Err(crate::infra::git_error::GitError::CommandFailed(
+                "offline".into(),
+            ))
+        });
+        mock_git
+            .expect_get_default_remote_branch()
+            .returning(|| Ok("origin/main".to_string()));
+        mock_git
+            .expect_create_worktree()
+            .withf(|_, _, start| start == "origin/main")
+            .once()
+            .returning(|_, _, _| Ok(()));
+
+        let result = GitWorktreeWorkspace::new(mock_git).create(None, false, &HashSet::new());
+
+        assert!(result.is_ok());
     }
 
     #[test]

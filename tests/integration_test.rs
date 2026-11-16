@@ -33,12 +33,22 @@ fn test_launch_and_ps() {
         assert!(status.success());
     };
 
-    run_git(&["init"], &repo_dir);
+    // New workspaces branch from `origin/<default>`, so the repo needs an origin.
+    let origin_dir = temp_dir.path().join("origin.git");
+    fs::create_dir_all(&origin_dir).expect("failed to create origin dir");
+    run_git(&["init", "--bare", "-b", "main"], &origin_dir);
+
+    run_git(&["init", "-b", "main"], &repo_dir);
     run_git(&["config", "user.email", "you@example.com"], &repo_dir);
     run_git(&["config", "user.name", "Your Name"], &repo_dir);
     fs::write(repo_dir.join("README.md"), "Dummy README").expect("failed to write README.md");
     run_git(&["add", "README.md"], &repo_dir);
     run_git(&["commit", "-m", "Initial commit"], &repo_dir);
+    run_git(
+        &["remote", "add", "origin", origin_dir.to_str().unwrap()],
+        &repo_dir,
+    );
+    run_git(&["push", "-u", "origin", "main"], &repo_dir);
 
     // 2. Launch silo launch in the background
     let silo_bin = PathBuf::from(env!("CARGO_BIN_EXE_silo"));
